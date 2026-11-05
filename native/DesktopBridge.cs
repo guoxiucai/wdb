@@ -93,7 +93,7 @@ public static class DesktopBridge {
     static object WindowAction(Dictionary<string,object>a) {
         IntPtr h=Window(S(a,"window")); string action=S(a,"action");
         switch(action) {
-            case "focus": ShowWindow(h,9); Win(SetForegroundWindow(h),"Foreground activation refused");break;
+            case "focus": if(IsIconic(h))ShowWindow(h,9);if(GetForegroundWindow()!=h)SetForegroundWindow(h);Thread.Sleep(50);Require(GetForegroundWindow()==h,"FOCUS_DENIED","Windows refused foreground activation; observe the current foreground window before injecting input.");break;
             case "maximize":ShowWindow(h,3);break;
             case "minimize":ShowWindow(h,6);break;
             case "restore":ShowWindow(h,9);break;
@@ -142,7 +142,7 @@ public static class DesktopBridge {
     }
     static object Find(Dictionary<string,object>a) {var elements=Root(a).FindAll(TreeScope.Subtree,Query(a));var found=new List<object>();int limit=Math.Min(I(a,"limit",100),5000);for(int i=0;i<elements.Count && i<limit;i++)found.Add(Control(elements[i],S(a,"window"),-1));return new {controls=found,count=elements.Count,truncated=elements.Count>limit};}
     static AutomationElement Resolve(Dictionary<string,object>a) {
-        Require(V(a,"reference")!=null,"INVALID_ARGUMENT","Control reference required.");var reference=D(a["reference"]);string win=S(reference,"window");var ids=A(reference["runtimeId"]).Select(Convert.ToInt32).ToArray();var root=AutomationElement.FromHandle(Window(win));var all=root.FindAll(TreeScope.Subtree,Condition.TrueCondition);
+        Require(V(a,"reference")!=null,"INVALID_ARGUMENT","Control reference required.");var reference=D(a["reference"]);string win=S(reference,"window");var ids=A(reference["runtimeId"]).Select(Convert.ToInt32).ToArray();var root=AutomationElement.FromHandle(Window(win));var all=root.FindAll(TreeScope.Subtree,new PropertyCondition(AutomationElement.RuntimeIdProperty,ids));
         for(int i=0;i<all.Count;i++){try{if(all[i].GetRuntimeId().SequenceEqual(ids))return all[i];}catch(ElementNotAvailableException){}}
         throw new Failure("STALE_CONTROL","Control reference is stale; query the window again.");
     }
@@ -225,6 +225,7 @@ public static class DesktopBridge {
     [DllImport("user32.dll",SetLastError=true)]static extern bool InitializeTouchInjection(uint count,uint mode);
     [DllImport("user32.dll",SetLastError=true)]static extern bool InjectTouchInput(uint count,POINTER_TOUCH_INFO[] contacts);
 }
+
 
 
 
