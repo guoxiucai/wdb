@@ -1,0 +1,14 @@
+{
+  "name": "windows-debug-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows Debug Bridge localhost phase one",
+  "type": "commonjs",
+  "bin": { "wdb": "src/cli.js" },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "node src/server.js",
+    "helper": "node src/helper.js"
+  },
+  "engines": { "node": ">=24" }
+}
