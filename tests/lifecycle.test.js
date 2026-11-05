@@ -5,9 +5,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const https = require('node:https');
+const http = require('node:http');
 const crypto = require('node:crypto');
+const net = require('node:net');
+const { spawn } = require('node:child_process');
 const { Bridge } = require('../src/server');
-const { atomic } = require('../src/common');
+const { atomic, execute, powershell } = require('../src/common');
+const { runOperation } = require('../src/operations');
 
 function stateDirectory() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wdb-lifecycle-'));
@@ -137,4 +141,168 @@ test('interrupted file upload removes partial output and releases destination re
   const retry = await request(port, 'PUT', url, bytes, client.token, { 'x-content-sha256': digest });
   assert.equal(retry.status, 200);
   assert.deepEqual(fs.readFileSync(destination), bytes);
+});
+
+test('real user helper preserves shell work across disconnect and cancels on explicit request', async t => {
+  const dir = stateDirectory();
+  const reservation = net.createServer();
+  await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
+  const helperPort = reservation.address().port;
+  await new Promise(resolve => reservation.close(resolve));
+  const helper = spawn(process.execPath, [path.join(__dirname, '../src/helper.js'), '--data-dir', dir, '--port', String(helperPort)], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  let helperError = '';
+  helper.stderr.on('data', data => { helperError += data; });
+  const helperReady = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Helper startup timeout: ${helperError}`)), 10000);
+    helper.stdout.on('data', data => { if (data.toString().includes('helper-ready')) { clearTimeout(timer); resolve(); } });
+    helper.once('error', error => { clearTimeout(timer); reject(error); });
+    helper.once('exit', code => { clearTimeout(timer); reject(new Error(`Helper exited ${code}: ${helperError}`)); });
+  });
+  const bridge = new Bridge({ dataDir: dir, helperPort });
+  t.after(async () => {
+    for (const task of bridge.tasks.values()) bridge.cancel(task);
+    await until(() => bridge.active.size === 0, 10000);
+    await bridge.close();
+    const exited = new Promise(resolve => helper.once('exit', resolve));
+    helper.kill();
+    if (helper.exitCode === null) await exited;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  await helperReady;
+  const server = await bridge.listen(0);
+  const port = server.address().port;
+  const client = await pair(port, dir, 'shell-lifecycle');
+  const helperCall = (secret, payload) => new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port: helperPort, path: '/execute', method: 'POST', headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' } }, res => {
+      let output = '';
+      res.on('data', chunk => { output += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(output) }));
+    });
+    req.on('error', reject); req.end(JSON.stringify(payload));
+  });
+  const unauthorizedMarker = path.join(dir, 'unauthorized-marker');
+  const unauthorized = await helperCall('wrong-secret', { op: 'shell', args: { command: `Set-Content -LiteralPath '${unauthorizedMarker.replaceAll("'", "''")}' -Value unsafe` }, dir: path.join(dir, 'tasks', 'invalid') });
+  assert.equal(unauthorized.status, 401);
+  assert.equal(unauthorized.body.error.code, 'UNAUTHORIZED');
+  assert.equal(fs.existsSync(unauthorizedMarker), false);
+  const outside = await helperCall(fs.readFileSync(path.join(dir, 'helper-secret'), 'utf8').trim(), { op: 'shell', args: { command: 'Write-Output ignored' }, dir: path.join(dir, 'outside-tasks') });
+  assert.equal(outside.status, 400);
+  assert.equal(outside.body.error.code, 'INVALID_TASK_DIRECTORY');
+  const submit = async command => (await request(port, 'POST', '/v1/tasks', { op: 'shell', args: { command }, timeoutMs: 15000 }, client.token)).body.data;
+  const completed = id => until(async () => {
+    const response = await request(port, 'GET', `/v1/tasks/${id}`, undefined, client.token);
+    return !['accepted', 'running'].includes(response.body.data.status) && response.body.data;
+  }, 15000);
+  const surviving = await submit('Write-Output "before disconnect"; Start-Sleep -Seconds 2; Write-Output "after disconnect"');
+  const disconnected = await request(port, 'DELETE', '/v1/connection', undefined, client.token);
+  assert.equal(disconnected.body.data.credentialsRetained, true);
+  const done = await completed(surviving.id);
+  assert.equal(done.status, 'succeeded', JSON.stringify(done.error));
+  assert.match(done.data.stdout, /before disconnect/);
+  assert.match(done.data.stdout, /after disconnect/);
+  assert.equal(done.data.requestedIdentity, 'logged-in-user');
+  assert.ok(done.data.identity);
+  const cancelled = await submit('Write-Output "started"; Start-Sleep -Seconds 5; Write-Output "should not finish"');
+  await until(() => fs.existsSync(path.join(dir, 'tasks', cancelled.id, 'stdout.live')), 10000);
+  await request(port, 'POST', `/v1/tasks/${cancelled.id}/cancel`, {}, client.token);
+  const cancelledFinal = await completed(cancelled.id);
+  assert.equal(cancelledFinal.status, 'cancelled');
+  assert.doesNotMatch(cancelledFinal.data?.stdout || '', /should not finish/);
+  const noisy = await submit("Write-Output ('中' * 600000)");
+  const noisyFinal = await completed(noisy.id);
+  assert.equal(noisyFinal.status, 'succeeded');
+  assert.equal(noisyFinal.data.truncated, true);
+  assert.ok(Buffer.byteLength(noisyFinal.data.stdout) <= 1024 * 1024);
+  const liveBytes = ['stdout.live', 'stderr.live'].reduce((sum, name) => {
+    const file = path.join(dir, 'tasks', noisy.id, name);
+    return sum + (fs.existsSync(file) ? fs.statSync(file).size : 0);
+  }, 0);
+  assert.ok(liveBytes <= 1024 * 1024, `Saved live output exceeded cap: ${liveBytes}`);
+});
+
+test('cancelling accepted or already-aborted work prevents process side effects', async t => {
+  const dir = stateDirectory();
+  const bridge = new Bridge({ dataDir: dir });
+  t.after(async () => { await bridge.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const marker = path.join(dir, 'must-not-exist.txt');
+  const task = await bridge.submit({ id: 'early-cancel-client' }, { op: 'shell', args: { admin: true, command: `Set-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value unsafe` } });
+  assert.equal(task.status, 'accepted');
+  bridge.cancel(task);
+  await until(() => task.status === 'cancelled');
+  assert.equal(task.startedAt, undefined);
+  assert.equal(fs.existsSync(marker), false);
+  const controller = new AbortController(); controller.abort();
+  let spawned = false;
+  const result = await execute(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'unsafe')`], { signal: controller.signal, onSpawn: () => { spawned = true; } });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.pid, null);
+  assert.equal(spawned, false);
+  assert.equal(fs.existsSync(marker), false);
+});
+
+test('non-elevated execution rejects explicit administrator commands and installers', async t => {
+  const elevated = await powershell('(New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)');
+  if (elevated.stdout.trim() === 'True') { t.skip('This rejection case requires an ordinary user process.'); return; }
+  const dir = stateDirectory();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const marker = path.join(dir, 'admin-must-not-execute');
+  const ctx = { id: crypto.randomUUID(), dir, timeoutMs: 5000 };
+  await assert.rejects(runOperation('shell', { admin: true, command: `Set-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value unsafe` }, ctx), { code: 'ADMIN_NOT_AVAILABLE' });
+  await assert.rejects(runOperation('apps.install', { admin: true, path: process.execPath, arguments: ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'unsafe')`] }, ctx), { code: 'ADMIN_NOT_AVAILABLE' });
+  assert.equal(fs.existsSync(marker), false);
+});
+
+test('fallback start is idempotent and stop targets only recorded matching processes', async t => {
+  const dir = stateDirectory();
+  const reserve = async () => {
+    const server = net.createServer();
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    await new Promise(resolve => server.close(resolve));
+    return port;
+  };
+  const port = await reserve(), helperPort = await reserve();
+  const windowsPowerShell = path.join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
+  // A detached Windows daemon can inherit the launcher's pipe handles. Await the
+  // launcher process's exit and drain its already-written JSON without requiring
+  // all intentionally surviving daemon descendants to close inherited handles.
+  const script = (name, args = []) => new Promise((resolve, reject) => {
+    const child = spawn(windowsPowerShell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, '../scripts', name), '-DataDirectory', dir, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '';
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+    child.stdout.on('data', data => { stdout += data; }); child.stderr.on('data', data => { stderr += data; });
+    const timer = setTimeout(() => { child.kill(); reject(new Error(`Script ${name} timed out: ${stderr}`)); }, 30000);
+    child.once('error', error => { clearTimeout(timer); reject(error); });
+    child.once('exit', exitCode => {
+      clearTimeout(timer);
+      setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); resolve({ exitCode, stdout, stderr }); }, 100);
+    });
+  });
+  t.after(async () => { await script('stop-local.ps1'); fs.rmSync(dir, { recursive: true, force: true }); });
+  const first = await script('start-local.ps1', ['-Port', String(port), '-HelperPort', String(helperPort)]);
+  assert.equal(first.exitCode, 0, first.stderr);
+  const one = JSON.parse(first.stdout);
+  assert.equal(one.mode, 'current-user-background');
+  assert.equal(one.windowsServiceVerified, false);
+  assert.equal(one.server.status, 'started');
+  assert.equal(one.helper.status, 'started');
+  const second = await script('start-local.ps1', ['-Port', String(port), '-HelperPort', String(helperPort)]);
+  assert.equal(second.exitCode, 0, second.stderr);
+  const two = JSON.parse(second.stdout);
+  assert.equal(two.server.status, 'already-running');
+  assert.equal(two.helper.status, 'already-running');
+  assert.equal(two.server.pid, one.server.pid);
+  assert.equal(two.helper.pid, one.helper.pid);
+  const metadata = JSON.parse(fs.readFileSync(path.join(dir, 'local-processes.json'), 'utf8').replace(/^\uFEFF/, ''));
+  assert.equal(metadata.length, 2);
+  assert.ok(metadata.every(item => item.role && item.pid && item.startedAt));
+  const stopped = await script('stop-local.ps1');
+  assert.equal(stopped.exitCode, 0, stopped.stderr);
+  assert.equal(JSON.parse(stopped.stdout).filter(item => item.status === 'stopped').length, 2);
+  assert.equal(fs.existsSync(path.join(dir, 'local-processes.json')), false);
+  fs.writeFileSync(path.join(dir, 'local-processes.json'), JSON.stringify([{ role: 'server', pid: process.pid, executable: process.execPath, script: 'unrelated-script.js', dataDirectory: dir, startedAt: '2000-01-01T00:00:00.0000000Z' }]));
+  const refused = await script('stop-local.ps1');
+  assert.notEqual(refused.exitCode, 0);
+  assert.match(refused.stderr, /no longer matches/);
+  fs.unlinkSync(path.join(dir, 'local-processes.json'));
 });

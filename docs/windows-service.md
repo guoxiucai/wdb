@@ -48,4 +48,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-servic
 
 SCM 显示 `Running` 只代表服务宿主在线；必须另外确认 HTTPS 监听、CLI 配对和请求可用。若子进程无法启动，查看 `service-host.log`。开发中曾发现初版打包误取 NVM shim、导致 SYSTEM 无法解析用户 Node 版本；构建和安装检查已修复，旧安装需要管理员重跑安装脚本才能替换受保护的运行时。
 
+当前本机暂用普通用户后台进程验证其余功能：`scripts\start-local.ps1` 隐藏启动服务端，优先使用已有桌面 helper；`scripts\stop-local.ps1` 只停止由启动脚本记录、且 PID、启动时间、程序路径和参数均匹配的进程，不停止 SCM 服务或其他进程。此模式明确报告 `windowsServiceVerified=false`、实际提权状态，不具备普通用户之外的安装权限。重复运行启动脚本会复用已验证的本机进程。
+
+用户回到电脑后，运行 `scripts\repair-service.ps1`，在系统 UAC 窗口确认一次。脚本先停止经过身份核对的本机 fallback，再使用常规 Windows 管理员授权重新安装；若取消 UAC，则恢复普通用户 fallback。从源码目录修复时会先构建完整离线内容，确保真实 Node、FFmpeg 和预编译桌面助手一起安装，不保存管理员密码。继续开发并希望服务引用当前仓库时可显式加 `-Development`。修复后重新用 CLI 检查身份、普通命令和显式 `--admin` 命令，才能认定后台服务部署验证通过。
+
 设计参考：[Windows 服务架构](https://learn.microsoft.com/en-us/dotnet/framework/windows-services/service-application-programming-architecture)、[任务的交互用户身份](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal)。

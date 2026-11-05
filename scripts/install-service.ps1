@@ -27,8 +27,10 @@ try {
     if ($oldTask) { Stop-ScheduledTask -TaskName WdbDesktopHelper }
     $bundledHost = Join-Path $sourceRoot 'native\WdbServiceHost.exe'
     $bundledNode = Join-Path $sourceRoot 'runtime\node.exe'
+    $payloadRoot = $sourceRoot
     if (!(Test-Path -LiteralPath $bundledHost) -or !(Test-Path -LiteralPath $bundledNode)) {
-        $bundleRoot = & (Join-Path $PSScriptRoot 'build.ps1') -HostOnly | Select-Object -Last 1
+        $bundleRoot = & (Join-Path $PSScriptRoot 'build.ps1') | Select-Object -Last 1
+        $payloadRoot = $bundleRoot
         $bundledHost = Join-Path $bundleRoot 'native\WdbServiceHost.exe'
         $bundledNode = Join-Path $bundleRoot 'runtime\node.exe'
     }
@@ -43,18 +45,18 @@ try {
     if ($Development) { $serverRoot = $sourceRoot; Write-Warning "Development install: SYSTEM executes source in $serverRoot. Keep this checkout protected." }
     else {
         foreach ($name in @('src','bin','scripts','skills','docs','package.json','README.md','wdb.cmd')) {
-            $item = Join-Path $sourceRoot $name
-            if ((Test-Path -LiteralPath $item) -and $sourceRoot -ne $InstallDirectory) { Copy-Item -LiteralPath $item -Destination $InstallDirectory -Recurse -Force }
+            $item = Join-Path $payloadRoot $name
+            if ((Test-Path -LiteralPath $item) -and $payloadRoot -ne $InstallDirectory) { Copy-Item -LiteralPath $item -Destination $InstallDirectory -Recurse -Force }
         }
-        Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'native') -File | Where-Object Name -ne 'WdbServiceHost.exe' | ForEach-Object {
+        Get-ChildItem -LiteralPath (Join-Path $payloadRoot 'native') -File | Where-Object Name -ne 'WdbServiceHost.exe' | ForEach-Object {
             if ($_.FullName -ne (Join-Path $InstallDirectory "native\$($_.Name)")) { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallDirectory 'native') -Force }
         }
-        $desktopBin = Join-Path $sourceRoot 'native\bin'
-        if ((Test-Path -LiteralPath $desktopBin) -and $sourceRoot -ne $InstallDirectory) {
+        $desktopBin = Join-Path $payloadRoot 'native\bin'
+        if ((Test-Path -LiteralPath $desktopBin) -and $payloadRoot -ne $InstallDirectory) {
             Copy-Item -LiteralPath $desktopBin -Destination (Join-Path $InstallDirectory 'native') -Recurse -Force
         }
-        if (Test-Path -LiteralPath (Join-Path $sourceRoot 'runtime')) {
-            Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'runtime') -File | Where-Object Name -ne 'node.exe' | ForEach-Object {
+        if (Test-Path -LiteralPath (Join-Path $payloadRoot 'runtime')) {
+            Get-ChildItem -LiteralPath (Join-Path $payloadRoot 'runtime') -File | Where-Object Name -ne 'node.exe' | ForEach-Object {
                 if ($_.FullName -ne (Join-Path $InstallDirectory "runtime\$($_.Name)")) { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallDirectory 'runtime') -Force }
             }
         }
