@@ -55,3 +55,5 @@ node scripts/validate-transfer.js
 ```
 
 标准测试需要测试证书：首次在开发机执行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/init-data.ps1`。测试数据、凭据、生成文件和本机应用截图均忽略于 Git。分步方案见 [实施计划](docs/IMPLEMENTATION.md)，每个验证完成的阶段独立提交，后续问题用修复提交。
+
+离线包携带 Node 而不携带 npm；在解压目录可用 `runtime\node.exe --test tests/*.test.js` 运行同一套标准测试，先执行 `scripts/init-data.ps1` 初始化独立测试证书。
