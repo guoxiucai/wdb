@@ -27,13 +27,22 @@
 - 发送 1,801 帧，包含 18,010 个触点样本，最大同时 10 指；1800 个采样帧及最后抬起帧。
 - `InjectSyntheticPointerInput` 全部返回成功，执行加设备释放耗时 30,205.58 ms，最大观测延迟 23.10 ms，未报告丢弃样本或减少触点。
 - 测试应用收到的触摸联系人和触摸事件均为 0，画布没有笔迹。因此 A04、A05 **未通过**。
-- 单指和两指可以收到真实触摸。三指及以上疑似受到 Windows 手势路由影响，尚未证明根因；未修改用户全局手势设置。
+- 单指和两指可以收到真实触摸。此轮旧探测未强制检查焦点，不能根据零事件推断 Windows 手势路由问题；未修改用户全局手势设置。
 
 原始结果：`artifacts/desktop-acceptance/report.json`、`touch.log`、`after.png`。必须分别评估输入接口、应用实际事件与笔迹完整性，不得把注入成功当作书写验收通过。
 
-22:58:23 至 22:58:54 又在夹具窗口内部禁用普通手势及 flick、press-and-hold，并显式启用 multitouch data 后复测（未改变系统全局设置）：仍然 1,801 帧、18,010 点注入成功，应用收到 0 个触摸事件；最大延迟 25.81 ms，总耗时 30,217.10 ms。该次与最终 CFR 30 fps 录像任务 `6f3ffd3f-a97a-461d-9105-c1d13268cb4f`（22:52:27 至 23:02:27）重合。证据位于 `artifacts/desktop-acceptance-raw-gesture`。因此不能将问题简单归因于普通窗口手势配置，根因仍未明确，A04/A05 继续保留未通过。
+22:58:23 至 22:58:54 又在夹具窗口内部禁用普通手势及 flick、press-and-hold，并显式启用 multitouch data 后复测（未改变系统全局设置）：仍然 1,801 帧、18,010 点注入成功，应用收到 0 个触摸事件；最大延迟 25.81 ms，总耗时 30,217.10 ms。该次与最终 CFR 30 fps 录像任务 `6f3ffd3f-a97a-461d-9105-c1d13268cb4f`（22:52:27 至 23:02:27）重合。证据位于 `artifacts/desktop-acceptance-raw-gesture`。复核录像发现该轮夹具没有显示在录制桌面上；旧脚本忽略 focus 返回结果，因此这两轮属于前提未验证的探测，不能作为应用交付失败或系统手势根因的有效证据。保留原始文件用于追溯。
 
 复现夹具窗口手势探测：先设置 `WDB_FIXTURE_RAW_TOUCH=1`、`WDB_ACCEPTANCE_LABEL=raw-gesture`，再运行 acceptance 脚本；正常测试不启用这项配置。
+
+
+### 修正前台和可见性前提后的复测
+
+已修复探测脚本：仅将自有夹具窗口设为 TopMost；Windows 拒绝程序激活时，点击已知自有夹具标题栏，随后必须确认 focus 成功及窗口 foreground=true，否则跳过注入。截图采用实际 `visible-desktop` 区域截图，不再仅依赖可对后台窗口成功的 PrintWindow。结束后再次记录 foreground 与实际可见截图。
+
+23:24:41 至 23:25:12 的纠正复测中，注入前后 foreground 均为 true，实际可见截图均显示夹具白色画布；1,801 帧、18,010 点注入 API 成功，最大延迟 19.13 ms、总耗时 30,208.38 ms，但应用仍收到 0 个触摸事件且没有笔迹。因此当前有效复测仍未通过 10 指应用交付验证。此次没有宣称与录屏并行通过。
+
+证据：`artifacts/desktop-acceptance-foreground-verified/report.json`、`setup.json`、`visible-before.png`、`visible-after.png`、`touch.log`。旧探测的设置缺陷已经与这次纠正结果明确区分。尚未定位根因；下一步可检查每个坐标的实际 HWND hit-test、窗口遮挡或外部输入拦截，但这些仅是诊断方向，不是已证实结论。没有在用户现有画板上追加书写试验。
 
 ## 已知边界
 
@@ -47,3 +56,4 @@
 - 当前只验证此台 Windows，不能推导所有支持版本、不同显卡及不同 UIA Provider 均通过。
 
 参考：[Microsoft 合成指针设备](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createsyntheticpointerdevice)、[触摸注入契约](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-injecttouchinput)。
+

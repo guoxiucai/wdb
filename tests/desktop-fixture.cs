@@ -9,7 +9,7 @@ public class DesktopFixture : Form {
     static readonly bool RawTouch=Environment.GetEnvironmentVariable("WDB_FIXTURE_RAW_TOUCH")=="1";
     string log; Label status; InkPanel ink;
     public DesktopFixture(string logPath) {
-        log=logPath;Text="wdb desktop verification fixture";Name="WdbFixture";StartPosition=FormStartPosition.Manual;Location=new Point(80,80);ClientSize=new Size(720,540);
+        TopMost=true;Shown+=(sender,eventArgs)=>{BringToFront();Activate();};log=logPath;Text="wdb desktop verification fixture";Name="WdbFixture";StartPosition=FormStartPosition.Manual;Location=new Point(80,80);ClientSize=new Size(720,540);
         var input=new TextBox{ Name="Input",AccessibleName="wdb input",Multiline=false,Location=new Point(16,16),Size=new Size(440,60)};
         status=new Label{Name="Status",AccessibleName="wdb status",Text="Clicks: 0",Location=new Point(16,84),Size=new Size(400,24)};
         var button=new Button{Name="Apply",AccessibleName="wdb apply",Text="Apply",Location=new Point(480,16),Size=new Size(120,40)};
@@ -41,6 +41,7 @@ public class DesktopFixture : Form {
         [DllImport("user32.dll")]static extern bool CloseTouchInputHandle(IntPtr handle);
     }
 }
+
 
 
 
