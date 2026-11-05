@@ -51,8 +51,10 @@ test('installed localhost service: CLI pairing, user shell, transfer, logs, life
     const completed = await cli(['task', 'wait', taskId]); assert.equal(completed.code, 0); assert.match(completed.result.data.data.stdout, /continued/);
     const cancelled = await cli(['shell', '--script', 'Start-Sleep -Seconds 30', '--detach']);
     const cancelId = cancelled.result.data.id; assert.ok(cancelId);
+    const cancelStarted = Date.now();
     assert.equal((await cli(['task', 'cancel', cancelId])).code, 0);
     const cancelResult = await cli(['task', 'wait', cancelId]); assert.equal(cancelResult.result.data.status, 'cancelled');
+    assert.ok(Date.now() - cancelStarted < 8000, 'Cancellation must stop the active process promptly, not merely label it cancelled after natural completion');
     assert.equal((await cli(['task', 'delete', cancelId])).code, 0);
   } finally {
     if (clientId) await cli(['clients', 'revoke', clientId]);

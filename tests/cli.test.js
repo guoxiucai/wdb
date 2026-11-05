@@ -9,7 +9,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { main, api, parseArgv, normalizeTarget, selectDevice } = require('../src/cli');
 
-let temporary, server, target, fingerprint, requestCount = 0;
+let temporary, server, target, fingerprint, requestCount = 0, protocolVersion = 1;
 const stored = new Map();
 function envelope(data, status = 'succeeded') { return { requestId: crypto.randomUUID(), deviceId: 'device-test', status, error: null, durationMs: 0, artifacts: [], data }; }
 before(async () => {
@@ -30,7 +30,7 @@ before(async () => {
       respond({ clientId: 'client-test', deviceId: 'device-test', token: 'private-token' }); return;
     }
     if (req.headers.authorization !== 'Bearer private-token') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'No token' } })); return; }
-    if (url.pathname === '/v1/info') { respond({ version: '0.1.0' }); return; }
+    if (url.pathname === '/v1/info') { respond({ version: '0.1.0', protocolVersion }); return; }
     if (url.pathname === '/v1/heartbeat' || url.pathname === '/v1/connection') { respond({ ok: true }); return; }
     if (url.pathname === '/v1/tasks' && req.method === 'POST') {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -92,6 +92,11 @@ test('certificate mismatch sends no credentials or request body', async () => {
   const beforeCount = requestCount;
   await assert.rejects(api({ url: target, fingerprint: '0'.repeat(64), token: 'secret' }, 'POST', '/v1/pair', { pairingCode: 'secret' }), { code: 'CERTIFICATE_MISMATCH' });
   assert.equal(requestCount, beforeCount);
+});
+test('incompatible protocol is reported explicitly', async () => {
+  protocolVersion = 2;
+  try { await assert.rejects(api({ url: target, fingerprint, token: 'private-token' }, 'GET', '/v1/info'), { code: 'INCOMPATIBLE_PROTOCOL' }); }
+  finally { protocolVersion = 1; }
 });
 test('pair, shell, file/recursive transfers, disconnect, and reconnect', async () => {
   const paired = await cli(['connect', target, '--fingerprint', fingerprint, '--pairing-code', 'test-secret']);

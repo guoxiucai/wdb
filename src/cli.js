@@ -139,7 +139,11 @@ async function api(device, method, endpoint, body, timeoutMs) {
   const req = await openRequest(device, method, endpoint, data ? { 'content-type': 'application/json', 'content-length': data.length } : {}, timeoutMs);
   const response = receiveResponse(req);
   req.end(data);
-  return responseJson(await response);
+  const result = await responseJson(await response);
+  if (endpoint === '/v1/info' && result.data?.protocolVersion !== undefined && result.data.protocolVersion !== 1) {
+    throw new CliError('INCOMPATIBLE_PROTOCOL', `Server protocol ${result.data.protocolVersion} is incompatible with client protocol 1.`);
+  }
+  return result;
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function taskFrom(envelope) { return envelope.data?.task || envelope.data; }
@@ -392,6 +396,7 @@ async function execute(argv, io) {
     const paired = await api(next, 'POST', '/v1/pair', { name: options.name || os.hostname(), pairingCode: String(options['pairing-code']) });
     if (!paired.data?.token || !paired.data.clientId || !paired.data.deviceId) throw new CliError('INVALID_RESPONSE', 'Pairing response is missing credentials or identity.');
     device = { ...next, ...paired.data, connected: true, lastConnected: new Date().toISOString() };
+    await api(device, 'GET', '/v1/info');
     config.devices = [...config.devices.filter(entry => entry.url !== url), device];
     await saveConfig(dir, config);
     const { token, ...publicDevice } = device;
