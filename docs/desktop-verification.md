@@ -31,12 +31,18 @@
 
 原始结果：`artifacts/desktop-acceptance/report.json`、`touch.log`、`after.png`。必须分别评估输入接口、应用实际事件与笔迹完整性，不得把注入成功当作书写验收通过。
 
+22:58:23 至 22:58:54 又在夹具窗口内部禁用普通手势及 flick、press-and-hold，并显式启用 multitouch data 后复测（未改变系统全局设置）：仍然 1,801 帧、18,010 点注入成功，应用收到 0 个触摸事件；最大延迟 25.81 ms，总耗时 30,217.10 ms。该次与最终 CFR 30 fps 录像任务 `6f3ffd3f-a97a-461d-9105-c1d13268cb4f`（22:52:27 至 23:02:27）重合。证据位于 `artifacts/desktop-acceptance-raw-gesture`。因此不能将问题简单归因于普通窗口手势配置，根因仍未明确，A04/A05 继续保留未通过。
+
+复现夹具窗口手势探测：先设置 `WDB_FIXTURE_RAW_TOUCH=1`、`WDB_ACCEPTANCE_LABEL=raw-gesture`，再运行 acceptance 脚本；正常测试不启用这项配置。
+
 ## 已知边界
 
 - Windows 可能拒绝将后台应用激活为前台，返回 `FOCUS_DENIED`。客户端应观察实际前台状态，不能因已发出请求便假定焦点成功。
 - UIA Provider 可能阻塞；服务端应给子进程设置超时，标记结果未知并重新观察，禁止盲目重试有副作用动作。
 - `input.key` 的 `down` 是有上限的保持任务，默认保持 1000 ms，可设置 `holdMs`（最多 300000 ms），正常结束或取消时释放；不能靠一次已结束的短请求无限保持键。
 - `input.touch` 由独立合成设备执行，结束/异常时释放联系人并销毁设备。`cancelFile` 由服务端控制，用于断开/取消后的清理。
+- 取消回归已验证：等待应用实际收到 DOWN 后写取消标记，适配器返回 `CANCELLED`，应用收到对应 UP。整帧使用期间不复用 native slot；当 10 个槽位全部占用时，旧触点抬起与新触点按下需要分成两帧，否则事前明确拒绝轨迹。
+- 窗口 ID 含 HWND、PID 和进程启动时间，可以防止跨进程 HWND 复用误操作；同一进程内部关闭后恰好复用相同 HWND 的极端情况仍需进一步加固。控件引用还校验 UIA runtime ID。
 - 截图返回原始尺寸、坐标映射与 `layoutId`；使用旧 `layoutId` 的坐标操作会拒绝执行。尚未覆盖真实多显示器混合 DPI 和横竖屏切换。
 - 当前只验证此台 Windows，不能推导所有支持版本、不同显卡及不同 UIA Provider 均通过。
 

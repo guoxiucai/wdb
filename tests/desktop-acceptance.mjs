@@ -1,6 +1,6 @@
 // Explicit interactive acceptance probe. Evidence is recorded even when application delivery fails.
 import fs from 'node:fs';import path from 'node:path';import {spawn,spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');const out=path.join(root,'artifacts/desktop-acceptance');fs.mkdirSync(out,{recursive:true});let serial=0;
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');const out=path.join(root,'artifacts/desktop-acceptance'+(process.env.WDB_ACCEPTANCE_LABEL?'-'+process.env.WDB_ACCEPTANCE_LABEL.replace(/[^a-z0-9-]/gi,''):''));fs.mkdirSync(out,{recursive:true});let serial=0;
 function request(op,args={}){const file=path.join(out,`request-${serial++}.json`);fs.writeFileSync(file,JSON.stringify({op,args}));const r=spawnSync(path.join(root,'native/bin/DesktopBridge.exe'),[file],{encoding:'utf8',timeout:60000,windowsHide:true});return r.error?{ok:false,error:{message:r.error.message}}:JSON.parse(r.stdout.replace(/^\uFEFF/,''));}
 const fixture=path.join(out,'Fixture.exe'),log=path.join(out,'touch.log');fs.writeFileSync(log,'');
 spawnSync(path.join(process.env.WINDIR,'Microsoft.NET/Framework64/v4.0.30319/csc.exe'),['/nologo','/target:winexe','/platform:x64',`/out:${fixture}`,'/r:System.Windows.Forms.dll','/r:System.Drawing.dll',path.join(root,'tests/desktop-fixture.cs')],{windowsHide:true});
@@ -17,3 +17,4 @@ try {
   report.screenshot=request('screenshot',{window,path:path.join(out,'after.png')});fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
   request('windows.action',{window,action:'close'});
 }finally{if(proc.exitCode===null)proc.kill();}
+

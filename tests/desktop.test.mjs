@@ -43,6 +43,16 @@ test('native desktop observation, UIA, input, true multitouch, stale references 
     const frames=[{t:0,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y,phase:'down'}))},{t:40,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y:y+50,phase:'move'}))},{t:80,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y:y+100,phase:'move'}))},{t:120,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y:y+100,phase:'up'}))}];
     const touch=call('input.touch',{frames});assert.equal(touch.maxContacts,2);assert.equal(touch.samples,8);await pause(300);const observed=fs.readFileSync(log,'utf8');assert.equal(new Set([...observed.matchAll(/^TOUCH (\d+) down/gm)].map(m=>m[1])).size,2,'App must receive two real touch contacts');assert.equal([...observed.matchAll(/^TOUCH \d+ up/gm)].length,2);
     assert.equal(request('input.touch',{frames:[{t:0,contacts:[{id:1,x,y,phase:'move'}]}]}).error.code,'INVALID_TRAJECTORY');
+    const ten=Array.from({length:10},(_,i)=>({id:i+1,x:x+i*50,y,phase:'down'}));
+    const reused=[{t:0,contacts:ten},{t:50,contacts:[{...ten[0],phase:'up'},{id:11,x,y,phase:'down'}]},{t:100,contacts:[...ten.slice(1).map(c=>({...c,phase:'up'})),{id:11,x,y,phase:'up'}]}];
+    assert.equal(request('input.touch',{frames:reused}).error.code,'INVALID_TRAJECTORY','Native slot cannot be reused before the old UP frame is sent');
+    const cancelFile=path.join(tmp,'cancel-touch');const cancelRequest=path.join(tmp,'cancel-touch.json');
+    const heldFrames=Array.from({length:180},(_,i)=>({t:i*1000/60,contacts:[{id:1,x,y:y+i%50,phase:i?'move':'down'}]}));heldFrames.push({t:3000,contacts:[{id:1,x,y:y+179%50,phase:'up'}]});
+    fs.writeFileSync(cancelRequest,JSON.stringify({op:'input.touch',args:{frames:heldFrames,cancelFile}}));
+    const held=spawn(exe,[cancelRequest],{windowsHide:true});let heldOutput='';held.stdout.on('data',c=>heldOutput+=c);const exited=new Promise(resolve=>held.once('exit',resolve));
+    for(let i=0;i<200;i++){if([...fs.readFileSync(log,'utf8').matchAll(/^TOUCH \d+ down/gm)].length>=3)break;await pause(10);}
+    fs.writeFileSync(cancelFile,'cancel');await exited;assert.equal(JSON.parse(heldOutput).error.code,'CANCELLED');await pause(150);
+    assert.equal([...fs.readFileSync(log,'utf8').matchAll(/^TOUCH \d+ up/gm)].length,3,'Cancellation must release the contact actually received by the application');
     call('windows.action',{window,action:'close'});await pause(150);assert.equal(request('ui.action',{reference:button.reference,action:'invoke'}).error.code,'STALE_WINDOW');
     fs.mkdirSync(path.join(root,'artifacts/desktop'),{recursive:true});for(const name of ['window.png','fixture.log','fixture.log.png'])if(fs.existsSync(path.join(tmp,name)))fs.copyFileSync(path.join(tmp,name),path.join(root,'artifacts/desktop',name));
     console.log(`Desktop evidence: ${path.join(root,'artifacts/desktop')}`);
