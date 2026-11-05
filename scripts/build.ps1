@@ -20,7 +20,7 @@ $nodePath = (& node.exe -p 'process.execPath').Trim()
 if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $nodePath)) { throw 'Could not resolve the actual Node runtime (a version-manager shim cannot be bundled).' }
 Copy-RuntimeFile $nodePath (Join-Path $outputRoot 'runtime\node.exe')
 if (!$HostOnly) {
-    foreach ($name in @('src','bin','scripts','skills','docs','native','package.json','README.md','wdb.cmd','wdb-phase1-requirements.md')) {
+    foreach ($name in @('src','bin','scripts','skills','docs','native','tests','package.json','README.md','wdb.cmd','wdb-phase1-requirements.md')) {
         $item = Join-Path $sourceRoot $name
         if (Test-Path -LiteralPath $item) { Copy-Item -LiteralPath $item -Destination $outputRoot -Recurse -Force }
     }
