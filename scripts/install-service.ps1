@@ -24,7 +24,19 @@ try {
     $oldService = Get-Service -Name WdbService -ErrorAction SilentlyContinue
     if ($oldService -and $oldService.Status -ne 'Stopped') { Stop-Service WdbService -Force }
     $oldTask = Get-ScheduledTask -TaskName WdbDesktopHelper -ErrorAction SilentlyContinue
-    if ($oldTask) { Stop-ScheduledTask -TaskName WdbDesktopHelper }
+    if ($oldTask) {
+        # Hosts from the first development installation lacked job containment.
+        # Retire their verified process tree before stopping the scheduler entry.
+        $expectedHelperHost = Join-Path $InstallDirectory 'native\WdbServiceHost.exe'
+        $oldHelperHosts = @(Get-CimInstance Win32_Process -Filter "Name='WdbServiceHost.exe'" | Where-Object {
+            $_.ExecutablePath -eq $expectedHelperHost -and $_.CommandLine -like '*--helper*' -and $_.CommandLine -like "*$DataDirectory*"
+        })
+        foreach ($oldHelper in $oldHelperHosts) {
+            & taskkill.exe /PID $oldHelper.ProcessId /T /F | Out-Null
+            if ($LASTEXITCODE -ne 0 -and (Get-Process -Id $oldHelper.ProcessId -ErrorAction SilentlyContinue)) { throw "Could not stop old desktop helper host $($oldHelper.ProcessId)." }
+        }
+        Stop-ScheduledTask -TaskName WdbDesktopHelper
+    }
     $bundledHost = Join-Path $sourceRoot 'native\WdbServiceHost.exe'
     $bundledNode = Join-Path $sourceRoot 'runtime\node.exe'
     $payloadRoot = $sourceRoot
