@@ -264,7 +264,7 @@ async function pushOne(device, local, remote, options, io) {
     const result = await responsePromise;
     const serverHash = result.data?.sha256 || result.data?.checksum;
     if (serverHash && serverHash.toLowerCase() !== checksum) throw new CliError('CHECKSUM_MISMATCH', 'Server reported a different checksum.');
-    return { type: 'file', requestId: result.requestId, deviceId: result.deviceId, localPath: path.resolve(local), path: remote, bytes: progress.byteCount(), sha256: checksum, transferMs: Date.now() - transferStart, durationMs: Date.now() - start, result: result.data };
+    return { type: 'file', requestId: result.requestId, deviceId: result.deviceId, localPath: path.resolve(local), path: remote, bytes: progress.byteCount(), sha256: checksum, checksumMs: transferStart - start, transferMs: Date.now() - transferStart, durationMs: Date.now() - start, result: result.data };
   } catch (error) { req.destroy(); throw error; }
 }
 async function pullFile(device, remote, local, options, io) {
@@ -279,6 +279,7 @@ async function pullFile(device, remote, local, options, io) {
   const req = await openRequest(device, 'GET', `/v1/files?${new URLSearchParams({ path: remote })}`, {}, numberOption(options['transfer-timeout'], 120000, '--transfer-timeout', 1));
   const responsePromise = receiveResponse(req); req.end();
   const response = await responsePromise;
+  const responseAt = Date.now();
   if (response.statusCode >= 400) return responseJson(response);
   const expected = String(response.headers['x-content-sha256'] || '').toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(expected)) { response.destroy(); throw new CliError('CHECKSUM_MISSING', 'Server did not provide a valid SHA-256 checksum.'); }
@@ -287,12 +288,12 @@ async function pullFile(device, remote, local, options, io) {
   const hasher = new Transform({ transform(chunk, encoding, callback) { hash.update(chunk); callback(null, chunk); } });
   try {
     await pipeline(response, hasher, progress, fs.createWriteStream(temporary, { flags: 'wx', highWaterMark: 1024 * 1024 }));
-    const transferMs = Date.now() - start;
+    const transferMs = Date.now() - responseAt;
     const actual = hash.digest('hex');
     if (expected !== actual) throw new CliError('CHECKSUM_MISMATCH', 'Downloaded content failed its SHA-256 integrity check.');
     if (boolOption(options.overwrite)) await fsp.rename(temporary, absolute);
     else { await fsp.link(temporary, absolute); await fsp.unlink(temporary); }
-    return { type: 'file', localPath: absolute, path: remote, bytes: progress.byteCount(), sha256: actual, transferMs, durationMs: Date.now() - start };
+    return { type: 'file', localPath: absolute, path: remote, bytes: progress.byteCount(), sha256: actual, responseWaitMs: responseAt - start, transferMs, checksumMode: 'inline-sha256', durationMs: Date.now() - start };
   } finally { req.destroy(); await fsp.rm(temporary, { force: true }); }
 }
 async function pullDirectory(device, remote, local, options, io) {
