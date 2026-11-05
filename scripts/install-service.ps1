@@ -32,18 +32,27 @@ try {
         $bundledHost = Join-Path $bundleRoot 'native\WdbServiceHost.exe'
         $bundledNode = Join-Path $bundleRoot 'runtime\node.exe'
     }
+    $resolvedBundledNode = (& $bundledNode -p 'process.execPath').Trim()
+    if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($resolvedBundledNode) -ne [IO.Path]::GetFullPath($bundledNode)) {
+        throw 'Bundled node.exe is a version-manager shim or invalid runtime. Rebuild using scripts/build.ps1 before installation.'
+    }
     New-Item -ItemType Directory -Force -Path (Join-Path $InstallDirectory 'native'), (Join-Path $InstallDirectory 'runtime') | Out-Null
     if ($bundledHost -ne (Join-Path $InstallDirectory 'native\WdbServiceHost.exe')) { Copy-Item -LiteralPath $bundledHost -Destination (Join-Path $InstallDirectory 'native\WdbServiceHost.exe') -Force }
     if ($bundledNode -ne (Join-Path $InstallDirectory 'runtime\node.exe')) { Copy-Item -LiteralPath $bundledNode -Destination (Join-Path $InstallDirectory 'runtime\node.exe') -Force }
     $serverRoot = $InstallDirectory
     if ($Development) { $serverRoot = $sourceRoot; Write-Warning "Development install: SYSTEM executes source in $serverRoot. Keep this checkout protected." }
     else {
-        foreach ($name in @('src','scripts','skills','docs','package.json','README.md','wdb.cmd')) {
+        foreach ($name in @('src','bin','scripts','skills','docs','package.json','README.md','wdb.cmd')) {
             $item = Join-Path $sourceRoot $name
             if ((Test-Path -LiteralPath $item) -and $sourceRoot -ne $InstallDirectory) { Copy-Item -LiteralPath $item -Destination $InstallDirectory -Recurse -Force }
         }
         Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'native') -File | Where-Object Name -ne 'WdbServiceHost.exe' | ForEach-Object {
             if ($_.FullName -ne (Join-Path $InstallDirectory "native\$($_.Name)")) { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallDirectory 'native') -Force }
+        }
+        if (Test-Path -LiteralPath (Join-Path $sourceRoot 'runtime')) {
+            Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'runtime') -File | Where-Object Name -ne 'node.exe' | ForEach-Object {
+                if ($_.FullName -ne (Join-Path $InstallDirectory "runtime\$($_.Name)")) { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallDirectory 'runtime') -Force }
+            }
         }
     }
     $desktopSid = (New-Object Security.Principal.NTAccount($DesktopUser)).Translate([Security.Principal.SecurityIdentifier]).Value

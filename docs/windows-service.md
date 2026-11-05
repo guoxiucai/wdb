@@ -34,6 +34,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-servic
 .\scripts\build.ps1
 ```
 
+构建会用 `node -p process.execPath` 找到真实运行时，避免误打包 NVM/FNM 等版本管理器的代理程序。安装器再次验证运行时路径。录屏依赖准备使用 `scripts\fetch-ffmpeg.ps1`（仅构建机联网）；脚本下载固定版本并核对发布方 SHA-256。可用 `-SourceUri` 和 `-Sha256` 指定镜像与对应校验值。此机已经下载并验证 FFmpeg/ffprobe 9.0.2，二进制、许可和来源记录位于 `.runtime\ffmpeg`，构建时复制到交付包 `runtime`。FFmpeg 为独立命令行依赖，发布来源、GPL 许可和上游源码链接随包保留。
+
 输出 `dist\wdb-windows-x64`，其中包含运行时、服务宿主、CLI、源码、脚本、Skill、使用文档和 `SHA256SUMS.txt`。整个目录复制到目标 Windows x64 设备，在管理员 PowerShell 执行该目录里的 `scripts\install-service.ps1`。安装前没有网络请求。
 
 升级使用新版目录重新执行安装脚本，停止旧服务/helper，覆盖程序，再启动。默认保留原数据目录与 `helper-secret`。客户端凭据属于客户端自身配置，不随服务升级删除。安装失败信息见 `C:\ProgramData\wdb\install.log`；服务/桌面宿主信息见 `logs\service-host.log`、`logs\helper-host.log`。
@@ -43,5 +45,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-servic
 ## 验证边界
 
 本机开发验证不等于支持矩阵全覆盖。Windows 10 22H2、Windows 11 24H2/25H2 的干净离线环境、重启后的自动启动、无人登录与锁屏场景仍需要分别执行验收。当前实现不配置防火墙或开放局域网访问。
+
+SCM 显示 `Running` 只代表服务宿主在线；必须另外确认 HTTPS 监听、CLI 配对和请求可用。若子进程无法启动，查看 `service-host.log`。开发中曾发现初版打包误取 NVM shim、导致 SYSTEM 无法解析用户 Node 版本；构建和安装检查已修复，旧安装需要管理员重跑安装脚本才能替换受保护的运行时。
 
 设计参考：[Windows 服务架构](https://learn.microsoft.com/en-us/dotnet/framework/windows-services/service-application-programming-architecture)、[任务的交互用户身份](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtaskprincipal)。
