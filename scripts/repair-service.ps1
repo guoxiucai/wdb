@@ -3,6 +3,12 @@ param([switch]$Development, [string]$DataDirectory = "$env:ProgramData\wdb")
 $ErrorActionPreference = 'Stop'
 $sourceRoot = Split-Path $PSScriptRoot -Parent
 $installer = Join-Path $PSScriptRoot 'install-service.ps1'
+# Prepare the concrete offline payload before stopping anything or requesting
+# consent. The elevated installer then needs no per-user NVM configuration.
+if (!$Development -and (!(Test-Path -LiteralPath (Join-Path $sourceRoot 'runtime\node.exe')) -or !(Test-Path -LiteralPath (Join-Path $sourceRoot 'native\WdbServiceHost.exe')))) {
+    $preparedRoot = & (Join-Path $PSScriptRoot 'build.ps1') | Select-Object -Last 1
+    $installer = Join-Path $preparedRoot 'scripts\install-service.ps1'
+}
 # This script is deliberately invoked by the user when available to approve UAC.
 # It uses the ordinary Windows administrator-consent flow and never stores a password.
 $argsText = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -DataDirectory "{1}"' -f $installer,[IO.Path]::GetFullPath($DataDirectory).TrimEnd('\')
