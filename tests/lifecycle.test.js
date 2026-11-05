@@ -306,3 +306,28 @@ test('fallback start is idempotent and stop targets only recorded matching proce
   assert.match(refused.stderr, /no longer matches/);
   fs.unlinkSync(path.join(dir, 'local-processes.json'));
 });
+
+test('terminating the native helper supervisor releases its child and grandchild process tree', async t => {
+  const dir = stateDirectory();
+  const hostPath = path.join(dir, 'WdbServiceHost.exe');
+  const compiler = path.join(process.env.SystemRoot, 'Microsoft.NET/Framework64/v4.0.30319/csc.exe');
+  const compiled = await execute(compiler, ['/nologo', '/target:winexe', '/platform:x64', '/r:System.ServiceProcess.dll', `/out:${hostPath}`, path.join(__dirname, '../native/ServiceHost.cs')]);
+  assert.equal(compiled.exitCode, 0, compiled.stdout + compiled.stderr);
+  const fixturePath = path.join(dir, 'supervisor-fixture.js'), pidPath = path.join(dir, 'pids.json');
+  fs.writeFileSync(fixturePath, `const child=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{windowsHide:true,stdio:'ignore'});require('node:fs').writeFileSync(${JSON.stringify(pidPath)},JSON.stringify({child:process.pid,grandchild:child.pid}));setInterval(()=>{},1000);`);
+  const host = spawn(hostPath, ['--helper', '--node', process.execPath, '--script', fixturePath, '--data-dir', dir], { windowsHide: true, stdio: 'ignore' });
+  let pids;
+  const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  t.after(async () => {
+    if (host.exitCode === null) host.kill();
+    if (pids) for (const pid of Object.values(pids)) { if (alive(pid)) process.kill(pid); }
+    await new Promise(resolve => setTimeout(resolve, 100));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  await until(() => fs.existsSync(pidPath));
+  pids = JSON.parse(fs.readFileSync(pidPath));
+  assert.ok(alive(pids.child)); assert.ok(alive(pids.grandchild));
+  const exited = new Promise(resolve => host.once('exit', resolve));
+  host.kill(); await exited;
+  await until(() => !alive(pids.child) && !alive(pids.grandchild));
+});

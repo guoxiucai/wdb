@@ -28,6 +28,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-servic
 
 服务停止会结束它的进程树，进行中的任务应由应用层在下次启动时标记为中断或结果未知，不会自动重新执行。计划任务不自动登录、不自动解锁；必须在桌面用户登录后才能启动交互 helper。`diagnose` 仅报告状态和末尾日志，不输出配对凭据或 helper 密钥。
 
+新版原生宿主额外把运行时及其子进程放入 Windows Job Object，设置 `KILL_ON_JOB_CLOSE`；即使计划任务宿主异常退出，进程树也会随之清理。已用独立宿主、子进程及孙进程验证这一行为。已经安装的旧宿主需要执行修复安装才获得此更新。参考 [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)。
+
 ## 构建、离线安装与升级
 
 ```powershell

@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.ServiceProcess;
 using System.Threading;
+using System.Runtime.InteropServices;
+using System.ComponentModel;
 
 // Windows SCM host and hidden interactive-session helper supervisor.
 // No desktop APIs execute inside the SYSTEM/session-0 service process.
@@ -16,6 +18,14 @@ internal sealed class WdbServiceHost : ServiceBase
     private readonly object gate = new object();
     private readonly object logGate = new object();
     private readonly bool helper;
+    private IntPtr job = IntPtr.Zero;
+    [StructLayout(LayoutKind.Sequential)] private struct BasicLimits { public long ProcessTime, JobTime; public uint Flags; public UIntPtr MinWorkingSet, MaxWorkingSet; public uint ActiveProcesses; public UIntPtr Affinity; public uint Priority, Scheduling; }
+    [StructLayout(LayoutKind.Sequential)] private struct IoCounters { public ulong ReadOperations, WriteOperations, OtherOperations, ReadBytes, WriteBytes, OtherBytes; }
+    [StructLayout(LayoutKind.Sequential)] private struct ExtendedLimits { public BasicLimits Basic; public IoCounters Io; public UIntPtr ProcessMemory, JobMemory, PeakProcessMemory, PeakJobMemory; }
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+    [DllImport("kernel32.dll", SetLastError=true)] private static extern bool SetInformationJobObject(IntPtr handle, int type, ref ExtendedLimits info, uint length);
+    [DllImport("kernel32.dll", SetLastError=true)] private static extern bool AssignProcessToJobObject(IntPtr handle, IntPtr process);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
 
     private WdbServiceHost(string[] args)
     {
@@ -46,6 +56,13 @@ internal sealed class WdbServiceHost : ServiceBase
     }
     protected override void OnStart(string[] args)
     {
+        job = CreateJobObject(IntPtr.Zero, null);
+        if (job == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateJobObject failed");
+        ExtendedLimits limits = new ExtendedLimits(); limits.Basic.Flags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if (!SetInformationJobObject(job, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits)))) {
+            int error = Marshal.GetLastWin32Error(); CloseHandle(job); job = IntPtr.Zero;
+            throw new Win32Exception(error, "Cannot establish process-tree cleanup");
+        }
         worker = new Thread(RunLoop); worker.IsBackground = true; worker.Start();
     }
     private void RunLoop()
@@ -68,7 +85,12 @@ internal sealed class WdbServiceHost : ServiceBase
                 p.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (e.Data != null) Log("stderr " + e.Data); };
                 lock (gate) {
                     if (stopped.WaitOne(0)) break;
-                    p.Start(); child = p;
+                    p.Start();
+                    if (!AssignProcessToJobObject(job, p.Handle)) {
+                        int error = Marshal.GetLastWin32Error(); try { p.Kill(); } catch { }
+                        throw new Win32Exception(error, "Cannot contain runtime process tree");
+                    }
+                    child = p;
                 }
                 p.BeginOutputReadLine(); p.BeginErrorReadLine();
                 Log("Child started pid=" + p.Id);
@@ -93,6 +115,7 @@ internal sealed class WdbServiceHost : ServiceBase
             }
         }
         if (worker != null) worker.Join(12000);
+        if (job != IntPtr.Zero) { CloseHandle(job); job = IntPtr.Zero; }
         Log("Supervisor stopped");
     }
     protected override void OnShutdown() { OnStop(); }
