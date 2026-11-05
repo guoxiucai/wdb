@@ -1,6 +1,6 @@
 'use strict';
 const https=require('node:https');const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');const os=require('node:os');const {Transform}=require('node:stream');const {pipeline}=require('node:stream/promises');
-const {ROOT,argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require('./common');const {runOperation}=require('./operations');
+const {ROOT,argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require('./common');const {runOperation,executionIdentity}=require('./operations');
 const VERSION='0.1.0';
 class Bridge {
  constructor(options={}){
@@ -8,20 +8,21 @@ class Bridge {
   this.options=options;this.config=read(path.join(this.dir,'config.json'),{deviceId:crypto.randomUUID(),retentionHours:24,maxArtifactBytes:10*1024**3,maxOutputBytes:1024**2,helperPort:18767});atomic(path.join(this.dir,'config.json'),this.config);
   const installation=read(path.join(this.dir,'installation.json'),{});this.config.helperPort=options.helperPort||installation.helperPort||this.config.helperPort;
   this.helperSecret=fs.readFileSync(path.join(this.dir,'helper-secret'),'utf8').trim();this.pairingCode=fs.readFileSync(path.join(this.dir,'pairing-code'),'utf8').trim();
-  this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();
-  for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
+  this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();this.clientSockets=new Map();
+  for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
   this.timer=setInterval(()=>{for(const [id,a] of this.active){const t=this.tasks.get(id);if(t.op.startsWith('input.')&&Date.now()-(this.leases.get(t.clientId)||0)>10000)this.cancel(t,'CONTROL_CONNECTION_LOST');}this.cleanup();},1000);this.timer.unref();
  }
  save(t){atomic(path.join(this.dir,'tasks',t.id,'task.json'),t);}
  audit(event){fs.appendFileSync(path.join(this.dir,'audit.jsonl'),JSON.stringify({...event,deviceId:this.config.deviceId,time:new Date().toISOString()})+'\n');}
  persistClients(){atomic(path.join(this.dir,'clients.json'),this.clients);}
- auth(req){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const c=this.clients.find(c=>!c.revokedAt&&equal(c.tokenHash,sha(token)));if(!c)throw fail('UNAUTHORIZED','Valid paired client token required',401);this.leases.set(c.id,Date.now());return c;}
+ auth(req){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const c=this.clients.find(c=>!c.revokedAt&&equal(c.tokenHash,sha(token)));if(!c)throw fail('UNAUTHORIZED','Valid paired client token required',401);this.leases.set(c.id,Date.now());let sockets=this.clientSockets.get(c.id);if(!sockets){sockets=new Set();this.clientSockets.set(c.id,sockets);}if(!sockets.has(req.socket)){sockets.add(req.socket);req.socket.once('close',()=>{sockets.delete(req.socket);if(sockets.size===0)this.clientSockets.delete(c.id);});}return c;}
  owned(id,client){const t=this.tasks.get(id);if(!t||t.clientId!==client.id)throw fail('TASK_NOT_FOUND','Task not found for this client',404);return t;}
  cancel(t,reason='CANCEL_REQUESTED'){const a=this.active.get(t.id);if(!a)return;fs.writeFileSync(path.join(a.dir,'cancel'),reason);a.controller.abort();t.cancelRequested=true;t.cancelReason=reason;this.save(t);}
  async submit(client,b){
   if(typeof b.op!=='string'||!b.op)throw fail('INVALID_ARGUMENT','Task operation required');
   this.cleanup();if(this.artifactBytes()>=this.config.maxArtifactBytes)throw fail('ARTIFACT_SPACE_EXHAUSTED','Task storage quota exhausted',507);
-  const timeoutMs=Number(b.timeoutMs||b.args?.timeoutMs||120000);if(!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>24*3600*1000)throw fail('INVALID_TIMEOUT','Timeout must be 1..86400000 ms');
+  const defaultTimeout=b.op==='record.start'?(Number(b.args?.durationSeconds||600)*1000+30000):120000;
+  const timeoutMs=Number(b.timeoutMs||b.args?.timeoutMs||defaultTimeout);if(!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>24*3600*1000)throw fail('INVALID_TIMEOUT','Timeout must be 1..86400000 ms');
   const id=crypto.randomUUID(),dir=path.join(this.dir,'tasks',id);fs.mkdirSync(dir);
   const t={id,taskId:id,requestId:id,deviceId:this.config.deviceId,clientId:client.id,op:b.op,status:'accepted',createdAt:new Date().toISOString(),durationMs:0,artifacts:[],error:null};
   this.tasks.set(id,t);this.save(t);const controller=new AbortController();this.active.set(id,{controller,dir});this.leases.set(client.id,Date.now());
@@ -54,12 +55,13 @@ class Bridge {
     const dir=path.join(this.dir,'tasks','.status');fs.mkdirSync(dir,{recursive:true});let desktop;
     try{desktop=await runOperation('desktop.status',{}, {id:'status',dir,timeoutMs:5000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){desktop={available:false,error:{code:e.code,message:e.message}};}
     const recording=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'.runtime','ffmpeg','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].some(f=>fs.existsSync(f));
-    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','input','touch','apps','logs',...(recording?['record']:[])],desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
+    const execution=await executionIdentity();
+    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,serverProcessId:process.pid,execution,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','input','touch','logs',...(execution.isElevated?['apps']:[]),...(recording?['record']:[])],desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
    }
    if(u.pathname==='/v1/heartbeat'&&req.method==='POST')return respond({connected:true});
    if(u.pathname==='/v1/connection'&&req.method==='DELETE'){this.leases.delete(client.id);for(const t of this.tasks.values())if(t.clientId===client.id&&t.op.startsWith('input.'))this.cancel(t,'DISCONNECTED');return respond({disconnected:true,credentialsRetained:true});}
    if(u.pathname==='/v1/clients'&&req.method==='GET')return respond({clients:this.clients.map(({tokenHash,...c})=>c)});
-   if(u.pathname.startsWith('/v1/clients/')&&req.method==='DELETE'){const id=decodeURIComponent(u.pathname.split('/').pop()),c=this.clients.find(c=>c.id===id);if(!c)throw fail('CLIENT_NOT_FOUND','Client not found',404);c.revokedAt=new Date().toISOString();this.persistClients();this.leases.delete(id);for(const t of this.tasks.values())if(t.clientId===id)this.cancel(t,'AUTHORIZATION_REVOKED');return respond({revoked:id});}
+   if(u.pathname.startsWith('/v1/clients/')&&req.method==='DELETE'){const id=decodeURIComponent(u.pathname.split('/').pop()),c=this.clients.find(c=>c.id===id);if(!c)throw fail('CLIENT_NOT_FOUND','Client not found',404);c.revokedAt=new Date().toISOString();this.persistClients();this.leases.delete(id);for(const t of this.tasks.values())if(t.clientId===id)this.cancel(t,'AUTHORIZATION_REVOKED');for(const socket of this.clientSockets.get(id)||[])if(socket!==req.socket)socket.destroy();return respond({revoked:id});}
    if(u.pathname==='/v1/tasks'&&req.method==='POST')return respond(await this.submit(client,await body(req)),'accepted',202);
    if(u.pathname==='/v1/tasks'&&req.method==='GET')return respond({tasks:[...this.tasks.values()].filter(t=>t.clientId===client.id)});
    const match=/^\/v1\/tasks\/([^/]+)(?:\/(cancel|output))?$/.exec(u.pathname);

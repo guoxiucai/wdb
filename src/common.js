@@ -24,8 +24,11 @@ function execute(exe,args,options={}) { return new Promise((resolve,reject)=>{
   const kill=()=>{ if(process.platform==='win32') spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});else child.kill('SIGKILL'); };
   const timer=setTimeout(()=>{timedOut=true;kill();},options.timeoutMs || 120000);
   const abort=()=>{cancelled=true;kill();}; options.signal?.addEventListener('abort',abort,{once:true});
-  child.once('error',e=>{clearTimeout(timer);reject(e);});
-  child.once('close',code=>{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);resolve({stdout,stderr,exitCode:code,durationMs:Date.now()-started,truncated,timedOut,cancelled,pid:child.pid});});
+  let drainTimer,finished=false;
+  const finish=code=>{if(finished)return;finished=true;clearTimeout(timer);clearTimeout(drainTimer);options.signal?.removeEventListener('abort',abort);resolve({stdout,stderr,exitCode:code,durationMs:Date.now()-started,truncated,timedOut,cancelled,pid:child.pid});};
+  child.once('error',e=>{clearTimeout(timer);clearTimeout(drainTimer);options.signal?.removeEventListener('abort',abort);reject(e);});
+  child.once('exit',code=>{drainTimer=setTimeout(()=>{truncated=true;child.stdout.destroy();child.stderr.destroy();finish(code);},250);});
+  child.once('close',finish);
   if(options.stdin) child.stdin.end(options.stdin); else if(!options.keepStdin) child.stdin.end();
   options.onSpawn?.(child);
 }); }
