@@ -49,6 +49,10 @@ try {
         Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'native') -File | Where-Object Name -ne 'WdbServiceHost.exe' | ForEach-Object {
             if ($_.FullName -ne (Join-Path $InstallDirectory "native\$($_.Name)")) { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallDirectory 'native') -Force }
         }
+        $desktopBin = Join-Path $sourceRoot 'native\bin'
+        if ((Test-Path -LiteralPath $desktopBin) -and $sourceRoot -ne $InstallDirectory) {
+            Copy-Item -LiteralPath $desktopBin -Destination (Join-Path $InstallDirectory 'native') -Recurse -Force
+        }
         if (Test-Path -LiteralPath (Join-Path $sourceRoot 'runtime')) {
             Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'runtime') -File | Where-Object Name -ne 'node.exe' | ForEach-Object {
                 if ($_.FullName -ne (Join-Path $InstallDirectory "runtime\$($_.Name)")) { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $InstallDirectory 'runtime') -Force }
