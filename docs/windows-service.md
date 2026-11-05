@@ -38,6 +38,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-servic
 
 输出 `dist\wdb-windows-x64`，其中包含运行时、服务宿主、CLI、源码、脚本、Skill、使用文档和 `SHA256SUMS.txt`。整个目录复制到目标 Windows x64 设备，在管理员 PowerShell 执行该目录里的 `scripts\install-service.ps1`。安装前没有网络请求。
 
+用 `scripts\verify-package.ps1 -PackageDirectory <交付目录>` 校验全部清单条目、缺失/未列出文件、必须随包提供的依赖及独立 CLI 启动。验证器不连接或更改运行中的设备。
+
 升级使用新版目录重新执行安装脚本，停止旧服务/helper，覆盖程序，再启动。默认保留原数据目录与 `helper-secret`。客户端凭据属于客户端自身配置，不随服务升级删除。安装失败信息见 `C:\ProgramData\wdb\install.log`；服务/桌面宿主信息见 `logs\service-host.log`、`logs\helper-host.log`。
 
 卸载：管理员执行 `scripts\uninstall-service.ps1`，移除 SCM 服务与计划任务，保留程序文件、配置和配对。确认不再需要后可手动删除程序目录。明确指定 `-RemoveData` 才删除默认 `C:\ProgramData\wdb` 数据目录；自定义目录须手动处理。
