@@ -15,11 +15,12 @@ function powershell(script, options={}) {
   return execute(process.env.SystemRoot+'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from('[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding; '+script,'utf16le').toString('base64')], options);
 }
 function execute(exe,args,options={}) { return new Promise((resolve,reject)=>{
+  if(options.signal?.aborted){resolve({stdout:'',stderr:'',exitCode:null,durationMs:0,truncated:false,timedOut:false,cancelled:true,pid:null});return;}
   const started=Date.now(); let stdout='',stderr='',truncated=false,timedOut=false,cancelled=false;
   const child=spawn(exe,args,{windowsHide:true,cwd:options.cwd,env:{...process.env,...options.env},stdio:['pipe','pipe','pipe']});
   const max=options.maxOutput || 1024*1024;
   const add=(kind,chunk)=> { const s=chunk.toString('utf8'); options.onOutput?.(kind,s); if(kind==='stdout'){ if(Buffer.byteLength(stdout)+Buffer.byteLength(s)<=max)stdout+=s; else truncated=true;} else {if(Buffer.byteLength(stderr)+Buffer.byteLength(s)<=max)stderr+=s;else truncated=true;} };
-  child.stdout.on('data',x=>add('stdout',x));child.stderr.on('data',x=>add('stderr',x));
+  child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',x=>add('stdout',x));child.stderr.on('data',x=>add('stderr',x));
   const kill=()=>{ if(process.platform==='win32') spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});else child.kill('SIGKILL'); };
   const timer=setTimeout(()=>{timedOut=true;kill();},options.timeoutMs || 120000);
   const abort=()=>{cancelled=true;kill();}; options.signal?.addEventListener('abort',abort,{once:true});

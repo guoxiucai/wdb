@@ -1,6 +1,6 @@
 'use strict';
 const https=require('node:https');const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');const os=require('node:os');const {Transform}=require('node:stream');const {pipeline}=require('node:stream/promises');
-const {argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require('./common');const {runOperation}=require('./operations');
+const {ROOT,argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require('./common');const {runOperation}=require('./operations');
 const VERSION='0.1.0';
 class Bridge {
  constructor(options={}){
@@ -26,13 +26,14 @@ class Bridge {
   const t={id,taskId:id,requestId:id,deviceId:this.config.deviceId,clientId:client.id,op:b.op,status:'accepted',createdAt:new Date().toISOString(),durationMs:0,artifacts:[],error:null};
   this.tasks.set(id,t);this.save(t);const controller=new AbortController();this.active.set(id,{controller,dir});this.leases.set(client.id,Date.now());
   setImmediate(async()=>{
+   if(controller.signal.aborted){t.status='cancelled';t.endedAt=new Date().toISOString();t.error={code:'CANCELLED',message:'Cancelled before execution'};this.active.delete(id);this.save(t);return;}
    t.status='running';t.startedAt=new Date().toISOString();this.save(t);this.audit({requestId:id,clientId:client.id,op:t.op,status:'running'});
    let outputBytes=0;
    try{
     const data=await runOperation(t.op,b.args||{},{id,dir,signal:controller.signal,timeoutMs,maxOutput:this.config.maxOutputBytes,onOutput:(kind,s)=>{const available=this.config.maxOutputBytes-outputBytes;if(available>0){const buffer=Buffer.from(s).subarray(0,available);fs.appendFileSync(path.join(dir,kind+'.live'),buffer);outputBytes+=buffer.length;}}},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});
     t.data=data;t.artifacts=data?.artifacts||[];t.status=data?.timedOut?'timed_out':data?.cancelled||controller.signal.aborted?'cancelled':data?.installerStatus||((data?.exitCode!=null&&data.exitCode!==0)?'failed':'succeeded');
     if(t.status==='failed')t.error={code:'PROCESS_FAILED',message:'Process exited with code '+data.exitCode};if(t.status==='timed_out')t.error={code:'TIMEOUT',message:'Operation timed out; inspect current state before retrying'};
-   }catch(e){t.status=controller.signal.aborted?'cancelled':'failed';t.error={code:e.code||'OPERATION_FAILED',message:e.message};}
+   }catch(e){t.status=controller.signal.aborted||e.code==='CANCELLED'?'cancelled':e.code==='TIMEOUT'?'timed_out':'failed';t.error={code:e.code||'OPERATION_FAILED',message:e.message};}
    finally{t.endedAt=new Date().toISOString();t.durationMs=Date.now()-Date.parse(t.startedAt);this.active.delete(id);this.save(t);this.audit({requestId:id,clientId:client.id,op:t.op,status:t.status,error:t.error});}
   });return t;
  }
@@ -49,7 +50,12 @@ class Bridge {
     const token=crypto.randomBytes(32).toString('base64url');const c={id:crypto.randomUUID(),name:String(b.name||'wdb client').slice(0,120),tokenHash:sha(token),createdAt:new Date().toISOString()};this.clients.push(c);this.persistClients();this.audit({requestId,clientId:c.id,op:'pair',status:'succeeded'});return respond({clientId:c.id,token,deviceId:this.config.deviceId,version:VERSION});
    }
    client=this.auth(req);
-   if(u.pathname==='/v1/info'&&req.method==='GET')return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','input','touch','apps','logs','record'],helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
+   if(u.pathname==='/v1/info'&&req.method==='GET'){
+    const dir=path.join(this.dir,'tasks','.status');fs.mkdirSync(dir,{recursive:true});let desktop;
+    try{desktop=await runOperation('desktop.status',{}, {id:'status',dir,timeoutMs:5000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){desktop={available:false,error:{code:e.code,message:e.message}};}
+    const recording=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'.runtime','ffmpeg','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].some(f=>fs.existsSync(f));
+    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','input','touch','apps','logs',...(recording?['record']:[])],desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
+   }
    if(u.pathname==='/v1/heartbeat'&&req.method==='POST')return respond({connected:true});
    if(u.pathname==='/v1/connection'&&req.method==='DELETE'){this.leases.delete(client.id);for(const t of this.tasks.values())if(t.clientId===client.id&&t.op.startsWith('input.'))this.cancel(t,'DISCONNECTED');return respond({disconnected:true,credentialsRetained:true});}
    if(u.pathname==='/v1/clients'&&req.method==='GET')return respond({clients:this.clients.map(({tokenHash,...c})=>c)});
@@ -80,7 +86,7 @@ class Bridge {
   }finally{await fs.promises.rm(temp,{force:true}).catch(()=>{});this.uploads.delete(p.toLowerCase());}
  }
  listen(port=18766,host='127.0.0.1'){
-  const server=https.createServer({pfx:fs.readFileSync(path.join(this.dir,'tls.pfx')),passphrase:fs.readFileSync(path.join(this.dir,'tls-password'),'utf8'),minVersion:'TLSv1.2'},(req,res)=>this.route(req,res));server.requestTimeout=0;server.headersTimeout=30000;this.server=server;return new Promise(resolve=>server.listen(port,host,()=>resolve(server)));
+  const server=https.createServer({pfx:fs.readFileSync(path.join(this.dir,'tls.pfx')),passphrase:fs.readFileSync(path.join(this.dir,'tls-password'),'utf8'),minVersion:'TLSv1.2'},(req,res)=>this.route(req,res));server.requestTimeout=0;server.headersTimeout=30000;this.server=server;return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>resolve(server));});
  }
  close(){clearInterval(this.timer);return new Promise(r=>{this.server?.close(r);this.server?.closeAllConnections();if(!this.server)r();});}
 }

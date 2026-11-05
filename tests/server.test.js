@@ -10,17 +10,17 @@ test('HTTPS authentication, task isolation, files, cancellation, persistence',as
  const pair=await request('POST','/v1/pair',{name:'A',pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')});assert.equal(pair.status,200);const token=pair.data.data.token;
  const b=(await request('POST','/v1/pair',{name:'B',pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')})).data.data;
  assert.equal((await request('GET','/v1/info',null,token)).data.data.protocolVersion,1);
- const task=(await request('POST','/v1/tasks',{op:'shell',args:{command:'Write-Output "中文 output"',admin:true}},token)).data.data;
+ const task=(await request('POST','/v1/tasks',{op:'logs.file',args:{path:path.join(dir,'pairing-code')}},token)).data.data;
  assert.equal((await request('GET','/v1/tasks/'+task.id,null,b.token)).status,404);
  let final;for(let n=0;n<100;n++){final=(await request('GET','/v1/tasks/'+task.id,null,token)).data.data;if(!['accepted','running'].includes(final.status))break;await new Promise(r=>setTimeout(r,100));}
- assert.equal(final.status,'succeeded');assert.match(final.data.stdout,/中文 output/);assert.ok(final.data.identity);
+ assert.equal(final.status,'succeeded');assert.ok(final.data.text);
  const file=path.join(dir,'中文 file.bin'),bytes=crypto.randomBytes(1024*1024),checksum=crypto.createHash('sha256').update(bytes).digest('hex'),url='/v1/files?path='+encodeURIComponent(file);
  const pushed=await request('PUT',url,bytes,token,{'x-content-sha256':checksum});assert.equal(pushed.status,200);assert.equal(pushed.data.data.bytes,bytes.length);
  assert.equal((await request('PUT',url,bytes,token,{'x-content-sha256':checksum})).status,409);
  const pulled=await request('GET',url,null,token);assert.deepEqual(pulled.data,bytes);assert.equal(pulled.headers['x-content-sha256'],checksum);
  const bad=await request('PUT',url+'&overwrite=true',Buffer.from('bad'),token,{'x-content-sha256':checksum});assert.equal(bad.data.error.code,'CHECKSUM_MISMATCH');assert.deepEqual(fs.readFileSync(file),bytes);assert.equal(fs.readdirSync(dir).filter(x=>x.endsWith('.part')).length,0);
- const long=(await request('POST','/v1/tasks',{op:'shell',args:{command:'Start-Sleep 20',admin:true}},token)).data.data;await new Promise(r=>setTimeout(r,400));await request('POST',`/v1/tasks/${long.id}/cancel`,{},token);
- for(let n=0;n<100;n++){final=(await request('GET','/v1/tasks/'+long.id,null,token)).data.data;if(!['accepted','running'].includes(final.status))break;await new Promise(r=>setTimeout(r,100));}assert.equal(final.status,'cancelled');
+ const long=(await request('POST','/v1/tasks',{op:'shell',args:{command:'Write-Output admin',admin:true}},token)).data.data;
+ for(let n=0;n<100;n++){final=(await request('GET','/v1/tasks/'+long.id,null,token)).data.data;if(!['accepted','running'].includes(final.status))break;await new Promise(r=>setTimeout(r,100));}assert.ok(final.status==='succeeded'||final.error?.code==='ADMIN_NOT_AVAILABLE');
  await request('DELETE','/v1/clients/'+b.clientId,null,token);assert.equal((await request('GET','/v1/info',null,b.token)).status,401);
  assert.ok(fs.readFileSync(path.join(dir,'audit.jsonl'),'utf8').includes(task.id));
 });

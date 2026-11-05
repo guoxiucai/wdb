@@ -6,4 +6,6 @@ node_modules/
 *.part
 native/*.exe
 native/*.dll
+native/bin/
+.tmp/
 .test-*/

@@ -10,7 +10,8 @@ const server=http.createServer(async(req,res)=>{
   const b=await body(req);const dir=path.resolve(b.dir||'');const base=path.join(dataDir,'tasks')+path.sep;
   if(!dir.startsWith(base))throw fail('INVALID_TASK_DIRECTORY','Task directory outside service data');
   const controller=new AbortController();const timer=setInterval(()=>{if(fs.existsSync(path.join(dir,'cancel')))controller.abort();},100);
-  try {const data=await runOperation(b.op,b.args||{},{id:b.taskId,dir,timeoutMs:b.timeoutMs||120000,signal:controller.signal,onOutput:(stream,text)=>fs.appendFileSync(path.join(dir,stream+'.live'),text.slice(0,65536))},{isHelper:true});send(res,200,{ok:true,data});}finally{clearInterval(timer);}
+  let outputBytes=0;const maxOutput=1024*1024;
+  try {const data=await runOperation(b.op,b.args||{},{id:b.taskId,dir,timeoutMs:b.timeoutMs||120000,signal:controller.signal,onOutput:(stream,text)=>{const available=maxOutput-outputBytes;if(available>0){const bytes=Buffer.from(text).subarray(0,available);fs.appendFileSync(path.join(dir,stream+'.live'),bytes);outputBytes+=bytes.length;}}},{isHelper:true});send(res,200,{ok:true,data});}finally{clearInterval(timer);}
  }catch(e){send(res,e.statusCode||500,{ok:false,error:{code:e.code||'INTERNAL_ERROR',message:e.message}});}
 });
 server.listen(Number(args.port||18767),'127.0.0.1',()=>console.log(JSON.stringify({event:'helper-ready',port:Number(args.port||18767),pid:process.pid})));

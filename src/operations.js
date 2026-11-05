@@ -6,15 +6,18 @@ const {spawn}=require('node:child_process');
 const {ROOT,fail,powershell,execute,read}=require('./common');
 function psQuote(s){return "'"+String(s).replaceAll("'","''")+"'";}
 async function native(op,args,ctx){
+  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
   const request=path.join(ctx.dir,'native-request.json');fs.writeFileSync(request,JSON.stringify({op,args:{...args,cancelFile:path.join(ctx.dir,'cancel')}}));
   const abort=()=>fs.writeFileSync(path.join(ctx.dir,'cancel'),'cancel');ctx.signal?.addEventListener('abort',abort,{once:true});
   try {
     const r=await execute(process.env.SystemRoot+'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(ROOT,'native','desktop.ps1'),'-RequestFile',request],{timeoutMs:ctx.timeoutMs+5000});
+    if(r.timedOut)throw fail('TIMEOUT','Native operation timed out; observe before retrying');
     let result;try{result=JSON.parse(r.stdout.replace(/^\uFEFF/,''));}catch{throw fail('NATIVE_ERROR',r.stderr||r.stdout||'Native bridge produced no JSON');}
     if(!result.ok)throw fail(result.error?.code||'NATIVE_ERROR',result.error?.message||'Native operation failed');return result.data;
   } finally {ctx.signal?.removeEventListener('abort',abort);}
 }
 async function helperRequest(op,args,ctx,config){
+ if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
  return new Promise((resolve,reject)=>{
    const req=http.request({host:'127.0.0.1',port:config.helperPort||18767,path:'/execute',method:'POST',headers:{authorization:'Bearer '+config.helperSecret,'content-type':'application/json'}},res=>{
      let raw='';res.on('data',c=>{raw+=c;if(raw.length>16*1024*1024)res.destroy();});res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw fail(r.error.code,r.error.message);resolve(r.data);}catch(e){reject(e);}});
@@ -25,15 +28,17 @@ async function helperRequest(op,args,ctx,config){
 }
 async function shell(args,ctx){
  if(typeof args.command!=='string')throw fail('INVALID_ARGUMENT','shell requires command');
- const identity=await powershell('[Security.Principal.WindowsIdentity]::GetCurrent().Name',{timeoutMs:10000});
+ const identity=await executionIdentity();if(args.admin&&!identity.isElevated)throw fail('ADMIN_NOT_AVAILABLE','Server is not elevated. Repair/install the Windows service before requesting administrator execution');
  const result=await powershell(args.command,{cwd:args.cwd,env:args.env,timeoutMs:ctx.timeoutMs,signal:ctx.signal,onOutput:ctx.onOutput,maxOutput:ctx.maxOutput});
- return {...result,identity:identity.stdout.trim(),requestedIdentity:args.admin?'administrator':'logged-in-user'};
+ return {...result,...identity,requestedIdentity:args.admin?'administrator':'logged-in-user'};
 }
+async function executionIdentity(){const r=await powershell('$i=[Security.Principal.WindowsIdentity]::GetCurrent(); $p=New-Object Security.Principal.WindowsPrincipal($i); @{identity=$i.Name;isElevated=$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)} | ConvertTo-Json -Compress',{timeoutMs:10000});if(r.exitCode!==0)throw fail('IDENTITY_QUERY_FAILED',r.stderr);return JSON.parse(r.stdout);}
 async function installedApps(){
  const r=await powershell("$keys=@('HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'); @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object DisplayName | ForEach-Object { [ordered]@{id=$_.PSPath;name=$_.DisplayName;version=$_.DisplayVersion;publisher=$_.Publisher;installLocation=$_.InstallLocation;uninstallString=$_.UninstallString;quietUninstallString=$_.QuietUninstallString} }) | ConvertTo-Json -Depth 5 -Compress");
- if(r.exitCode!==0)throw fail('APPS_QUERY_FAILED',r.stderr);return {apps:JSON.parse(r.stdout||'[]')};
+ if(r.exitCode!==0)throw fail('APPS_QUERY_FAILED',r.stderr);const value=JSON.parse(r.stdout||'[]');return {apps:Array.isArray(value)?value:value?[value]:[]};
 }
 async function install(op,args,ctx){
+ const identity=await executionIdentity();if(!identity.isElevated)throw fail('ADMIN_NOT_AVAILABLE','App deployment requires the installed elevated Windows service');
  let file=args.path,params=args.arguments;
  if(op==='apps.uninstall'){
    if(!args.id)throw fail('APPLICATION_ID_REQUIRED','Exact installed application registry id is required');
@@ -45,14 +50,14 @@ async function install(op,args,ctx){
  let exe=file,argv=params;
  if(path.extname(file).toLowerCase()==='.msi'){exe='msiexec.exe';argv=[op==='apps.uninstall'?'/x':'/i',file,'/qn','/norestart',...params];}
  const result=await execute(exe,argv,{cwd:args.cwd,timeoutMs:ctx.timeoutMs,signal:ctx.signal});
- return {...result,installerStatus:result.timedOut?'needs_manual_intervention':result.exitCode===0?'succeeded':[1641,3010].includes(result.exitCode)?'reboot_required':'failed',rebootRequested:false};
+ return {...result,...identity,installerStatus:result.timedOut?'needs_manual_intervention':result.exitCode===0?'succeeded':[1641,3010].includes(result.exitCode)?'reboot_required':'failed',rebootRequested:false};
 }
 async function logFile(args){
  if(!args.path)throw fail('INVALID_ARGUMENT','log path required');
  const st=await fs.promises.stat(args.path);const limit=Math.min(Math.max(Number(args.limitBytes)||65536,2),4*1024*1024);
- const start=Math.max(0,st.size-limit);const handle=await fs.promises.open(args.path,'r');let bytes;
- try{bytes=Buffer.alloc(st.size-start);await handle.read(bytes,0,bytes.length,start);}finally{await handle.close();}
- let encoding=args.encoding||'utf8';if(start===0&&bytes[0]===255&&bytes[1]===254)encoding='utf16le';if(!['utf8','utf16le'].includes(encoding))throw fail('INVALID_ENCODING','Supported encodings: utf8, utf16le');
+ let start=Math.max(0,st.size-limit);const handle=await fs.promises.open(args.path,'r');let bytes,encoding=args.encoding||'utf8';
+ try{const prefix=Buffer.alloc(2);await handle.read(prefix,0,2,0);if(!args.encoding&&prefix[0]===255&&prefix[1]===254)encoding='utf16le';if(encoding==='utf16le')start-=start%2;bytes=Buffer.alloc(st.size-start);const result=await handle.read(bytes,0,bytes.length,start);bytes=bytes.subarray(0,result.bytesRead);if(encoding==='utf8'&&start>0){let skip=0;while(skip<bytes.length&&(bytes[skip]&0xc0)===0x80)skip++;bytes=bytes.subarray(skip);start+=skip;}}finally{await handle.close();}
+ if(!['utf8','utf16le'].includes(encoding))throw fail('INVALID_ENCODING','Supported encodings: utf8, utf16le');
  const text=bytes.toString(encoding).replace(/^\uFEFF/,'');const lines=args.lines?text.split(/\r?\n/).slice(-Number(args.lines)).join('\n'):text;
  return {path:args.path,text:lines,size:st.size,offset:start,encoding,modifiedAt:st.mtime.toISOString(),fileId:st.ino};
 }
@@ -61,7 +66,7 @@ async function eventLogs(args){
  const limit=Math.min(Math.max(Number(args.limit)||100,1),1000),offset=Math.max(0,Number(args.offset)||0);if(offset>10000)throw fail('INVALID_OFFSET','Maximum event offset is 10000');
  let filter='@{LogName='+psQuote(log);if(args.startTime)filter+=';StartTime=[datetime]'+psQuote(args.startTime);if(args.endTime)filter+=';EndTime=[datetime]'+psQuote(args.endTime);if(args.source)filter+=';ProviderName='+psQuote(args.source);if(args.level)filter+=';Level='+Number(args.level);if(args.eventId)filter+=';Id='+Number(args.eventId);filter+='}';
  const script='$ErrorActionPreference="Stop"; try { @(Get-WinEvent -FilterHashtable '+filter+' -MaxEvents '+(limit+offset)+' | Select-Object -Skip '+offset+' -First '+limit+' | Select-Object TimeCreated,Id,LevelDisplayName,ProviderName,RecordId,Message) | ConvertTo-Json -Depth 5 -Compress } catch { if ($_.FullyQualifiedErrorId -like "NoMatchingEventsFound*") { "[]" } else { throw } }';
- const r=await powershell(script,{timeoutMs:30000});if(r.exitCode!==0)throw fail('EVENT_LOG_FAILED',r.stderr);let entries=JSON.parse(r.stdout||'[]');if(args.keyword)entries=entries.filter(e=>e.Message?.includes(args.keyword));return {entries,nextOffset:entries.length===limit?offset+limit:null};
+ const r=await powershell(script,{timeoutMs:30000});if(r.exitCode!==0)throw fail('EVENT_LOG_FAILED',r.stderr);let entries=JSON.parse(r.stdout||'[]');entries=Array.isArray(entries)?entries:entries?[entries]:[];const fetched=entries.length;if(args.keyword)entries=entries.filter(e=>e.Message?.includes(args.keyword));return {entries,nextOffset:fetched===limit?offset+limit:null};
 }
 const recordings=new Map();
 async function record(op,args,ctx){
@@ -69,17 +74,20 @@ async function record(op,args,ctx){
    const entry=recordings.get(args.id);if(!entry)throw fail('RECORDING_NOT_FOUND','Recording id is absent or process restarted');
    entry.child.stdin.write('q\n');await entry.done;return entry.result;
  }
- const ffmpeg=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].find(f=>fs.existsSync(f));if(!ffmpeg)throw fail('CAPABILITY_UNAVAILABLE','Bundled ffmpeg is not installed');
+ const ffmpeg=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'.runtime','ffmpeg','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].find(f=>fs.existsSync(f));if(!ffmpeg)throw fail('CAPABILITY_UNAVAILABLE','Bundled ffmpeg is not installed');
  const duration=Number(args.durationSeconds||600);if(!(duration>0&&duration<=3600))throw fail('INVALID_DURATION','Recording duration must be 1..3600 seconds');
  const screens=await native('screens',{},ctx);const list=Array.isArray(screens)?screens:screens.screens||screens.monitors;const monitor=list?.[Number(args.monitor||0)];if(!monitor)throw fail('MONITOR_NOT_FOUND','Monitor unavailable');
- const bounds=monitor.bounds||monitor;const target=path.join(ctx.dir,'recording.mp4');const id=ctx.id;
- const cmd=['-y','-f','gdigrab','-framerate',String(args.fps||30),'-offset_x',String(bounds.x??bounds.left??0),'-offset_y',String(bounds.y??bounds.top??0),'-video_size',`${bounds.width}x${bounds.height}`,'-i','desktop','-t',String(duration),'-vf','scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-an','-movflags','+faststart',target];
+ const target=path.join(ctx.dir,'recording.mp4');const id=ctx.id;const fps=Number(args.fps||30);if(!Number.isInteger(fps)||fps<1||fps>60)throw fail('INVALID_FPS','fps must be 1..60');
+ const captureIndex=Number(args.captureIndex??args.monitor??0);if(!Number.isInteger(captureIndex)||captureIndex<0)throw fail('INVALID_MONITOR','captureIndex must be a nonnegative DXGI output index');
+ const cmd=['-y','-hide_banner','-nostats','-loglevel','warning','-f','lavfi','-i',`ddagrab=output_idx=${captureIndex}:framerate=${fps}`,'-t',String(duration),'-vf','hwdownload,format=bgra,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-fps_mode','passthrough','-an','-movflags','+faststart',target];
  const entry={};let resolveDone;entry.done=new Promise(r=>resolveDone=r);recordings.set(id,entry);
  const child=spawn(ffmpeg,cmd,{windowsHide:true,stdio:['pipe','ignore','pipe']});entry.child=child;let stderr='';child.stderr.on('data',c=>{stderr=(stderr+c).slice(-65536);});
  const started=Date.now();const timer=setTimeout(()=>child.stdin.write('q\n'),(duration+10)*1000);const abort=()=>child.stdin.write('q\n');ctx.signal?.addEventListener('abort',abort);
- return await new Promise((resolve,reject)=>{child.on('error',e=>{clearTimeout(timer);reject(e);resolveDone();});child.on('close',code=>{clearTimeout(timer);ctx.signal?.removeEventListener('abort',abort);entry.result={id,path:target,exitCode:code,durationMs:Date.now()-started,stderr,artifacts:fs.existsSync(target)?[{path:target,type:'video/mp4',size:fs.statSync(target).size}]:[]};resolveDone();recordings.delete(id);if(code===0)resolve(entry.result);else reject(fail('RECORDING_FAILED',stderr));});});
+ return await new Promise((resolve,reject)=>{child.on('error',e=>{clearTimeout(timer);reject(e);resolveDone();});child.on('close',async code=>{clearTimeout(timer);ctx.signal?.removeEventListener('abort',abort);const log=path.join(ctx.dir,'encoder.log');fs.writeFileSync(log,stderr);let probe=null;try{const r=await execute(path.join(path.dirname(ffmpeg),'ffprobe.exe'),['-v','error','-show_entries','stream=codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames,duration','-of','json',target],{timeoutMs:30000});if(r.exitCode===0)probe=JSON.parse(r.stdout);}catch{}
+ entry.result={id,path:target,exitCode:code,durationMs:Date.now()-started,captureMethod:'DXGI Desktop Duplication (ddagrab)',monitor:Number(args.monitor||0),captureIndex,monitorMappingVerified:list.length===1,requestedFps:fps,probe,encoderLog:log,artifacts:fs.existsSync(target)?[{path:target,type:'video/mp4',size:fs.statSync(target).size},{path:log,type:'text/plain',size:fs.statSync(log).size}]:[]};resolveDone();recordings.delete(id);if(code===0)resolve(entry.result);else reject(fail('RECORDING_FAILED',stderr.slice(-2000)));});});
 }
 async function runOperation(op,args,ctx,config={}){
+ if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
  const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.'].some(p=>op.startsWith(p));
  const userShell=op==='shell'&&!args.admin;
  if(!config.isHelper&&(desktop||userShell))return helperRequest(op,args,ctx,config);
@@ -92,4 +100,4 @@ async function runOperation(op,args,ctx,config={}){
  if(desktop){if(op==='screenshot')args={...args,path:path.join(ctx.dir,'screenshot.png')};const data=await native(op,args,ctx);if(op==='screenshot')return {...data,artifacts:[{path:args.path,type:'image/png',size:fs.statSync(args.path).size}]};return data;}
  throw fail('UNKNOWN_OPERATION','Unsupported operation: '+op);
 }
-module.exports={runOperation,native,psQuote,logFile,eventLogs};
+module.exports={runOperation,native,psQuote,logFile,eventLogs,executionIdentity};
