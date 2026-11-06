@@ -35,7 +35,11 @@ test('non-idempotent requests with uncertain outcomes are not replayed',async t=
 });
 test('task waiter survives a server outage and reports restart uncertainty without resubmission',async t=>{
  const f=await setup(t),original=f.bridge.route.bind(f.bridge);let polls=0,posts=0,restored=false;
- f.bridge.route=async(req,res)=>{if(req.method==='POST'&&req.url==='/v1/tasks')posts++;if(req.url==='/v1/tasks/existing'){polls++;if(polls===1){res.end(JSON.stringify({deviceId:f.device.deviceId,data:{id:'existing',status:'running'}}));setTimeout(()=>{f.bridge.server.close();f.bridge.server.closeAllConnections();setTimeout(()=>{restored=true;f.bridge.server.listen(new URL(f.device.url).port,'127.0.0.1');},500);},30);return;}res.end(JSON.stringify({deviceId:f.device.deviceId,data:{id:'existing',status:'unknown',error:{code:'SERVICE_RESTARTED',message:'unknown'}}}));return;}return original(req,res);};
+ // This fixture fabricates the legacy polling endpoint without a stored task.
+ // Advertise that capability honestly; real SSE restart is covered separately.
+ const legacyRoute=original;f.bridge.route=(req,res)=>{if(req.url==='/v1/health'){res.end(JSON.stringify({deviceId:f.device.deviceId,data:{protocolVersion:1,taskEvents:false}}));return;}return legacyRoute(req,res);};
+ const legacy=f.bridge.route.bind(f.bridge);
+ f.bridge.route=async(req,res)=>{if(req.method==='POST'&&req.url==='/v1/tasks')posts++;if(req.url==='/v1/tasks/existing'){polls++;if(polls===1){res.end(JSON.stringify({deviceId:f.device.deviceId,data:{id:'existing',status:'running'}}));setTimeout(()=>{f.bridge.server.close();f.bridge.server.closeAllConnections();setTimeout(()=>{restored=true;f.bridge.server.listen(new URL(f.device.url).port,'127.0.0.1');},500);},30);return;}res.end(JSON.stringify({deviceId:f.device.deviceId,data:{id:'existing',status:'unknown',error:{code:'SERVICE_RESTARTED',message:'unknown'}}}));return;}return legacy(req,res);};
  const result=await f.cli(['task','wait','existing']);assert.equal(restored,true);assert.equal(result.code,1);assert.equal(result.result.data.status,'unknown');assert.equal(posts,0);assert.match(result.stderr,/Connection restored/);
 });
 
