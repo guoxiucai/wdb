@@ -23,9 +23,10 @@ test('installed localhost service: CLI pairing, user shell, transfer, logs, life
   let clientId;
   try {
     const paired = await cli(['connect', target, '--name', 'wdb-cli-integration']);
-    assert.equal(paired.code, 0, JSON.stringify(paired.result)); clientId = paired.result.data.clientId;
-    assert.notEqual(paired.result.data.remembered,false,'For this opt-in integration test, the server operator must check Remember so its reconnect step does not require a second manual dialog.');
+    assert.equal(paired.code, 0, JSON.stringify(paired.result));assert.equal(paired.result.data.state,'connected');
     const info = await cli(['info']); assert.equal(info.code, 0); assert.equal(info.result.data.protocolVersion, 1);
+    clientId=info.result.data.connection.clientId;
+    assert.notEqual(info.result.data.connection.remembered,false,'For this opt-in integration test, the server operator must check Remember so its reconnect step does not require a second manual dialog.');
     const shell = await cli(['shell', '--script', "[Console]::WriteLine('中文 shell verified'); whoami"]);
     assert.equal(shell.code, 0, JSON.stringify(shell.result)); assert.match(shell.result.data.data.stdout, /中文 shell verified/);
     assert.ok(shell.result.data.data.identity); assert.equal(shell.result.data.data.requestedIdentity, 'logged-in-user');

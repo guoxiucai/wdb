@@ -100,6 +100,21 @@ async function resolveConfigDir(options = {}, context = {}) {
   }
   return dir;
 }
+function connectionResult(url, state, error = null) {
+  const target = url ? new URL(url) : null;
+  const address = target ? `${target.hostname}:${target.port || 443}` : null;
+  return makeEnvelope({ address, state }, {
+    status: state === 'timeout' ? 'timed_out' : state === 'failed' ? 'failed' : 'succeeded',
+    error: error ? { code: error.code || 'CLIENT_ERROR', message: error.message } : null
+  });
+}
+function connectionError(error, target) {
+  const timeouts = new Set(['PAIRING_TIMEOUT', 'TRANSPORT_TIMEOUT', 'RECONNECT_TIMEOUT', 'ETIMEDOUT', 'ERR_TLS_HANDSHAKE_TIMEOUT']);
+  const timedOut = timeouts.has(error.code) || (error.code === 'REQUEST_OUTCOME_UNKNOWN' && timeouts.has(error.extra?.cause));
+  let url;
+  try { url = normalizeTarget(target); } catch { /* Never echo invalid URLs containing credentials. */ }
+  return connectionResult(url, timedOut ? 'timeout' : 'failed', error);
+}
 async function readConfig(dir) {
   try {
     await secureConfig(dir);
@@ -381,6 +396,7 @@ const HELP = `wdb — Windows Debug Bridge
 
   wdb connect <server-IP-or-hostname>[:18766] [--name <client-name>]
     Approve on the server; no pairing code required. First certificate is saved automatically.
+    Prints connected / already connected / failed / timed out. Use info for details.
     Optional trusted pin: --fingerprint <SHA256>; --approval-timeout <ms> defaults to 150000.
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
   wdb clients list | clients revoke <clientId>
@@ -412,8 +428,8 @@ Credentials: macOS ~/Library/Application Support/wdb/client;
 Observe task state before retrying side effects after timeouts.
 `;
 
-async function execute(argv, io) {
-  const { positional, options } = parseArgv(argv);
+async function execute(argv, io, parsed = parseArgv(argv)) {
+  const { positional, options } = parsed;
   if (options.version) return { result: makeEnvelope({ version: '0.1.0' }), options };
   if (options.help || !positional.length) return { help: HELP, options };
   const [command, ...words] = positional;
@@ -431,13 +447,21 @@ async function execute(argv, io) {
     if (device) {
       setSession(device,options,io);
       if (options.fingerprint && normalizeFingerprint(options.fingerprint) !== device.fingerprint) throw new CliError('CERTIFICATE_MISMATCH', 'Supplied fingerprint differs from saved device identity. Verify the server certificate before changing saved trust.');
-      let info;
-      try{info=await api(device,'GET','/v1/info');}
-      catch(e){if(e.code==='PAIRING_REQUIRED'){io.stderr.write('Waiting for approval on the Windows server.\n');const renewed=await api(device,'POST','/v1/connection',{},approvalTimeout,{reconnectMs:0});device.remembered=renewed.data.remembered;info=await api(device,'GET','/v1/info');}else if(e.code!=='UNAUTHORIZED')throw e;}
-      if(info){
-      device.connected = true; device.lastConnected = new Date().toISOString();device.hostname=info.data.hostname||device.hostname;
-      await saveConfig(dir, config);
-      return { options, result: makeEnvelope({ url, deviceId: device.deviceId, clientId: device.clientId, reconnected: true, info: info.data }, { deviceId: device.deviceId }) };
+      let health, alreadyConnected = device.connected !== false;
+      try { health = await discoverServer(device); }
+      catch (e) {
+        if (e.code === 'PAIRING_REQUIRED') {
+          alreadyConnected = false;
+          io.stderr.write('Waiting for approval on the Windows server.\n');
+          const renewed = await api(device, 'POST', '/v1/connection', {}, approvalTimeout, { reconnectMs: 0 });
+          device.remembered = renewed.data.remembered;
+          health = await discoverServer(device);
+        } else if (e.code !== 'UNAUTHORIZED') throw e;
+      }
+      if (health) {
+        device.connected = true; device.lastConnected = new Date().toISOString(); device.hostname = health.data.hostname || device.hostname;
+        await saveConfig(dir, config);
+        return { options, result: connectionResult(url, alreadyConnected ? 'already_connected' : 'connected') };
       }
     }
     const fingerprint=device?.fingerprint||(options.fingerprint?normalizeFingerprint(options.fingerprint):await discoverFingerprint(url,numberOption(options['request-timeout'],10000,'--request-timeout',1)));
@@ -448,11 +472,10 @@ async function execute(argv, io) {
     if (!paired.data?.token || !paired.data.clientId || !paired.data.deviceId) throw new CliError('INVALID_RESPONSE', 'Pairing response is missing credentials or identity.');
     device = { ...next, ...paired.data, connected: true, lastConnected: new Date().toISOString() };
     setSession(device,options,io);
-    const info=await api(device, 'GET', '/v1/info');device.hostname=info.data.hostname;
+    const health=await discoverServer(device);device.hostname=health.data.hostname;
     config.devices = [...config.devices.filter(entry => entry.url !== url), device];
     await saveConfig(dir, config);
-    const { token, ...publicDevice } = device;
-    return { options, result: makeEnvelope(publicDevice, { deviceId: device.deviceId }) };
+    return { options, result: connectionResult(url, 'connected') };
   }
   const device = selectDevice(config, command === 'disconnect' ? words[0] || options.device : options.device, command === 'disconnect');
   setSession(device,options,io,dir);
@@ -461,7 +484,10 @@ async function execute(argv, io) {
     device.connected = false; await saveConfig(dir, config);
     try{result=await api(device,'DELETE','/v1/connection',undefined,2000,{reconnectMs:0});}
     catch(e){result=makeEnvelope({disconnected:true,credentialsRetained:true,remoteNotified:false,notificationError:{code:e.code,message:e.message}},{deviceId:device.deviceId});}
-  } else if (command === 'info') result = await api(device, 'GET', '/v1/info');
+  } else if (command === 'info') {
+    result = await api(device, 'GET', '/v1/info');
+    result.data.connection = { url: device.url, clientId: device.clientId, fingerprint: device.fingerprint, remembered: device.remembered !== false, lastConnected: device.lastConnected };
+  }
   else if (command === 'clients') {
     if (!words[0] || words[0] === 'list') result = await api(device, 'GET', '/v1/clients');
     else if (words[0] === 'revoke' && words[1]) result = await api(device, 'DELETE', `/v1/clients/${encodeURIComponent(words[1])}`);
@@ -503,6 +529,16 @@ function exitCode(result) {
 }
 function printResult(result, options, io) {
   if (options.json) io.stdout.write(`${JSON.stringify(result)}\n`);
+  else if (options.command === 'connect') {
+    const { address, state } = result.data;
+    const destination = address ? ` to ${address}` : '';
+    const code = result.error ? ` (${result.error.code})` : '';
+    const text = state === 'already_connected' ? `already connected${destination}`
+      : state === 'connected' ? `connected${destination}`
+      : state === 'timeout' ? `connection${destination} timed out${code}`
+      : `failed to connect${address ? ` to ${address}` : ''}${code}`;
+    io.stdout.write(text + (result.error?.code === 'REQUEST_OUTCOME_UNKNOWN' ? '; check server state before retrying' : '') + '\n');
+  }
   else if(Array.isArray(result.data)&&result.data.every(d=>d.connectionState)){
     io.stdout.write('STATE              HOSTNAME             ADDRESS                          DEVICE ID\n');
     for(const d of result.data)io.stdout.write(`${d.connectionState.padEnd(18)} ${(d.hostname||'(unknown)').padEnd(20)} ${d.url.padEnd(32)} ${d.deviceId}\n`);
@@ -515,13 +551,17 @@ function printResult(result, options, io) {
   }
 }
 async function main(argv = process.argv.slice(2), io = process) {
+  let parsed;
   try {
-    const { help, result, options } = await execute(argv, io);
+    parsed = parseArgv(argv);
+    const { help, result, options } = await execute(argv, io, parsed);
     if (help) { io.stdout.write(help); return 0; }
-    printResult(result, options, io); return exitCode(result);
+    printResult(result, { ...options, command: options.version ? undefined : parsed.positional[0] }, io); return exitCode(result);
   } catch (error) {
-    const result = error.envelope || makeEnvelope(error.extra || null, { status: 'failed', error: { code: error.code || 'CLIENT_ERROR', message: error.message } });
-    printResult(result, { json: argv.includes('--json') || argv.includes('--json=true') }, io);
+    const command = parsed?.positional[0];
+    const result = command === 'connect' ? connectionError(error, parsed.positional[1])
+      : error.envelope || makeEnvelope(error.extra || null, { status: 'failed', error: { code: error.code || 'CLIENT_ERROR', message: error.message } });
+    printResult(result, { command, json: argv.includes('--json') || argv.includes('--json=true') }, io);
     return 1;
   }
 }

@@ -2,6 +2,8 @@
 
 目标平台：Windows 10 22H2、Windows 11 24H2/25H2，x64。包内已有 Node，无需安装 Node、npm、Python，也不需要在客户端安装 WdbService。当前包在本机 Windows 验证；跨电脑测试按下面流程执行。
 
+逐步执行并记录验收结果，请使用 [Windows CLI 局域网验证指导](WINDOWS-CLI-VALIDATION.md)，包含授权、13步基础检查、断网/服务重启与异常恢复的命令和通过标准。
+
 ## 解压与校验
 
 解压 `wdb-client-windows-x64.zip`，在解压后的 `wdb-client-windows-x64` 目录打开 PowerShell：
@@ -29,6 +31,8 @@ wdb connect $server --json
 wdb devices
 wdb info --device $server --json
 ```
+
+不加`--json`时，connect只提示`connected to <地址>`、`already connected to <地址>`、失败或超时；`info`才显示详细信息。`connect --json`的`data`仅含`address/state`，已连接为`already_connected`；授权是否记住见`info --json`的`data.connection.remembered`。
 
 客户端名称默认为当前电脑名，可选 `--name <名称>`。同意授予完整 WDB 调试权限；成功后自动保存首次证书指纹和凭据，后续证书变化不会自动接受。每台客户端自行申请授权，禁止把服务器私钥、helper-secret 或另一台客户端的 `devices.json` 当作安装材料复制。首次信任边界与可选预核验指纹见 [连接授权](CONNECTION-APPROVAL.md)。
 

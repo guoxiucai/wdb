@@ -52,6 +52,12 @@ node scripts/validate-lan.js --device 172.20.115.75 --output ./artifacts/mac-lan
 
 ## 3. CLI 与本地适配
 
+### connect输出修订
+
+与Windows共享实现保持一致：connect默认一行`connected to <host:port>` / `already connected to <host:port>` / 失败或超时（带原因码）。JSON保留通用信封，`data`仅`{address,state}`，state为`connected/already_connected/failed/timeout`；顶层status为`succeeded/failed/timed_out`，前两种成功状态退出码0，其余1。旧的connect详情字段已移到`info --json`的`data.connection`（url、clientId、fingerprint、remembered、lastConnected）。不应继续解析connect的`data.info/reconnected/remembered/clientId`。
+
+已保存且启用的身份必须成功查询health后才可提示already_connected；主动断开或临时重新审批后成功则返回connected。连接检查走`/v1/health`（旧服务404才回退info），避免每次connect都获取桌面详情。等待审批提示仍写stderr，服务端API和令牌存储不变。
+
 ### 参数和输出
 
 以 `node src/cli.js --help`、`docs/CLI.md` 和 `desktopCommand()` 为当前契约，命令名保持一致。`--json` 常规命令 stdout 只有一个 UTF-8 JSON；进度/重连提示走 stderr。watch 和日志 follow 输出 NDJSON 事件及最终结束结果。成功/accepted/reboot_required 退出 0，失败/取消/超时/unknown/需人工介入退出 1。需重启仅作为结果，不自动重启。
@@ -99,8 +105,8 @@ Ctrl+C：watch/follow 正常结束；普通长任务中止客户端等待不代�
 1. 将 `<IP>` 标准化为 `https://<IP>:18766`；只允许 HTTPS origin，禁止 URL 用户名/密码、业务路径、query/hash。
 2. 已保存身份使用原指纹；新身份若指定可选 `--fingerprint` 则使用该值，否则 `discoverFingerprint()` 建立独立 TLS 握手，取得叶证书 DER 的 SHA-256 后关闭，不发送 HTTP 数据。握手有独立期限。存储64位小写 hex；接受可选输入中的冒号分隔。
 3. 新 TLS 连接中**指纹比较成功后**才允许 flush HTTP 请求头、Bearer 和请求体；发现后换证书也必须失败。`openRequest()` 延迟 `req.end()` 并在 `secureConnect` 比对，不能仅设置 `rejectUnauthorized:false`。默认是 TOFU，不能识别首次连接时的主动中间人；可选预核验指纹提供额外身份核对。Node API 见 [官方 HTTPS API](https://nodejs.org/api/https.html#httpsrequestoptions-callback)。
-4. 首次 `POST /v1/pair`，body仅 `{"name":"mac-client"}`，等待服务器本地审批（最多120秒，CLI默认等待150秒），仅同意后响应 `data` 为 `clientId/token/deviceId/version/remembered`。token 是 32 随机字节的 base64url 字符串，只在配对响应中明文返回；服务器保存 tokenHash。成功查询 info 后才持久保存本地指纹/凭据，拒绝或失败不保存新身份。
-5. 此后发送 `Authorization: Bearer <token>`。调用 `/v1/info` 检查协议/能力并记录 hostname。不得把 token 放入 URL、诊断输出或共享报告。
+4. 首次 `POST /v1/pair`，body仅 `{"name":"mac-client"}`，等待服务器本地审批（最多120秒，CLI默认等待150秒），仅同意后响应 `data` 为 `clientId/token/deviceId/version/remembered`。token 是 32 随机字节的 base64url 字符串，只在配对响应中明文返回；服务器保存 tokenHash。成功查询 health 后才持久保存本地指纹/凭据，拒绝或失败不保存新身份。
+5. 此后发送 `Authorization: Bearer <token>`。health检查协议并记录hostname；显式info命令查询`/v1/info`获得能力、桌面等详情，并补充本地connection信息。不得把 token 放入 URL、诊断输出或共享报告。
 
 配对码不再参与授权；为兼容旧客户端接受但忽略 `pairingCode` 字段。每个来源地址每分钟最多 10 次配对尝试，超限 `RATE_LIMITED`；同一时刻仅一个审批窗口。旧服务器仍返回 `PAIRING_DENIED` 时升级服务端。`--name` 是客户端授权记录名称，不是服务器昵称。
 

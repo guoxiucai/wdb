@@ -45,7 +45,8 @@ try{
  assert.equal(fs.readFileSync(png).subarray(0,8).toString('hex'),'89504e470d0a1a0a');
  run('disconnect',['disconnect',options.device]);
  const devices=run('devices-disconnected',['devices']);assert.ok(devices.some(x=>x.deviceId===info.deviceId&&x.connectionState==='disconnected'));
- run('reconnect',['connect',devices.find(x=>x.deviceId===info.deviceId&&x.connectionState==='disconnected').url]);
+ const reconnected=run('reconnect',['connect',devices.find(x=>x.deviceId===info.deviceId&&x.connectionState==='disconnected').url]);
+ assert.equal(reconnected.state,'connected');
  assert.equal(run('info-reconnected',['info']).deviceId,info.deviceId);
  report.passed=true;
 }catch(e){report.error=e.message;process.exitCode=1;}

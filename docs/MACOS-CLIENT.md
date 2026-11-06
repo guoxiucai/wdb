@@ -26,7 +26,9 @@ wdb connect 172.20.115.75 --name mac-client --json
 wdb info --device 172.20.115.75 --json
 ```
 
-Windows 当前用户桌面会显示连接授权，由操作者选择同意/拒绝和是否记住。CLI 默认等待150秒（`--approval-timeout`），服务器弹窗120秒后过期。拒绝、关闭或超时不保存新身份。首次自动发现证书并固定后续请求，审批成功且 info 核对后保存指纹和 token；已有证书变化不会自动接受。可选 `--fingerprint` 支持事先核验；默认首次信任的边界见 [CONNECTION-APPROVAL.md](CONNECTION-APPROVAL.md)。无需读取或传递配对码。
+Windows 当前用户桌面会显示连接授权，由操作者选择同意/拒绝和是否记住。CLI 默认等待150秒（`--approval-timeout`），服务器弹窗120秒后过期。拒绝、关闭或超时不保存新身份。首次自动发现证书并固定后续请求，审批成功且 health 核对后保存指纹和 token；已有证书变化不会自动接受。可选 `--fingerprint` 支持事先核验；默认首次信任的边界见 [CONNECTION-APPROVAL.md](CONNECTION-APPROVAL.md)。无需读取或传递配对码。
+
+`connect` 默认只显示一行 `connected to ...` 或 `already connected to ...`，后者必须通过在线和授权检查。`connect --json` 的 `data` 仅包含 `address` 和 `state`（`connected/already_connected/failed/timeout`），不再包含 `clientId`、`remembered`、`fingerprint`、`info` 或 `reconnected`。脚本要读取这些身份详情时改用 `wdb info --json` 的 `data.connection`；设备能力和桌面详情仍在 `info.data`。成功/已连接退出0，失败/超时退出1，原因在 `error.code`。
 
 之后 `wdb connect 172.20.115.75 --json` 复用已保存的 token。勾选记住的授权跨 disconnect/服务重启保留；临时许可在 disconnect、服务重启或30分钟无认证请求后结束，再次 connect 会重新弹窗，沿用原 clientId。普通操作及 watch 不自动申请确认。`disconnect` 保留凭据；需要撤销授权时使用 `clients revoke <clientId>`。
 

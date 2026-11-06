@@ -2,6 +2,22 @@
 
 2026-11-06 14:47—14:48，Asia/Shanghai。**Mac → Windows 的仅地址首次连接、人工同意并记住、13步 LAN 闭环已通过**。本地28项客户端回归和5项离线包校验全部通过。用户在 Windows 本机点击授权，测试工具没有代替用户同意。
 
+## connect输出更新评估（15:59）
+
+远端同步至 `ce7d8a6`，包含 `4027e07` 的简洁connect输出和Windows授权弹窗布局调整。Mac需要同步共享CLI及输出契约，无需新增Mac专用协议、修改Node版本、启动器或配置目录。合并保留已有Mac迁移和0700/0600保护；共享transport未变化。Windows弹窗由服务器执行，不打入Mac包。
+
+`connect --json` 现在只返回 `data.address/state`；`clientId/fingerprint/remembered/lastConnected` 改读 `info --json` 的 `data.connection`。重复连接先验证health再返回`already_connected`，不查询桌面详情；旧服务health返回404时仍回退info。仓库LAN脚本已同步检查重连的`state=connected`。旧的`data.info/reconnected/clientId/remembered`解析方式不能继续使用。
+
+| 本轮检查 | 实际结果 |
+|---|---|
+| Mac客户端回归 | 31项通过，0失败，覆盖简洁文本/JSON、在线检查、离线超时、审批拒绝/超时、临时续期，以及原有Mac配置/文件/信号行为 |
+| 已记住设备真实连接 | 默认输出严格为一行`already connected to 172.20.115.75:18766`；JSON为`{address:"172.20.115.75:18766",state:"already_connected"}` |
+| info详情与身份 | deviceId仍为`2f493aacf427f3e9`；`data.connection`中clientId/指纹与原记录一致，remembered=true，desktop.available=true |
+| 凭据保留 | 升级前后token/clientId/deviceId/指纹均保持，stdout不含token；未重新配对 |
+| 交付 | 重新生成Mac arm64离线包并执行包内校验 |
+
+本轮证据在 `artifacts/macos-connect-output/`：`client-tests.log`、`connect-plain.txt`、`connect-json.json`、`info.json`、`live-report.json`、`package-verification.json`。本轮只复验受影响的connect/info路径，未重新操作Windows授权弹窗、重启服务或重跑全部13步；下文14:47的完整LAN记录仍为该轮历史结果，其connect产物使用当时的旧输出结构。
+
 ## 环境与追溯
 
 | 项目 | 实际值 |
