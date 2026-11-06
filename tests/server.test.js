@@ -2,7 +2,7 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const https=require('node:https');const crypto=require('node:crypto');const os=require('node:os');const {Bridge}=require('../src/server');
 test('HTTPS authentication, task isolation, files, cancellation, persistence',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-server-test-'));for(const f of ['tls.pfx','tls-password','helper-secret','pairing-code'])fs.copyFileSync(path.join(__dirname,'../.runtime/server',f),path.join(dir,f));
- const bridge=new Bridge({dataDir:dir});const server=await bridge.listen(0);const port=server.address().port;
+ const bridge=new Bridge({dataDir:dir,approvePairing:async()=>({decision:'approved',remember:true})});const server=await bridge.listen(0);const port=server.address().port;
  const request=(method,url,b,token,headers={})=>new Promise((resolve,reject)=>{const r=https.request({hostname:'127.0.0.1',port,path:url,method,rejectUnauthorized:false,headers:{...(token?{authorization:'Bearer '+token}:{}),...headers}},res=>{const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>{const raw=Buffer.concat(chunks);resolve({status:res.statusCode,headers:res.headers,data:res.headers['content-type']?.includes('json')?JSON.parse(raw):raw});});});r.on('error',reject);r.end(Buffer.isBuffer(b)?b:b?JSON.stringify(b):undefined);});
  t.after(async()=>{await bridge.close();fs.rmSync(dir,{recursive:true,force:true});});
  assert.equal((await request('GET','/v1/info')).status,401);
