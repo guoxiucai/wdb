@@ -83,7 +83,7 @@ class Bridge {
   if(this.uploads.has(p.toLowerCase()))throw fail('TRANSFER_IN_PROGRESS','Another upload targets the same path',409);
   const overwrite=u.searchParams.get('overwrite')==='true';if(!overwrite&&fs.existsSync(p))throw fail('TARGET_EXISTS','Destination exists; explicit overwrite required',409);
   this.uploads.add(p.toLowerCase());const temp=path.join(path.dirname(p),'.wdb-'+crypto.randomUUID()+'.part');const start=Date.now();let bytes=0;
-  try{const h=crypto.createHash('sha256');await pipeline(req,new Transform({transform(c,e,cb){h.update(c);bytes+=c.length;cb(null,c);}}),fs.createWriteStream(temp,{flags:'wx'}));const actual=h.digest('hex');if(actual.toLowerCase()!==checksum.toLowerCase())throw fail('CHECKSUM_MISMATCH','Upload checksum mismatch');
+  try{await fs.promises.mkdir(path.dirname(p),{recursive:true});const h=crypto.createHash('sha256');await pipeline(req,new Transform({transform(c,e,cb){h.update(c);bytes+=c.length;cb(null,c);}}),fs.createWriteStream(temp,{flags:'wx'}));const actual=h.digest('hex');if(actual.toLowerCase()!==checksum.toLowerCase())throw fail('CHECKSUM_MISMATCH','Upload checksum mismatch');
    if(overwrite)await fs.promises.rename(temp,p);else{await fs.promises.link(temp,p);await fs.promises.unlink(temp);}this.audit({requestId,clientId:client.id,op:'push',status:'succeeded',bytes,durationMs:Date.now()-start});return respond({path:p,bytes,sha256:actual,durationMs:Date.now()-start});
   }finally{await fs.promises.rm(temp,{force:true}).catch(()=>{});this.uploads.delete(p.toLowerCase());}
  }
