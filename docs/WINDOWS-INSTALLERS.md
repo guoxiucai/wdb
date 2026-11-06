@@ -2,6 +2,8 @@
 
 当前交付是未签名的 **Development** 测试包，不发布 npm。正式 npm 名称、项目许可、发布者证书尚未配置。CLI 使用同一个纯 JS tarball，见 [NPM-CLIENT.md](NPM-CLIENT.md)。
 
+本机最终候选、下载大小、SHA-256、安装/SSE 验收结果及未验证范围见 [WINDOWS-DISTRIBUTION-VERIFICATION.md](WINDOWS-DISTRIBUTION-VERIFICATION.md)。
+
 ## 构建
 
 构建机需要 Windows x64、Node/npm 24.15+（<25）、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。

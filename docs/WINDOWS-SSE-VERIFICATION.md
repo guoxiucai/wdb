@@ -25,3 +25,5 @@ node scripts/validate-sse-windows.js --config '<已授权客户端目录>' --dev
 ```
 
 本机脱敏报告：`artifacts/sse-windows-live/report.json`。真实跨机器物理断网和 Mac npm 客户端留给对应环境验证；既有测试不会自动新建或放行安全授权。
+
+最终安装包 `windows-final-05` 再次完成以上 8 项：服务由 external-node EXE 部署，CLI 来自同批 npm tarball 的实际安装目录，报告为 `artifacts/release-matrix-05/external-sse/report.json`。因此该轮验证覆盖了交付产物和真实服务，不只运行仓库内 CLI。安装矩阵完成后本机恢复为 with-node；分发验收详情见 [WINDOWS-DISTRIBUTION-VERIFICATION.md](WINDOWS-DISTRIBUTION-VERIFICATION.md)。

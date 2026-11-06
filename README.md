@@ -16,7 +16,7 @@ Windows 服务端 + Windows/macOS CLI + Agent Skill。macOS arm64 已具备启�
 
 ## 直接使用
 
-Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装器，共用数据和服务身份；本地构建、切换与人工签名续跑见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。当前为未签名 Development 包，不发布 npm。
+Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装器，共用数据和服务身份；本地构建、切换与人工签名续跑见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。当前为未签名 Development 包，不发布 npm。[本机分发验收](docs/WINDOWS-DISTRIBUTION-VERIFICATION.md)记录了最终包、12 项安装检查和 8 项实机 SSE 结果。
 
 新版 CLI 分发采用同一个纯 JS npm tarball（Windows/macOS），需要 Node `>=24.15.0 <25`。本地构建/隔离安装见 [npm 客户端](docs/NPM-CLIENT.md)，尚未发布 registry。下方 portable 包与构建脚本保留为开发/历史入口。
 
@@ -36,7 +36,7 @@ Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装�
 .\bin\wdb.cmd screenshot --json
 ```
 
-服务默认只监听 `127.0.0.1:18766`，桌面助手在 `127.0.0.1:18767`。数据在 `C:\ProgramData\wdb`；默认 CLI 配置在 `%LOCALAPPDATA%\wdb\client`。截图/录像返回远端产物路径，用 `wdb pull <路径> <本地路径>` 取回。需要修复旧安装时才运行 `scripts\repair-service.ps1`，通过正常 UAC 保留配置重新安装；失败会尝试恢复先前的普通用户调试进程。`scripts\start-local.ps1` 和 `stop-local.ps1` 仅用于无系统服务时的开发调试。
+服务默认只监听 `127.0.0.1:18766`，桌面助手在 `127.0.0.1:18767`。数据在 `C:\ProgramData\wdb`；默认 CLI 配置在 `%LOCALAPPDATA%\wdb\client`。截图/录像返回远端产物路径，用 `wdb pull <路径> <本地路径>` 取回。修复安装可重新运行同版本 EXE；完整的已安装 payload 也可运行 `scripts\repair-service.ps1`，通过正常 UAC 保留配置重新绑定服务。升级失败会尝试恢复旧程序与运行时。`scripts\start-local.ps1` 和 `stop-local.ps1` 仅用于无系统服务时的开发调试。
 
 桌面操作要求登录且解锁。窗口/控件引用来自最新查询；多设备连接必须明确 `--device`。默认不会覆盖文件，不会重试点击、书写或安装。具体命令和 JSON 契约见 [CLI 文档](docs/CLI.md)。
 
@@ -44,7 +44,7 @@ Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装�
 
 ## 构建和离线交付
 
-**下一阶段分发方案（待 Windows 实现与验证）：** 客户端统一为不携带 Node 的 npm 包；服务端每次构建同时生成内置 Node / 外部 Node 两种完整 EXE 安装包。人工签名清单、安装升级流程和验收矩阵见 [分发与服务端打包实现交接](docs/DISTRIBUTION-AND-PACKAGING.md)。下列命令仍是当前目录包构建方式。
+当前分发构建使用 `scripts/build-release.ps1` 的 Prepare / Package / Finalize 三阶段，同时生成 npm 包和两种 EXE，命令见[安装器指南](docs/WINDOWS-INSTALLERS.md)。人工签名清单与完整目标矩阵保留在 [分发与服务端打包实现交接](docs/DISTRIBUTION-AND-PACKAGING.md)。下列命令是保留的开发目录包入口。
 
 ```powershell
 .\scripts\build.ps1
@@ -52,7 +52,7 @@ Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装�
 .\scripts\build-client.ps1
 ```
 
-输出 `dist\wdb-windows-x64`，包含 Node、FFmpeg/ffprobe、预编译服务宿主/桌面桥、CLI、Skill、源码、许可、安装脚本和 SHA-256 清单。把整个目录复制到目标机，以管理员运行其中 `scripts\install-service.ps1`；安装过程不联网。开发机器首次准备录屏依赖才需 `scripts\fetch-ffmpeg.ps1`。安装、升级、诊断和卸载见 [Windows 服务文档](docs/windows-service.md)。
+旧目录包输出到 `dist\wdb-windows-x64`，保留开发调试能力。新机器部署使用上文的独立 EXE，开发源码安装需显式 `-Development`。开发机器首次准备录屏依赖才需 `scripts\fetch-ffmpeg.ps1`。当前安装、升级、诊断和卸载以[安装器指南](docs/WINDOWS-INSTALLERS.md)为准。
 
 独立客户端输出 `dist\wdb-client-windows-x64`，解压即可使用；服务端与客户端包均带 `BUILD-INFO.json` 记录源码提交和运行时。`dist` 不提交 Git，交付时压缩整个目录并保留校验清单。
 
