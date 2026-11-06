@@ -33,7 +33,14 @@ function validate(m,direction){
   const extra=m.kind==='shell'?['program','admin','env','terminal']:m.kind==='tcp'?['forwardId']:['listen','target'];
   check(['shell','forward','reverse','tcp'].includes(m.kind),'Unknown stream kind');fields(m,['type','requestId','kind',...extra],m.kind==='shell'?['cwd']:m.kind==='tcp'?['connectionId']:[]);
   if(m.kind==='shell')shellOptions(m);else if(m.kind==='tcp'){check(id(m.forwardId),'Invalid forwardId');if(m.connectionId!==undefined)check(id(m.connectionId),'Invalid connectionId');}else{endpoint(m.listen,true);endpoint(m.target);}
- }else {const s=schemas[m.type];fields(m,['type',...s[0]],s[1]);}
+ }else {const s=schemas[m.type];if(m.type==='hello'){for(const k of s[0])check(Object.hasOwn(m,k),`Missing ${k}`);}else fields(m,['type',...s[0]],s[1]);}
+ if(m.type==='opened'){
+  check(['shell','forward','reverse','tcp'].includes(m.kind),'Invalid opened kind');
+  fields(m,['type','replyTo','kind',...(m.kind==='shell'?['sessionId','program','backend','execution']:m.kind==='tcp'?['forwardId','connectionId']:['forwardId','listen','target'])]);
+  if(m.kind==='shell')check(m.backend==='conpty'&&['powershell','cmd','pwsh'].includes(m.program),'Invalid shell backend');
+ }
+ if(m.type==='ready.ack')fields(m,['type','replyTo',...(m.sessionId!==undefined?['sessionId','pid','execution']:m.connectionId!==undefined?['forwardId','connectionId']:['forwardId','listen','target'])]);
+ if(m.pid!==undefined)check(integer(m.pid,1,0xffffffff),'Invalid process ID');
  if(m.requestId!==undefined)check(integer(m.requestId,1),'Invalid requestId');if(m.replyTo!==undefined)check(integer(m.replyTo,1),'Invalid replyTo');
  if(m.type==='credit')check(integer(m.consumed),'Invalid consumed counter','FLOW_CONTROL_ERROR');
  if(['resize','resize.ack'].includes(m.type))check(integer(m.cols,1,1000)&&integer(m.rows,1,1000),'Invalid terminal size');

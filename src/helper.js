@@ -4,9 +4,13 @@ const http=require('node:http');const fs=require('node:fs');const path=require('
 const {argv,equal,body,send,fail}=require('./common');const {runOperation}=require('./operations');
 const args=argv(),dataDir=path.resolve(args['data-dir']||path.join(__dirname,'../.runtime/server'));
 const secret=fs.readFileSync(path.join(dataDir,'helper-secret'),'utf8').trim();
+const {ServerStreams}=require('./server-streams'),{shellFactory}=require('./shell-sessions'),{HELPER_PROTOCOL}=require('./stream-protocol');
+const helperOwner={id:'wdb-service'};
+const streams=new ServerStreams({deviceId:JSON.parse(fs.readFileSync(path.join(dataDir,'config.json'),'utf8')).deviceId,protocol:HELPER_PROTOCOL,endpoint:'/stream/shell',authorize:req=>{if(req.owner===helperOwner)return helperOwner;if(!equal(req.headers.authorization||'','Bearer '+secret))throw fail('UNAUTHORIZED','Invalid helper secret',401);return helperOwner;},renew:()=>{},limits:{shell:{client:16,total:16}},factories:{shell:shellFactory({helper:true})}});
 const server=http.createServer(async(req,res)=>{
  try{
   if(!equal(req.headers.authorization||'','Bearer '+secret))throw fail('UNAUTHORIZED','Invalid helper secret',401);
+  if(req.url==='/stream/status'&&req.method==='GET'){const status=require('./pty-host').ptyAvailability();const execution=await require('./operations').executionIdentity();return send(res,200,{...status,available:status.available&&!execution.isElevated,execution,...(execution.isElevated?{reason:'HELPER_UNAVAILABLE'}:{})});}
   if(req.url!=='/execute'||req.method!=='POST')throw fail('NOT_FOUND','Endpoint not found',404);
   const b=await body(req);const dir=path.resolve(b.dir||'');const base=path.join(dataDir,'tasks')+path.sep;
   if(!dir.startsWith(base))throw fail('INVALID_TASK_DIRECTORY','Task directory outside service data');
@@ -16,4 +20,6 @@ const server=http.createServer(async(req,res)=>{
   try {const data=await runOperation(b.op,b.args||{},{id:b.taskId,dir,timeoutMs:b.timeoutMs||120000,signal:controller.signal,onOutput:(stream,text)=>{const available=maxOutput-outputBytes;if(available>0){const bytes=Buffer.from(text).subarray(0,available);fs.appendFileSync(path.join(dir,stream+'.live'),bytes);outputBytes+=bytes.length;}}},{isHelper:true});send(res,200,{ok:true,data});}finally{clearInterval(timer);}
  }catch(e){send(res,e.statusCode||500,{ok:false,error:{code:e.code||'INTERNAL_ERROR',message:e.message,details:e.details,artifacts:e.artifacts}});}
 });
+streams.attach(server);
 server.listen(Number(args.port||18767),'127.0.0.1',()=>console.log(JSON.stringify({event:'helper-ready',port:Number(args.port||18767),pid:process.pid})));
+for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await streams.close();server.close();server.closeAllConnections();});

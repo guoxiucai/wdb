@@ -7,7 +7,7 @@ class ForwardServer{
  release(conn,closeChannel=true){if(conn.released)return;conn.released=true;clearTimeout(conn.timer);if(closeChannel)conn.channel?.close();conn.adapter?.close();conn.socket?.destroy();conn.rule.connections.delete(conn);this.connections.delete(conn.id);}
  async rule(ctx,m){
   const rule={id:crypto.randomUUID(),kind:m.kind,owner:ctx.owner.id,ctx,listen:m.listen,target:m.target,connections:new Set(),active:false,closed:false};this.rules.set(rule.id,rule);
-  const close=async()=>{if(rule.closed)return;rule.closed=true;rule.active=false;this.rules.delete(rule.id);for(const conn of [...rule.connections])this.release(conn);if(rule.server)await new Promise(r=>rule.server.close(()=>r()));};ctx.signal.addEventListener('abort',()=>{close().catch(()=>{});},{once:true});
+  const close=()=>{if(rule.closing)return rule.closing;rule.closed=true;rule.active=false;this.rules.delete(rule.id);rule.closing=(async()=>{for(const conn of [...rule.connections])this.release(conn);if(rule.server)await new Promise(r=>rule.server.close(()=>r()));})();return rule.closing;};ctx.signal.addEventListener('abort',()=>{close().catch(()=>{});},{once:true});
   const announce=conn=>{if(!rule.active||conn.claimed||conn.announced||conn.released)return;conn.announced=true;ctx.channel.control({type:'incoming',forwardId:rule.id,connectionId:conn.id,attachTimeoutMs:10000});};
   try{
    if(m.kind==='reverse'){

@@ -437,6 +437,7 @@ const HELP = `wdb — Windows Debug Bridge
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
   wdb clients list | clients revoke <clientId>
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]
+  wdb shell [--interactive] [--program powershell|cmd|pwsh] [--cwd <dir>] [--admin]
   wdb forward <tcp:listen-port> <tcp:target-port> [--json]
   wdb reverse <tcp:listen-port> <tcp:target-port> [--json]
   wdb task list|get <id>|wait <id>|cancel <id>|output <id>|delete <id>
@@ -471,6 +472,7 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   if (options.version) return { result: makeEnvelope({ version: require('../package.json').version }), options };
   if (options.help || !positional.length) return { help: HELP, options };
   const [command, ...words] = positional;
+  const interactive=command==='shell'&&require('./terminal-client').validateInteractive(options,words,io);
   if (options['args-file']) {
     if (options.args !== undefined) throw new CliError('INVALID_ARGUMENT', 'Use either --args or --args-file.');
     options.args = await fsp.readFile(path.resolve(options['args-file']), 'utf8');
@@ -517,6 +519,7 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   }
   const device = selectDevice(config, command === 'disconnect' ? words[0] || options.device : options.device, command === 'disconnect');
   setSession(device,options,io,dir);
+  if(interactive)return {options,streamExit:await require('./terminal-client').runInteractiveShell(device,options,io)};
   if(command==='forward'||command==='reverse')return {options,streamExit:await require('./forward-client').runForward(device,command,words,options,io)};
   let result;
   if (command === 'disconnect') {
@@ -599,6 +602,7 @@ async function runMain(argv, io) {
     printResult(result, { ...options, command: options.version ? undefined : parsed.positional[0] }, io); return exitCode(result);
   } catch (error) {
     const command = parsed?.positional[0];
+    if(command==='shell'&&(parsed.options.interactive||(!parsed.options.script&&!parsed.options['script-file']&&parsed.positional.length===1))&&!parsed.options.json){io.stderr.write(`${error.code||'CLIENT_ERROR'}: ${error.message}\n`);return 1;}
     if(command==='forward'||command==='reverse'){if(parsed.options.json)io.stdout.write(JSON.stringify({event:'closed',direction:command,reason:'failed',error:{code:error.code||'CLIENT_ERROR',message:error.message}})+'\n');else io.stderr.write(`${error.code||'CLIENT_ERROR'}: ${error.message}\n`);return 1;}
     const result = command === 'connect' ? connectionError(error, parsed.positional[1])
       : error.envelope || makeEnvelope(error.extra || null, { status: 'failed', error: { code: error.code || 'CLIENT_ERROR', message: error.message } });

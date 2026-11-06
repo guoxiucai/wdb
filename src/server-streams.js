@@ -19,7 +19,7 @@ class ServerStreams{
  }
  claim(ctx,kind){const category=kind==='shell'?'shell':kind==='tcp'?'tcp':'rule',limit=this.limits[category],existing=[...this.channels].filter(c=>c.category===category&&!c.channel.closed);check(existing.length<limit.total&&existing.filter(c=>c.owner.id===ctx.owner.id).length<limit.client,'Stream resource quota exceeded','RESOURCE_LIMIT');ctx.category=category;}
  accept(ws,owner){
-  const channel=new Channel(ws,'server');const controller=new AbortController();const ctx={channel,owner,manager:this,signal:controller.signal,state:'HELLO',leaseAt:Date.now(),deadline:Date.now()+10000,channelId:crypto.randomUUID(),createdAt:Date.now(),close:()=>channel.close()};this.channels.add(ctx);
+  const channel=new Channel(ws,'server',{budget:this.budget});const controller=new AbortController();const ctx={channel,owner,manager:this,signal:controller.signal,state:'HELLO',leaseAt:Date.now(),deadline:Date.now()+10000,channelId:crypto.randomUUID(),createdAt:Date.now(),close:()=>channel.close()};this.channels.add(ctx);
   let completed;ctx.done=new Promise(r=>completed=r);
   const cleanup=()=>{if(ctx.cleaned)return;ctx.cleaned=true;controller.abort();this.channels.delete(ctx);Promise.resolve(ctx.resource?.close()).catch(()=>{}).finally(()=>{try{this.audit({op:'stream',clientId:owner.id,channelId:ctx.channelId,kind:ctx.kind,status:'closed',reason:channel.failure?.code||'closed',durationMs:Date.now()-ctx.createdAt,...ctx.resource?.audit?.()});}finally{completed();}});};
   channel.on('closed',cleanup);channel.on('failure',()=>{controller.abort();Promise.resolve(ctx.resource?.close()).catch(()=>{});});

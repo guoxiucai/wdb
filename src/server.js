@@ -7,6 +7,7 @@ const {requestApproval,clientName,TEMPORARY_IDLE_MS}=require('./pairing');
 const {TaskEvents}=require('./task-events');
 const {ServerStreams}=require('./server-streams');
 const {ForwardServer}=require('./forward-server');
+const {shellFactory}=require('./shell-sessions');
 const VERSION=require('../package.json').version;
 class Bridge {
  constructor(options={}){
@@ -20,7 +21,7 @@ class Bridge {
   this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();this.clientSockets=new Map();
   this.temporaryClients=new Map();this.taskEvents=new TaskEvents();
   this.forwarding=new ForwardServer();
-  this.streams=new ServerStreams({deviceId:this.config.deviceId,authorize:req=>{const c=req.owner||this.identify(req);if(c.revokedAt||!this.clients.includes(c))throw fail('UNAUTHORIZED','Client was revoked',401);if(!this.isApproved(c))throw fail('PAIRING_REQUIRED','Client authorization expired',401);return c;},renew:c=>{if(c.remembered===false)this.temporaryClients.set(c.id,Date.now());},audit:event=>this.audit(event),factories:options.streamFactories||this.forwarding.factories()});
+  this.streams=new ServerStreams({deviceId:this.config.deviceId,authorize:req=>{const c=req.owner||this.identify(req);if(c.revokedAt||!this.clients.includes(c))throw fail('UNAUTHORIZED','Client was revoked',401);if(!this.isApproved(c))throw fail('PAIRING_REQUIRED','Client authorization expired',401);return c;},renew:c=>{if(c.remembered===false)this.temporaryClients.set(c.id,Date.now());},audit:event=>this.audit(event),factories:options.streamFactories||{...this.forwarding.factories(),shell:shellFactory({helperPort:this.config.helperPort,helperSecret:this.helperSecret,deviceId:this.config.deviceId,desktopUser:installation.desktopUser})}});
   for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
   this.timer=setInterval(()=>{for(const [id,a] of this.active){const t=this.tasks.get(id);if(t.op.startsWith('input.')&&Date.now()-(this.leases.get(t.clientId)||0)>10000)this.cancel(t,'CONTROL_CONNECTION_LOST');}this.cleanup();},1000);this.timer.unref();
  }
@@ -91,8 +92,8 @@ class Bridge {
     const dir=path.join(this.dir,'tasks','.status');fs.mkdirSync(dir,{recursive:true});let desktop;
     try{desktop=await runOperation('desktop.status',{}, {id:'status',dir,timeoutMs:5000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){desktop={available:false,error:{code:e.code,message:e.message}};}
     const recording=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'.runtime','ffmpeg','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].some(f=>fs.existsSync(f));
-    const execution=await executionIdentity();
-    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,serverProcessId:process.pid,execution,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','electron','flutter','input','touch','logs',...(execution.isElevated?['apps']:[]),...(recording?['record']:[])],desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
+    const execution=await executionIdentity(); const interactiveShell=await require('./shell-sessions').helperShellStatus(this.config.helperPort,this.helperSecret);
+    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,serverProcessId:process.pid,execution,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','electron','flutter','input','touch','logs',...(execution.isElevated?['apps']:[]),...(recording?['record']:[])],streaming:this.streams.capabilities(),interactiveShell,desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
    }
    if(u.pathname==='/v1/heartbeat'&&req.method==='POST')return respond({connected:true});
    if(u.pathname==='/v1/connection'&&req.method==='DELETE'){this.streams.disconnect(client.id);this.taskEvents.disconnect(client.id);this.leases.delete(client.id);this.temporaryClients.delete(client.id);for(const t of this.tasks.values())if(t.clientId===client.id&&t.op.startsWith('input.'))this.cancel(t,'DISCONNECTED');return respond({disconnected:true,credentialsRetained:true,reauthorizationRequired:client.remembered===false});}
