@@ -12,7 +12,7 @@ Windows x64 的 localhost 已验证，LAN 交付包与本机 LAN IP 自检已完
 .\bin\wdb.cmd devices --json
 ```
 
-客户端在发送令牌、配对码或操作请求前验证证书 SHA-256 指纹。指纹错误则连接失败，不自动接受新证书。首次配对授予完整调试权限；后续 `connect localhost:18766` 复用已保存的凭据。凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`，可用 `WDB_CONFIG` 或 `--config <目录>` 选择独立客户端身份。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
+客户端在发送令牌、配对码或操作请求前验证证书 SHA-256 指纹。指纹错误则连接失败，不自动接受新证书。首次配对授予完整调试权限；后续 `connect localhost:18766` 复用已保存的凭据。Windows 凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`；Mac 默认 `~/Library/Application Support/wdb/client/devices.json`，目录/文件权限为 0700/0600。优先级为 `--config <目录>` > `WDB_CONFIG` > 平台默认，可选择独立客户端身份。Mac 入口和旧配置迁移见 [MACOS-CLIENT.md](MACOS-CLIENT.md)。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
 
 `disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
 

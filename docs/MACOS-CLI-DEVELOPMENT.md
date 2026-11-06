@@ -2,6 +2,8 @@
 
 版本：2026-11-06；协议基线 `/v1`、`protocolVersion:1`、产品版本 `0.1.0`。Windows LAN 支持提交 `4e88694`，独立 CLI/验证脚本提交 `ad15ad6`。本文是 Mac 端并行开发交接文档，Mac 安装包与实机结果尚未交付。
 
+后续实现状态：Mac 启动器、配置路径/迁移、arm64 离线构建与客户端测试已落地，使用 [MACOS-CLIENT.md](MACOS-CLIENT.md)，验证边界见 [MACOS-VERIFICATION.md](MACOS-VERIFICATION.md)。以下保留交接时的现状描述；其中“当前 Mac 回落到 `~/wdb/client`”及“尚待创建启动器”已由新实现替代。PC 端首次配对的同意/拒绝/记住交互由 Windows 侧另行调整，本文原有 `/v1/pair` 仍是当前 CLI 兼容基线。
+
 ## 1. 目标和复用边界
 
 范围为 **macOS 14+、Apple Silicon arm64 客户端 → Windows x64 服务端**，CLI + Agent Skill，无 Mac GUI、无 Mac 服务端、无客户端桌面控制。所有 UIA、键鼠/触摸、应用安装、PowerShell、FFmpeg、CDP、Flutter VM/Inspector 都在 Windows 端执行；Mac 只做加密传输、任务管理、文件收发和输出展示。

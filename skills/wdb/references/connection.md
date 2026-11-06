@@ -1,12 +1,16 @@
 # Remote Windows connections
 
-The Windows client is portable: extract the whole CLI package, use its `bin\wdb.cmd` (bundled Node), and retain the package's docs. The Skill alone is not a CLI installation. On a future macOS client, use its `bin/wdb`; remote operations still run on Windows.
+Both clients are portable: extract the whole CLI package, use Windows `bin\wdb.cmd` or macOS `bin/wdb` (bundled Node), and retain the package's docs. The Skill alone is not a CLI installation. Mac remote operations still run on Windows. The Mac launcher supports symlinks and paths containing spaces; it does not use a global Node installation.
 
 First pairing requires a trusted fingerprint and pairing code from the Windows server's local `scripts\show-pairing.ps1 -RevealCode`. Ask for those values only when unavailable through an authorized local source; don't guess, scan neighboring hosts, or copy another client's credential store. Reconnect an existing profile with `wdb connect <server-IP>` without a pairing code. Do not put credentials in shared output. Use `--config <local-directory>` consistently for an isolated test profile.
+
+Mac configuration precedence is `--config` > `WDB_CONFIG` > `~/Library/Application Support/wdb/client`. An absent default directory can import the legacy `~/wdb/client/devices.json`; an existing directory is never merged. Mac config directories/files use 0700/0600, including existing profiles. There is no general multi-process config lock. The current `/v1/pair` protocol checks a persistent pairing code directly; a PC-side approval or “remember device” prompt requires a separately updated server protocol. Do not claim that prompt exists or treat a rejection as a reason to retry automatically.
 
 Run `wdb devices --json`, then `wdb info --device <address> --json`. The displayed hostname is a label, the URL is the network address, the 16-character device ID is the persistent identifier, and the certificate fingerprint establishes trusted identity. Same device at multiple saved addresses can be ambiguous: use the exact address. A changed IP does not authorize trusting a changed certificate.
 
 For the standard delivery smoke check, run the client package's `runtime\node.exe scripts\validate-lan.js --device <address> --output <local-result-dir>`; append `--config` if applicable. It creates and cleans a unique remote temp directory, verifies file bytes, queries screens/windows, pulls a screenshot and disconnects/reconnects. It does not perform application clicks or measure LAN throughput. Inspect the resulting screenshot and report, preserving the distinction between transport and business validation. Use package `docs/LAN.md` for separate interruption, restart and performance steps.
+
+On Mac use `./runtime/node ./scripts/validate-lan.js --device <address> --output <local-result-dir>`. Verify the package offline with `./runtime/node ./scripts/verify-package.js`. Package validation does not prove LAN authentication or a real Windows desktop interaction passed.
 
 Only the Windows server's HTTPS port (default 18766) is exposed to the LAN. Desktop helper, CDP and Dart VM Service remain server-local; `--endpoint http://127.0.0.1:...` is interpreted on the server. Don't open those debug ports for a remote client. Windows remote file paths remain Windows paths; local artifacts use the client's filesystem. `--args-file` and `--script-file` are read locally and their contents sent to the server.
 

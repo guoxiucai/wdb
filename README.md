@@ -1,6 +1,6 @@
 # wdb — Windows Debug Bridge
 
-Windows 服务端 + Windows CLI + Agent Skill。localhost 功能已验证，Windows LAN 交付包已准备并在本机 LAN IP 完成自检；另一台电脑的局域网验收接下来开展。macOS CLI 可按 [开发交接文档](docs/MACOS-CLI-DEVELOPMENT.md) 同步开发。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
+Windows 服务端 + Windows/macOS CLI + Agent Skill。localhost 功能已验证，Windows LAN 包已在本机 LAN IP 完成自检；macOS arm64 已补齐启动器、私有配置迁移和离线包。Mac 使用见 [客户端指南](docs/MACOS-CLIENT.md)，实际通过项与待验证项见 [Mac 验收记录](docs/MACOS-VERIFICATION.md)。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
 
 ## 当前状态
 
@@ -49,6 +49,16 @@ Windows 服务端 + Windows CLI + Agent Skill。localhost 功能已验证，Wind
 独立客户端输出 `dist\wdb-client-windows-x64`，解压即可使用；服务端与客户端包均带 `BUILD-INFO.json` 记录源码提交和运行时。`dist` 不提交 Git，交付时压缩整个目录并保留校验清单。
 
 Agent Skill 在 `skills/wdb/SKILL.md`。将整个 `skills/wdb` 目录复制到 Codex/Claude Code 的 skills 目录，并确保 `bin\wdb.cmd` 在 PATH 中，或在调用时使用完整路径。Skill 指导先控件、必要时截图、操作后验证、超时先查询，服务端不配置模型密钥。
+
+在 Apple Silicon Mac 构建独立客户端：
+
+```sh
+./scripts/build-client-macos.sh
+./dist/wdb-client-macos-arm64/bin/wdb --version --json
+./dist/wdb-client-macos-arm64/runtime/node ./dist/wdb-client-macos-arm64/scripts/verify-package.js
+```
+
+构建首次下载并校验固定版本 Node；交付包无需全局 Node/npm，解压后直接使用 `bin/wdb`，支持空格路径和符号链接入口。Mac 的 Agent 使用同一个 `skills/wdb`。共享客户端回归可运行 `npm run test:client`（Node 24+）或使用包内 Node 执行该命令列出的三个测试文件，不需要 Windows 服务测试数据。
 
 ## 验证和提交
 
