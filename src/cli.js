@@ -541,7 +541,7 @@ function printResult(result, options, io) {
   }
   else if(Array.isArray(result.data)&&result.data.every(d=>d.connectionState)){
     io.stdout.write('STATE              HOSTNAME             ADDRESS                          DEVICE ID\n');
-    for(const d of result.data)io.stdout.write(`${d.connectionState.padEnd(18)} ${(d.hostname||'(unknown)').padEnd(20)} ${d.url.padEnd(32)} ${d.deviceId}\n`);
+    for(const d of result.data)io.stdout.write(`${d.connectionState.padEnd(18)} ${(d.hostname||'(unknown)').padEnd(20)} ${new URL(d.url).host.padEnd(32)} ${d.deviceId}\n`);
     if(!result.data.length)io.stdout.write('(no paired devices)\n');
   }
   else {

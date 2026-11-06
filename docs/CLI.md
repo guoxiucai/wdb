@@ -31,6 +31,8 @@ connection to 172.20.115.75:18766 timed out (PAIRING_TIMEOUT)
 
 `disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
 
+`devices` 和 `devices --watch` 的文本表格中，ADDRESS 显示主机及端口，例如 `172.20.115.75:18766`，省略 `https://`。这是显示格式；JSON的`url`、保存的服务地址及实际HTTPS传输保持不变。
+
 `devices` 同时展示实时状态、Windows 设备名、URL、固定 16 字符且无分隔符的设备 ID；JSON 的 `enabled` 为本地启用，`connected` 为本次在线探测结果。旧 UUID 自动迁移，不需重新配对。`devices --watch` 持续观察离线/恢复变化。已配对命令和任务等待默认自动重连最多 60 秒；`--reconnect-timeout` 可调整。证书、设备 ID 或授权错误不自动重试；服务重启不重跑结果未知的任务。详见[自动重连与设备标识](RECONNECTION.md)。
 
 Electron 应用使用 `wdb electron launch|targets|observe|tree|find|action|wait|eval|screenshot|logs`，支持服务端本机 CDP、UIA 与视觉坐标操作。完整参数、兜底规则、自研应用配置和验证方法见 [Electron 调试指南](ELECTRON.md)。
