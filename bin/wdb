@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+# Follow relative/absolute symlink chains, including links installed on PATH.
+WDB_ENTRY=$0
+case "$WDB_ENTRY" in */*) ;; *) WDB_ENTRY=$(command -v "$WDB_ENTRY") ;; esac
+WDB_LINKS=0
+while [ -L "$WDB_ENTRY" ]; do
+  WDB_LINKS=$((WDB_LINKS + 1))
+  [ "$WDB_LINKS" -le 40 ] || { echo 'wdb: launcher symlink loop' >&2; exit 1; }
+  WDB_DIR=$(CDPATH= cd -P -- "$(dirname -- "$WDB_ENTRY")" && pwd)
+  WDB_ENTRY=$(readlink "$WDB_ENTRY")
+  case "$WDB_ENTRY" in /*) ;; *) WDB_ENTRY=$WDB_DIR/$WDB_ENTRY ;; esac
+done
+WDB_ROOT=$(CDPATH= cd -P -- "$(dirname -- "$WDB_ENTRY")/.." && pwd)
+if [ ! -x "$WDB_ROOT/runtime/node" ]; then
+  echo 'wdb: bundled runtime/node is missing; run scripts/build-client-macos.sh and use dist/wdb-client-macos-arm64/bin/wdb' >&2
+  exit 1
+fi
+exec "$WDB_ROOT/runtime/node" "$WDB_ROOT/src/cli.js" "$@"

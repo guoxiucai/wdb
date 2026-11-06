@@ -56,8 +56,53 @@ function boolOption(value) { return value === true || value === 'true'; }
 function makeEnvelope(data, extra = {}) {
   return { requestId: crypto.randomUUID(), deviceId: null, status: 'succeeded', error: null, durationMs: 0, artifacts: [], data, ...extra };
 }
+async function secureConfig(dir) {
+  if (process.platform !== 'darwin') return;
+  for (const [file, directory, mode] of [[dir, true, 0o700], [path.join(dir, 'devices.json'), false, 0o600]]) {
+    try {
+      const stat = await fsp.lstat(file);
+      if (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile())) {
+        throw new CliError('CONFIG_INVALID', `Expected a regular ${directory ? 'directory' : 'file'}: ${file}`);
+      }
+      await fsp.chmod(file, mode);
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+}
+async function resolveConfigDir(options = {}, context = {}) {
+  const { platform = process.platform, env = process.env, home = os.homedir() } = context;
+  if (options.config || env.WDB_CONFIG) return path.resolve(options.config || env.WDB_CONFIG);
+  if (platform !== 'darwin') return path.join(env.LOCALAPPDATA || home, 'wdb', 'client');
+  const dir = path.join(home, 'Library', 'Application Support', 'wdb', 'client');
+  try { await fsp.lstat(dir); return dir; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const legacy = path.join(home, 'wdb', 'client');
+  let content;
+  try {
+    await secureConfig(legacy);
+    content = await fsp.readFile(path.join(legacy, 'devices.json'));
+  } catch (error) { if (error.code === 'ENOENT') return dir; throw error; }
+  try {
+    if (!Array.isArray(JSON.parse(content).devices)) throw new Error();
+  } catch { throw new CliError('CONFIG_INVALID', `Invalid legacy configuration: ${legacy}`); }
+  await fsp.mkdir(path.dirname(dir), { recursive: true, mode: 0o700 });
+  // Exclusively claim the new directory. Never merge into an existing profile.
+  try { await fsp.mkdir(dir, { mode: 0o700 }); }
+  catch (error) { if (error.code === 'EEXIST') return dir; throw error; }
+  const temporary = path.join(dir, `.devices-${crypto.randomUUID()}.tmp`);
+  try {
+    await fsp.writeFile(temporary, content, { flag: 'wx', mode: 0o600 });
+    await fsp.link(temporary, path.join(dir, 'devices.json'));
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  } finally {
+    await fsp.rm(temporary, { force: true });
+    // If publication failed, remove only our empty directory, never another profile.
+    await fsp.rmdir(dir).catch(error => { if (!['ENOTEMPTY', 'EEXIST', 'ENOENT'].includes(error.code)) throw error; });
+  }
+  return dir;
+}
 async function readConfig(dir) {
   try {
+    await secureConfig(dir);
     const data = JSON.parse(await fsp.readFile(path.join(dir, 'devices.json'), 'utf8'));
     if (!data.devices || !Array.isArray(data.devices)) throw new Error('missing devices');
     let migrated=false;for(const device of data.devices){const id=normalizeDeviceId(device.deviceId);if(id!==device.deviceId){device.deviceId=id;migrated=true;}}
@@ -65,14 +110,17 @@ async function readConfig(dir) {
     return data;
   } catch (error) {
     if (error.code === 'ENOENT') return { version: 1, devices: [] };
-    throw new CliError('CONFIG_INVALID', `Cannot read ${path.join(dir, 'devices.json')}: ${error.message}`);
+    throw new CliError('CONFIG_INVALID', `Cannot read ${path.join(dir, 'devices.json')}: ${error.code || 'invalid JSON or device list'}`);
   }
 }
 async function saveConfig(dir, data) {
   await fsp.mkdir(dir, { recursive: true, mode: 0o700 });
+  await secureConfig(dir);
   const temp = path.join(dir, `.devices-${crypto.randomUUID()}.tmp`);
-  await fsp.writeFile(temp, JSON.stringify(data, null, 2), { mode: 0o600 });
-  try { await fsp.rename(temp, path.join(dir, 'devices.json')); }
+  try {
+    await fsp.writeFile(temp, JSON.stringify(data, null, 2), { flag: 'wx', mode: 0o600 });
+    await fsp.rename(temp, path.join(dir, 'devices.json'));
+  }
   finally { await fsp.rm(temp, { force: true }); }
 }
 function selectDevice(config, selector, allowDisconnected = false) {
@@ -357,7 +405,8 @@ Global: --json --device <address|id> --config <dir> --timeout <server-ms>
 Recovery: --reconnect-timeout <ms> (default 60000; 0 disables) --request-timeout <ms>
 Devices: --watch --poll-ms <ms> --probe-timeout <ms> (default 2000)
 Tasks: --detach --wait-timeout <client-ms> --follow --poll-ms <ms>
-Credentials: %LOCALAPPDATA%\\wdb\\client (override: WDB_CONFIG).
+Credentials: macOS ~/Library/Application Support/wdb/client;
+  Windows %LOCALAPPDATA%\\wdb\\client (override: --config > WDB_CONFIG).
 Observe task state before retrying side effects after timeouts.
 `;
 
@@ -370,7 +419,7 @@ async function execute(argv, io) {
     if (options.args !== undefined) throw new CliError('INVALID_ARGUMENT', 'Use either --args or --args-file.');
     options.args = await fsp.readFile(path.resolve(options['args-file']), 'utf8');
   }
-  const dir = options.config || process.env.WDB_CONFIG || path.join(process.env.LOCALAPPDATA || os.homedir(), 'wdb', 'client');
+  const dir = await resolveConfigDir(options);
   const config = await readConfig(dir);
   if (command === 'devices') return { options, result: boolOption(options.watch)?await watchDevices(dir,options,io):makeEnvelope(await deviceSnapshot(dir,options,io)) };
   if (command === 'connect') {
@@ -469,4 +518,4 @@ async function main(argv = process.argv.slice(2), io = process) {
   }
 }
 if (require.main === module) main().then(code => { process.exitCode = code; });
-module.exports = { main, execute, parseArgv, normalizeTarget, normalizeFingerprint, selectDevice, openRequest, api, sha256, pushOne, pullFile, pullDirectory, desktopCommand, CliError };
+module.exports = { main, execute, parseArgv, normalizeTarget, normalizeFingerprint, selectDevice, openRequest, api, sha256, pushOne, pullFile, pullDirectory, desktopCommand, CliError, resolveConfigDir, readConfig, saveConfig };
