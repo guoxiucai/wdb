@@ -1,6 +1,6 @@
 # wdb — Windows Debug Bridge
 
-Windows 服务端 + Windows/macOS CLI + Agent Skill。localhost 功能已验证，Windows LAN 包已在本机 LAN IP 完成自检；macOS arm64 已补齐启动器、私有配置迁移和离线包。Mac 使用见 [客户端指南](docs/MACOS-CLIENT.md)，实际通过项与待验证项见 [Mac 验收记录](docs/MACOS-VERIFICATION.md)。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
+Windows 服务端 + Windows/macOS CLI + Agent Skill。macOS arm64 已具备启动器、私有配置迁移和离线包，并完成跨机器的仅地址首连、Windows人工同意并记住、13步LAN文件/截图/重连验证。Mac 使用见 [客户端指南](docs/MACOS-CLIENT.md)，实际通过项与待验证项见 [Mac 验收记录](docs/MACOS-VERIFICATION.md)。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
 
 ## 当前状态
 

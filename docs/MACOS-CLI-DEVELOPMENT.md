@@ -1,6 +1,6 @@
 # macOS CLI 开发与 Windows 服务端对接
 
-版本：2026-11-06；协议基线 `/v1`、`protocolVersion:1`、产品版本 `0.1.0`。Windows LAN 支持提交 `4e88694`，独立 CLI/验证脚本提交 `ad15ad6`。本文是 Mac 端并行开发交接文档，Mac 安装包与实机结果尚未交付。
+版本：2026-11-06；协议基线 `/v1`、`protocolVersion:1`、产品版本 `0.1.0`。Windows LAN 支持提交 `4e88694`，独立 CLI/验证脚本提交 `ad15ad6`。本文保留Mac开发交接基线；后续已交付Mac离线包并完成跨机器LAN实测，见下列状态和验收记录。
 
 后续实现状态：Mac 启动器、配置路径/迁移、arm64 离线构建与客户端测试已落地，使用 [MACOS-CLIENT.md](MACOS-CLIENT.md)，验证边界见 [MACOS-VERIFICATION.md](MACOS-VERIFICATION.md)。以下保留交接时的现状描述；其中“当前 Mac 回落到 `~/wdb/client`”及“尚待创建启动器”已由新实现替代。
 
@@ -18,7 +18,7 @@
 | `src/client-transport.js` | TLS 指纹校验、Bearer 认证、身份核对、重连、提交去重恢复 | 复用并在 Mac TLS 栈实测 |
 | `src/device-id.js` | 16 字符 ID 与旧 UUID 确定性迁移 | 原样复用 |
 | `skills/wdb`、`docs` | 操作策略、命令及验收 | 增加 Mac 入口与安装示例，保持同一 Skill |
-| `scripts/validate-lan.js` | 已配对 CLI 的文件/截图/断开重连闭环 | 脚本使用当前 Node 和共享 CLI，可直接在 Mac 运行；尚待 Mac 实测 |
+| `scripts/validate-lan.js` | 已配对 CLI 的文件/截图/断开重连闭环 | 脚本使用当前 Node 和共享 CLI；Mac跨机器13步已通过，见验收记录 |
 | `bin/wdb.cmd`、`scripts/build-client.ps1` | Windows 启动器/打包清单参考 | 新增 `bin/wdb`、Mac 构建/校验脚本 |
 | `native/*`、`src/server.js`、`src/helper.js`、其他服务端 JS | Windows 执行实现/协议依据 | 不放入 Mac 运行包、不在 Mac 执行 |
 
@@ -48,7 +48,7 @@ node src/cli.js info --device 172.20.115.75 --json
 node scripts/validate-lan.js --device 172.20.115.75 --output ./artifacts/mac-lan-smoke
 ```
 
-首连等待 Windows 桌面确认即可，不读取配对材料。开发终端没有配置 `WDB_CONFIG` 时，当前共享代码在 Mac 会回落到 `~/wdb/client`，并非 `~/Library/Application Support`；不要把计划中的目录当作已实现行为。
+首连等待 Windows 桌面确认即可，不读取配对材料。Mac默认配置目录已实现为 `~/Library/Application Support/wdb/client`，旧 `~/wdb/client` 仅在新目录不存在时迁移；具体规则见 [MACOS-CLIENT.md](MACOS-CLIENT.md)。
 
 ## 3. CLI 与本地适配
 
