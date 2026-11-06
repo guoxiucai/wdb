@@ -64,6 +64,24 @@ try {
  $externalHash=(Get-FileHash -LiteralPath $ExternalNode).Hash
  $null=Install-Exe with-node 'with-node-upgrade'
  Verify-Mode with-node 'with-node-upgrade' -Operations
+ # Exercise the same transaction used by Setup with a deterministic copy-time
+ # corruption. This is validation-only; production installers have no fault flag.
+ $sourcePayload=Join-Path $BuildDirectory 'payloads\external-node'
+ $actionScript=Join-Path $sourcePayload 'scripts\installer-action.ps1'
+ $transactionArgs='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -SourceDirectory "{1}" -DesktopUser "{2}" -NodePath "{3}"' -f $actionScript,$sourcePayload,$DesktopUser,$ExternalNode
+ $begin=Start-Process powershell.exe -WindowStyle Hidden -ArgumentList ($transactionArgs+' -Action Begin') -PassThru -Wait
+ if($begin.ExitCode -ne 0){throw 'Rollback fixture could not begin'}
+ try{
+  foreach($file in Get-ChildItem -LiteralPath $sourcePayload -Recurse -File){$relative=$file.FullName.Substring($sourcePayload.Length+1);$destination=Join-Path "$env:ProgramFiles\wdb" $relative;New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null;Copy-Item -LiteralPath $file.FullName -Destination $destination -Force}
+  [IO.File]::AppendAllText("$env:ProgramFiles\wdb\src\server.js","`n// deliberate validation-only copy corruption`n")
+  $commit=Start-Process powershell.exe -WindowStyle Hidden -ArgumentList ($transactionArgs+' -Action Commit') -RedirectStandardError (Join-Path $OutputDirectory 'rollback-expected-error.log') -PassThru -Wait
+  if($commit.ExitCode -eq 0){throw 'Corrupted installed content was accepted'}
+ }finally{
+  $rollback=Start-Process powershell.exe -WindowStyle Hidden -ArgumentList ($transactionArgs+' -Action Rollback') -PassThru -Wait
+  if($rollback.ExitCode -ne 0){throw 'Rollback failed'}
+ }
+ Verify-Mode with-node 'failed-upgrade-restored-old-runtime'
+ Add-Check 'copy-corruption-rejected-and-rolled-back' @{commitExit=$commit.ExitCode;rollbackExit=$rollback.ExitCode;userDataPreserved=$true}
  $pidBefore=(Get-CimInstance Win32_Service -Filter "Name='WdbService'").ProcessId
  $missing=Install-Exe external-node 'missing-node' 'C:\Program Files\WdbMissingRuntime\node.exe' -ExpectFailure
  if((Get-CimInstance Win32_Service -Filter "Name='WdbService'").ProcessId -ne $pidBefore){throw 'Missing Node disturbed existing service'}
@@ -87,7 +105,12 @@ try {
  try{
   Move-Item -LiteralPath $ExternalNode -Destination $missingPath
   Start-Service WdbService;Start-Sleep -Milliseconds 800
-  $diag=& powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:ProgramFiles\wdb\scripts\service.ps1" diagnose | ConvertFrom-Json
+  $diagOutput=Join-Path $OutputDirectory 'missing-runtime-diagnose.json'
+  $diagError=Join-Path $OutputDirectory 'missing-runtime-diagnose.stderr'
+  $diagProcess=Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$env:ProgramFiles+'\wdb\scripts\service.ps1" diagnose') -RedirectStandardOutput $diagOutput -RedirectStandardError $diagError -PassThru
+  if(!$diagProcess.WaitForExit(20000)){Stop-Process -Id $diagProcess.Id -Force;throw 'Runtime diagnostic exceeded 20 seconds; restoring the test runtime'}
+  if($diagProcess.ExitCode -ne 0){throw 'Runtime diagnostic failed'}
+  $diag=Get-Content -LiteralPath $diagOutput -Raw | ConvertFrom-Json
   if($diag.runtime.status -ne 'invalid'){throw 'Missing bound runtime was not diagnosed'}
   Add-Check 'removed-external-runtime-diagnosed' @{scmMayRemainRunning=$true;runtimeStatus='invalid';pathFallback=$false}
  }finally{Stop-Service WdbService -ErrorAction SilentlyContinue;if(Test-Path -LiteralPath $missingPath){Move-Item -LiteralPath $missingPath -Destination $ExternalNode};Start-Service WdbService;Start-ScheduledTask WdbDesktopHelper}

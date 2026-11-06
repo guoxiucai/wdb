@@ -23,7 +23,10 @@ if ($Action -eq 'diagnose') {
     $result['logs'] = @{}
     foreach ($name in @('service-host.log','helper-host.log')) {
         $path = Join-Path $DataDirectory "logs\$name"
-        if (Test-Path -LiteralPath $path) { $result.logs[$name] = @(Get-Content -LiteralPath $path -Tail 40) }
+        # Windows PowerShell 5.1 may serialize Get-Content provider metadata
+        # recursively. Diagnostics must use plain strings, especially when the
+        # bound runtime is unavailable and recovery depends on this command.
+        if (Test-Path -LiteralPath $path) { $result.logs[$name] = @([IO.File]::ReadAllLines($path) | Select-Object -Last 40) }
     }
 }
 $result | ConvertTo-Json -Depth 8
