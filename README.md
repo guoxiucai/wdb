@@ -40,6 +40,8 @@ Windows 服务端 + Windows/macOS CLI + Agent Skill。macOS arm64 已具备启�
 
 ## 构建和离线交付
 
+**下一阶段分发方案（待 Windows 实现与验证）：** 客户端统一为不携带 Node 的 npm 包；服务端每次构建同时生成内置 Node / 外部 Node 两种完整 EXE 安装包。人工签名清单、安装升级流程和验收矩阵见 [分发与服务端打包实现交接](docs/DISTRIBUTION-AND-PACKAGING.md)。下列命令仍是当前目录包构建方式。
+
 ```powershell
 .\scripts\build.ps1
 # 独立客户端（不含 Windows 服务、FFmpeg 和桌面桥）
