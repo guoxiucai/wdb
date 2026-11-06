@@ -1,6 +1,6 @@
 ---
 name: wdb
-description: Use the Windows Debug Bridge CLI to deploy and validate Windows applications, query accessible controls, operate the interactive desktop, and retrieve screenshots, recordings, and logs. Applies when wdb is available; does not provide Android adb control.
+description: Use the Windows Debug Bridge CLI to deploy and validate Windows applications, debug Electron UI with CDP and UIA, operate the interactive desktop, and retrieve screenshots, recordings, and logs. Applies when wdb is available; does not provide Android adb control.
 ---
 
 Use `wdb` (or the project/package `bin\wdb.cmd`) as the Windows device entry point. This build first validates Windows localhost; do not claim macOS, LAN, physical touch hardware, or real application acceptance from local fixture results.
@@ -12,6 +12,10 @@ Use `wdb` (or the project/package `bin\wdb.cmd`) as the Windows device entry poi
 5. Retrieve artifact files with `pull`. CLI JSON is evidence of execution, not proof the business workflow or every pen stroke succeeded. Inspect screenshots, recording content, application logs, and exposed control state before judging the result.
 
 Use `--json` for machine parsing and `--args-file <path>` for structured arguments, touch trajectories, or difficult shell quoting. Successful task submission is `accepted` / `running`; the final task result is obtained by automatic waiting or `task get|wait <id>`. Preserve request/task IDs, device IDs, errors, and artifact paths in validation records.
+
+For Electron, read the package's `docs/ELECTRON.md`. Use `electron launch` with the observed application path and an unused local debugging port, or `electron targets` against an already enabled endpoint. The endpoint is local to the **server**, not the CLI. Select the exact returned page ID and Windows window ID; do not assume they are interchangeable. Single-instance apps may need a normal exit and relaunch before debugging flags apply. `cdpAvailable:false` does not prove a usable CDP session.
+
+Use `electron observe` to combine DOM, UIA and screenshot evidence. Prefer CDP selectors or exact labels for web controls and UIA references for native controls. `electron action --backend auto` only falls back for confirmed pre-action lookup/unavailability failures; visual fallback requires explicitly supplied observed coordinates. After `ACTION_OUTCOME_UNKNOWN`, timeout, or an ambiguous target, reobserve rather than repeating or changing backend automatically. Keep CDP CSS viewport coordinates separate from physical desktop coordinates and screenshot pixels. A successful CDP action does not prove UIA or Windows input compatibility. `electron eval` can change the page; use it within the intended debugging scope, and use `wait`/state reads to confirm effects. Console capture is bounded to the requested interval. Self-authored temporary DOM panels test the mechanism, not the application's business workflow.
 
 `devices` shows live state, hostname, address and persistent device ID. `enabled` is local selection permission; `connected` is the current probe result. Use `devices --watch` for recovery monitoring. Hostnames can collide; use address or device ID when ambiguous. Commands automatically reconnect for up to 60 seconds by default (`--reconnect-timeout`), and supported task submissions recover the same persisted task by submission ID. This does not authorize replaying an action after `REQUEST_OUTCOME_UNKNOWN` or `SERVICE_RESTARTED`. Explicit disconnect stays disabled until connect; certificate, identity and authorization failures require resolution rather than automatic pairing.
 

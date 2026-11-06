@@ -6,6 +6,8 @@ Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost�
 
 已实现并验证 TLS 指纹配对、客户端授权撤销、异步任务、用户 PowerShell、目录/大文件校验传输、UI Automation、窗口管理、截图、键鼠/Unicode 输入、真实触摸注入、日志查询/跟踪及 MP4 录屏。具体通过项与限制见 [验收记录](docs/ACCEPTANCE.md)，不把接口成功等同于实际应用验收。
 
+已内置 Electron 的 CDP + UIA + 视觉调试：目标发现、控件查询、点击/输入、等待、脚本、截图和console采集，继续走现有认证服务与CLI。EasiClass三通道实测及自研应用配置见 [Electron指南](docs/ELECTRON.md) 和 [验证报告](docs/ELECTRON-VERIFICATION.md)。
+
 **2026-11-06 已完成后台服务修复和实机验证。** 服务安装在 `C:\Program Files\wdb`，开机自动启动，HTTPS 服务实际以 SYSTEM 身份运行；默认 shell 和桌面助手仍以登录用户身份运行，只有显式 `--admin` 使用管理员能力。已验证服务重启、配对保留、任务记录保留及真实 CLI 集成。首次安装的 Node 代理和 PowerShell 5.1 服务路径引号问题已修复。
 
 用户指定的 EasiClass 安装包已完成强制覆盖、启动观察及卸载，见[部署记录](docs/app-deployment-verification.md)。无触摸屏设备上已通过 10 指 30 秒 / 60 Hz 与录屏并行验证；需要关闭 Windows 系统多指手势以让应用接收输入，本次测试后已恢复原开关。详见[触摸复验](docs/touch-verification-20261106.md)，真实业务画布和 LAN / macOS 仍分别验收。

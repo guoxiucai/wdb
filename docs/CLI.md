@@ -18,6 +18,8 @@
 
 `devices` 同时展示实时状态、Windows 设备名、URL、固定 16 字符且无分隔符的设备 ID；JSON 的 `enabled` 为本地启用，`connected` 为本次在线探测结果。旧 UUID 自动迁移，不需重新配对。`devices --watch` 持续观察离线/恢复变化。已配对命令和任务等待默认自动重连最多 60 秒；`--reconnect-timeout` 可调整。证书、设备 ID 或授权错误不自动重试；服务重启不重跑结果未知的任务。详见[自动重连与设备标识](RECONNECTION.md)。
 
+Electron 应用使用 `wdb electron launch|targets|observe|tree|find|action|wait|eval|screenshot|logs`，支持服务端本机 CDP、UIA 与视觉坐标操作。完整参数、兜底规则、自研应用配置和验证方法见 [Electron 调试指南](ELECTRON.md)。
+
 ## 结果和任务
 
 所有命令支持 `--json`；常规命令 stdout 只有最终 JSON，文件进度及重连提示输出到 stderr。JSON 信封包含 `requestId`、`deviceId`、`status`、`error`、`durationMs`、`artifacts` 和 `data`。任务对象在 `data` 内，任务结果在其中的 `data`。失败退出码为 1，成功/接受退出码为 0。`reboot_required` 表示需重启，不自动重启设备。`logs ... --follow --json` 和 `devices --watch --json` 按行输出事件/快照及最终结束结果。
