@@ -30,6 +30,10 @@ function queryPage(args) {
     if(element.readOnly)return problem('CONTROL_READ_ONLY','Control is read-only');
     element.focus();let active=document.activeElement;while(active?.shadowRoot?.activeElement)active=active.shadowRoot.activeElement;
     if(active!==element)return problem('FOCUS_DENIED','DOM focus did not reach the target');
+    if(args.action==='fill'){
+      if(typeof element.select==='function')element.select();
+      else {const range=document.createRange();range.selectNodeContents(element);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);}
+    }
     return {control:summary(element)};
   }
   return problem('INVALID_ARGUMENT','Unknown DOM query mode');

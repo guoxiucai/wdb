@@ -43,13 +43,9 @@ async function runCdp(operation,args,ctx){
         let releaseSent=false;try{await connection.send('Input.dispatchMouseEvent',{type:'mousePressed',x:located.x,y:located.y,button:'left',clickCount:1});releaseSent=true;await connection.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:located.x,y:located.y,button:'left',clickCount:1});}finally{if(!releaseSent&&!signal.aborted)await connection.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:located.x,y:located.y,button:'left',clickCount:1}).catch(()=>{});}
       }else{
         await query(connection,args,'focus-edit');
-        if(action==='fill'){
-          await connection.send('Input.dispatchKeyEvent',{type:'keyDown',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2});
-          await connection.send('Input.dispatchKeyEvent',{type:'keyUp',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2});
-          await connection.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Backspace',code:'Backspace',windowsVirtualKeyCode:8});
-          await connection.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Backspace',code:'Backspace',windowsVirtualKeyCode:8});
-        }
-        if(args.text)await connection.send('Input.insertText',{text:args.text});
+        // Select through the DOM so app-wide Ctrl+A handlers cannot steal selection.
+        // CDP text insertion then replaces the selected value (including an empty string).
+        if(action==='fill'||args.text)await connection.send('Input.insertText',{text:args.text});
       }
       data={action,method:'CDP.Input',coordinateSpace:'css-viewport',control:located.control,needsObservation:true};
     }else if(operation==='screenshot'){
