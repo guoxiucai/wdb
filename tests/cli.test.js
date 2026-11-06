@@ -98,6 +98,11 @@ test('incompatible protocol is reported explicitly', async () => {
   try { await assert.rejects(api({ url: target, fingerprint, token: 'private-token' }, 'GET', '/v1/info'), { code: 'INCOMPATIBLE_PROTOCOL' }); }
   finally { protocolVersion = 1; }
 });
+test('rejected pairing does not save credentials', async () => {
+  const rejected = await cli(['connect', target, '--fingerprint', fingerprint, '--pairing-code', 'wrong-code'], 'rejected');
+  assert.equal(rejected.code, 1); assert.equal(rejected.result.error.code, 'PAIRING_DENIED');
+  await assert.rejects(fs.stat(path.join(temporary, 'rejected', 'devices.json')), { code: 'ENOENT' });
+});
 test('pair, shell, file/recursive transfers, disconnect, and reconnect', async () => {
   const paired = await cli(['connect', target, '--fingerprint', fingerprint, '--pairing-code', 'test-secret']);
   assert.equal(paired.code, 0); assert.equal(paired.result.data.clientId, 'client-test'); assert.ok(!paired.stdout.includes('private-token'));
@@ -119,6 +124,31 @@ test('pair, shell, file/recursive transfers, disconnect, and reconnect', async (
   assert.equal(await fs.readFile(path.join(temporary, 'download-dir/子目录/文件.txt'), 'utf8'), '你好世界');
   assert.equal((await cli(['disconnect', target])).code, 0);
   assert.equal((await cli(['info'])).result.error.code, 'NO_DEVICE');
+  const originalCredentials = JSON.parse(await fs.readFile(path.join(temporary, 'client', 'devices.json'))).devices[0];
   assert.equal((await cli(['connect', target])).code, 0);
+  const reusedCredentials = JSON.parse(await fs.readFile(path.join(temporary, 'client', 'devices.json'))).devices[0];
+  assert.equal(reusedCredentials.clientId, originalCredentials.clientId);
+  assert.equal(reusedCredentials.token, originalCredentials.token);
   assert.equal((await cli(['info'])).result.data.version, '0.1.0');
+});
+
+test('symlinks, overwrite, and filename aliases respect the local filesystem', { skip: process.platform === 'win32' }, async () => {
+  const source = path.join(temporary, 'original.txt'), link = path.join(temporary, 'link.txt');
+  await fs.writeFile(source, 'original'); await fs.symlink(source, link);
+  assert.equal((await cli(['push', link, 'C:/linked.txt'])).result.error.code, 'SYMLINK_UNSUPPORTED');
+  stored.set('C:/replacement.txt', Buffer.from('replacement 🌍'));
+  assert.equal((await cli(['pull', 'C:/replacement.txt', source])).result.error.code, 'ALREADY_EXISTS');
+  assert.equal((await cli(['pull', 'C:/replacement.txt', link, '--overwrite'])).code, 0);
+  assert.equal(await fs.readFile(source, 'utf8'), 'original');
+  assert.equal(await fs.readFile(link, 'utf8'), 'replacement 🌍');
+  assert.equal((await fs.lstat(link)).isSymbolicLink(), false);
+  for (const [first, alias] of [['Case.txt', 'case.txt'], ['café.txt', 'cafe\u0301.txt']]) {
+    const a = path.join(temporary, first), b = path.join(temporary, alias);
+    assert.equal((await cli(['pull', 'C:/replacement.txt', a])).code, 0);
+    const aliases = await fs.stat(b).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
+    const second = await cli(['pull', 'C:/replacement.txt', b]);
+    assert.equal(second.code, aliases ? 1 : 0);
+    if (aliases) assert.equal(second.result.error.code, 'ALREADY_EXISTS');
+    assert.equal(await fs.readFile(a, 'utf8'), 'replacement 🌍');
+  }
 });
