@@ -80,6 +80,8 @@ UI 操作用 `ui.find` / `ui.tree` 返回的完整 `reference` 对象。保存 J
 
 `method: "uia"` 的 `invoke/value/toggle/select/expand/collapse/focus` 是控件接口调用。需要验证真实输入路径时选择 `method: "input", action: "click"`，或 `mouse/key/text`；文本默认 Unicode 注入并返回实际方式。`key ... down --holdMs 1000` 是有界保持，结束/取消后释放；不创建跨任务永久按下状态。
 
+支持 TogglePattern 的控件返回 `toggleState: "On" | "Off" | "Indeterminate"`，不支持时为 null；可用于操作前后验证。`wdb call windows.hitTest --args '{"x":500,"y":400}' --json` 返回该物理坐标命中的子窗口、类名及根窗口，用于排查透明覆盖层或输入目标错误。
+
 截图、UI 边界和输入坐标均为 `virtual-desktop-physical` 物理像素。截图返回 `bounds`、`mapping` 和 `layoutId`。输入可传 `--layout-id <layoutId>`，布局变化返回 `DISPLAY_CHANGED` 后重新观察。显示器通过 `screens` 返回的数字 `index` 选择，例如 `screenshot --monitor 0`。区域截图用 `--args-file` 中的 `region:{x,y,width,height}`。缩略图坐标先按缩放比例还原至原图像素，再加截图 `mapping.offsetX/offsetY`。
 
 ## 真实触摸
@@ -95,6 +97,8 @@ UI 操作用 `ui.find` / `ui.tree` 返回的完整 `reference` 对象。保存 J
 ```
 
 运行 `wdb touch --args-file trajectory.json --json`。`t` 是相对毫秒；同一 frame 同步注入最多 10 个活动触点。各触点使用独立 ID 和 down/move/up 生命周期，up 坐标必须等于该触点最后一次 move/down 坐标。时序在服务端执行，不逐点网络往返。执行成功仅说明接口执行结果，笔迹完整性还需对应用画面和录像进行独立判断。
+
+**无需实体触摸屏即可验证 Windows 模拟触摸。** Windows 11 的“蓝牙和其他设备 → 触控 → 三指和四指的触摸手势”开启时，系统可能拦截多指应用输入。本机已复现 1/2 指正常、3/5/10 指无应用事件，关闭该开关后 10 指正常。可用 `app launch ms-settings:devices-touch` 打开设置；先记录原始开关状态，诊断时临时关闭，结束后恢复。CLI 注入不会自动修改这项系统偏好。先核实焦点、`windows.hitTest`、屏幕布局，再用应用事件和笔迹判断；详见[触摸复验](touch-verification-20261106.md)。
 
 ## 扩展操作和 Agent Skill
 

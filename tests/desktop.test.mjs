@@ -31,6 +31,8 @@ test('native desktop observation, UIA, input, true multitouch, stale references 
     const tree=call('ui.tree',{window});assert.ok(tree.controls.length>=4);
     const input=call('ui.find',{window,name:'wdb input'}).controls[0];assert.ok(input);
     const button=call('ui.find',{window,name:'wdb apply'}).controls[0];assert.ok(button);
+    const toggle=call('ui.find',{window,name:'wdb toggle'}).controls[0];assert.equal(toggle.toggleState,'Off');
+    assert.equal(call('ui.action',{reference:toggle.reference,action:'toggle'}).observed.toggleState,'On');
     call('ui.action',{reference:input.reference,action:'value',value:'中文 English !@#'});
     call('ui.action',{reference:button.reference,action:'invoke'});assert.match(fs.readFileSync(log,'utf8'),/CLICK 1 TEXT 中文 English/);
     call('ui.wait',{window,name:'wdb apply',state:'enabled',timeoutMs:1000});
@@ -40,6 +42,7 @@ test('native desktop observation, UIA, input, true multitouch, stale references 
     call('ui.action',{reference:button.reference,action:'click',method:'input'});await pause(150);assert.match(fs.readFileSync(log,'utf8'),/CLICK 3/);
     const shot=call('screenshot',{window,path:path.join(tmp,'window.png')});assert.ok(shot.bytes>1000);assert.equal(shot.coordinateSpace,'virtual-desktop-physical');
     const canvas=call('ui.find',{window,name:'wdb touch canvas'}).controls[0];assert.ok(canvas);const x=Math.round(canvas.bounds.x+30),y=Math.round(canvas.bounds.y+40);
+    const hit=call('windows.hitTest',{x,y});assert.equal(hit.root.window,window);assert.equal(hit.child.pid,proc.pid);
     const frames=[{t:0,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y,phase:'down'}))},{t:40,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y:y+50,phase:'move'}))},{t:80,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y:y+100,phase:'move'}))},{t:120,contacts:Array.from({length:2},(_,i)=>({id:i+1,x:x+i*50,y:y+100,phase:'up'}))}];
     const touch=call('input.touch',{frames});assert.equal(touch.maxContacts,2);assert.equal(touch.samples,8);await pause(300);const observed=fs.readFileSync(log,'utf8');assert.equal(new Set([...observed.matchAll(/^TOUCH (\d+) down/gm)].map(m=>m[1])).size,2,'App must receive two real touch contacts');assert.equal([...observed.matchAll(/^TOUCH \d+ up/gm)].length,2);
     assert.equal(request('input.touch',{frames:[{t:0,contacts:[{id:1,x,y,phase:'move'}]}]}).error.code,'INVALID_TRAJECTORY');

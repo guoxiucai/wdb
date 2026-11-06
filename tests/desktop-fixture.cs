@@ -16,6 +16,7 @@ public class DesktopFixture : Form {
         int clicks=0;button.Click+=(s,e)=>{status.Text="Clicks: "+(++clicks);File.AppendAllText(log,"CLICK "+clicks+" TEXT "+input.Text.Replace("\r","\\r").Replace("\n","\\n")+Environment.NewLine);};
         ink=new InkPanel(log){Name="Ink",AccessibleName="wdb touch canvas",Location=new Point(16,120),Size=new Size(680,390),BackColor=Color.White};
         Controls.Add(input);Controls.Add(button);Controls.Add(status);Controls.Add(ink);
+        Controls.Add(new CheckBox{Name="Toggle",AccessibleName="wdb toggle",Text="Toggle",Location=new Point(480,80),Size=new Size(120,24)});
         FormClosed+=(s,e)=>{ink.Save(log+".png");};
     }
     protected override void OnHandleCreated(EventArgs e){base.OnHandleCreated(e);RegisterTouchWindow(Handle,3);ConfigureGestures(Handle);}

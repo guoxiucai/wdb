@@ -53,6 +53,7 @@ public static class DesktopBridge {
             case "screens": return new {coordinateSpace="virtual-desktop-physical",layoutId=Layout(),virtualBounds=Rect(SystemInformation.VirtualScreen),monitors=Screens()};
             case "screenshot": return Screenshot(a);
             case "windows.list": return Windows(a);
+            case "windows.hitTest": return HitTest(a);
             case "windows.action": return WindowAction(a);
             case "app.launch": return Launch(a);
             case "ui.tree": return Tree(a);
@@ -89,6 +90,13 @@ public static class DesktopBridge {
     static object WindowInfo(IntPtr h) { uint pid; GetWindowThreadProcessId(h,out pid); var t=new StringBuilder(1024); GetWindowText(h,t,t.Capacity); RECT r; GetWindowRect(h,out r); return new {window=WindowId(h),title=t.ToString(),pid=pid,process=Process.GetProcessById((int)pid).ProcessName,bounds=Rect(r.Rectangle),minimized=IsIconic(h),maximized=IsZoomed(h),foreground=GetForegroundWindow()==h,visible=IsWindowVisible(h)}; }
     static object Windows(Dictionary<string,object>a) {
         var list=new List<object>(); EnumWindows(delegate(IntPtr h,IntPtr l) { try {if(!IsWindowVisible(h))return true; var info=WindowInfo(h);var d=D(Json.DeserializeObject(Json.Serialize(info))); if(S(a,"title")!="" && S(d,"title").IndexOf(S(a,"title"),StringComparison.OrdinalIgnoreCase)<0)return true;if(I(a,"pid")!=0 && I(d,"pid")!=I(a,"pid"))return true;if(S(a,"process")!="" && S(d,"process").IndexOf(S(a,"process"),StringComparison.OrdinalIgnoreCase)<0)return true; list.Add(info);}catch{} return true;},IntPtr.Zero);return list;
+    }
+    static object HitTest(Dictionary<string,object>a) {
+        var point=new POINT(I(a,"x"),I(a,"y"));
+        Require(Screen.AllScreens.Any(s=>s.Bounds.Contains(point.X,point.Y)),"INVALID_COORDINATE","Point is outside all monitors.");
+        var child=WindowFromPoint(point);Require(child!=IntPtr.Zero,"WINDOW_NOT_FOUND","No window at point.");
+        var root=GetAncestor(child,2);var className=new StringBuilder(256);GetClassName(child,className,className.Capacity);
+        return new {x=point.X,y=point.Y,child=WindowInfo(child),childClass=className.ToString(),root=WindowInfo(root==IntPtr.Zero?child:root),coordinateSpace="virtual-desktop-physical",layoutId=Layout()};
     }
     static object WindowAction(Dictionary<string,object>a) {
         IntPtr h=Window(S(a,"window")); string action=S(a,"action");
@@ -128,7 +136,7 @@ public static class DesktopBridge {
         return new {path=Path.GetFullPath(path),format="png",width=r.Width,height=r.Height,bounds=Rect(r),coordinateSpace="virtual-desktop-physical",layoutId=initialLayout,mapping=new {scaleX=1,scaleY=1,offsetX=r.X,offsetY=r.Y},method=method,bytes=new FileInfo(path).Length};
     }
     static AutomationElement Root(Dictionary<string,object>a) {return AutomationElement.FromHandle(Window(S(a,"window")));}
-    static object Control(AutomationElement e,string window,int depth) { var c=e.Current;return new {reference=new {window=window,runtimeId=e.GetRuntimeId()},name=c.Name,automationId=c.AutomationId,controlType=c.ControlType.ProgrammaticName.Replace("ControlType.",""),className=c.ClassName,enabled=c.IsEnabled,offscreen=c.IsOffscreen,bounds=Rect(c.BoundingRectangle),actions=e.GetSupportedPatterns().Select(p=>p.ProgrammaticName.Replace("PatternIdentifiers.Pattern","")).ToArray(),depth=depth}; }
+    static object Control(AutomationElement e,string window,int depth) { var c=e.Current;object toggle;string toggleState=e.TryGetCurrentPattern(TogglePattern.Pattern,out toggle)?((TogglePattern)toggle).Current.ToggleState.ToString():null;return new {reference=new {window=window,runtimeId=e.GetRuntimeId()},name=c.Name,automationId=c.AutomationId,controlType=c.ControlType.ProgrammaticName.Replace("ControlType.",""),className=c.ClassName,enabled=c.IsEnabled,offscreen=c.IsOffscreen,bounds=Rect(c.BoundingRectangle),actions=e.GetSupportedPatterns().Select(p=>p.ProgrammaticName.Replace("PatternIdentifiers.Pattern","")).ToArray(),toggleState=toggleState,depth=depth}; }
     static List<object> Traverse(AutomationElement root,string window,int max,int depth) {
         var result=new List<object>();var queue=new Queue<Tuple<AutomationElement,int>>();queue.Enqueue(Tuple.Create(root,0));
         while(queue.Count>0 && result.Count<max){var item=queue.Dequeue();try{result.Add(Control(item.Item1,window,item.Item2));if(item.Item2<depth){var child=TreeWalker.ControlViewWalker.GetFirstChild(item.Item1);while(child!=null){queue.Enqueue(Tuple.Create(child,item.Item2+1));child=TreeWalker.ControlViewWalker.GetNextSibling(child);}}}catch(ElementNotAvailableException){}}
@@ -210,6 +218,9 @@ public static class DesktopBridge {
     [DllImport("user32.dll")]static extern bool IsIconic(IntPtr h);
     [DllImport("user32.dll")]static extern bool IsZoomed(IntPtr h);
     [DllImport("user32.dll")]static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]static extern IntPtr WindowFromPoint(POINT point);
+    [DllImport("user32.dll")]static extern IntPtr GetAncestor(IntPtr h,uint flags);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern int GetClassName(IntPtr h,StringBuilder text,int count);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern int GetWindowText(IntPtr h,StringBuilder text,int count);
     [DllImport("user32.dll")]static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
     [DllImport("user32.dll")]static extern bool GetWindowRect(IntPtr h,out RECT rect);
