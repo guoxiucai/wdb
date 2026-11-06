@@ -84,19 +84,22 @@ public static class DesktopBridge {
     static object ApproveConnection(Dictionary<string,object>a) {
         string decision="denied";bool remembered=false;
         DateTime deadline=DateTime.UtcNow.AddMilliseconds(Math.Max(1000,Math.Min(120000,I(a,"timeoutMs",120000))));
+        Application.EnableVisualStyles();
         using(var form=new Form()) using(var timer=new System.Windows.Forms.Timer()) {
-            form.Text="WDB 连接授权";form.ClientSize=new Size(600,400);
+            form.Text="WDB 连接授权";form.AutoSize=true;form.AutoSizeMode=AutoSizeMode.GrowAndShrink;
             form.Font=new Font("Microsoft YaHei UI",10F);form.AutoScaleMode=AutoScaleMode.Dpi;
             form.FormBorderStyle=FormBorderStyle.FixedDialog;form.MaximizeBox=false;form.MinimizeBox=false;
             form.StartPosition=FormStartPosition.CenterScreen;form.TopMost=true;form.ShowInTaskbar=true;
-            var heading=new Label{Text="是否允许此客户端连接？",Location=new Point(24,20),Size=new Size(550,34),Font=new Font("Microsoft YaHei UI",14F,FontStyle.Bold)};
-            var identity=new TextBox{ReadOnly=true,Multiline=true,TabStop=false,BorderStyle=BorderStyle.FixedSingle,Location=new Point(24,65),Size=new Size(550,100),Text="客户端名称（客户端提供）："+S(a,"name")+Environment.NewLine+"来源地址："+S(a,"remoteAddress")+Environment.NewLine+"请求编号："+S(a,"requestId")};
-            var permission=new Label{Location=new Point(24,181),Size=new Size(550,52),Text="允许后，客户端可以执行命令、传输文件、安装应用并操作本机桌面。显式请求管理员执行时，可使用 WDB 后台管理员能力。"};
-            var remember=new CheckBox{Text="记住此客户端，下次连接不再询问",Location=new Point(24,242),Size=new Size(550,30),Checked=false,AccessibleName="记住此客户端"};
-            var temporary=new Label{Location=new Point(24,277),Size=new Size(550,40),Text="未记住：主动断开、服务重启或闲置 30 分钟后，需要重新确认。"};
-            var countdown=new Label{Location=new Point(24,344),Size=new Size(270,30)};
-            var allow=new Button{Text="同意",Location=new Point(360,337),Size=new Size(100,38),AccessibleName="同意连接"};
-            var deny=new Button{Text="拒绝",Location=new Point(474,337),Size=new Size(100,38),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+            var flow=new FlowLayoutPanel{FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(24)};
+            var heading=new Label{Text="是否允许此客户端连接？",AutoSize=true,MaximumSize=new Size(550,0),Font=new Font("Microsoft YaHei UI",14F,FontStyle.Bold)};
+            var identity=new TextBox{ReadOnly=true,Multiline=true,ScrollBars=ScrollBars.Vertical,TabStop=false,AccessibleName="连接客户端信息",BorderStyle=BorderStyle.FixedSingle,Size=new Size(550,130),Text="客户端名称（客户端提供）："+S(a,"name")+Environment.NewLine+"来源地址："+S(a,"remoteAddress")+Environment.NewLine+"请求编号："+S(a,"requestId")};
+            var permission=new Label{AutoSize=true,MaximumSize=new Size(550,0),Text="允许后，客户端可以执行命令、传输文件、安装应用并操作本机桌面。显式请求管理员执行时，可使用 WDB 后台管理员能力。"};
+            var remember=new CheckBox{Text="记住此客户端，下次连接不再询问",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
+            var temporary=new Label{AutoSize=true,MaximumSize=new Size(550,0),Text="未记住：主动断开、服务重启或闲置 30 分钟后，需要重新确认。"};
+            var buttons=new Panel{Size=new Size(550,48)};
+            var countdown=new Label{Location=new Point(0,10),Size=new Size(270,30)};
+            var allow=new Button{Text="同意",Location=new Point(336,0),Size=new Size(100,38),AccessibleName="同意连接"};
+            var deny=new Button{Text="拒绝",Location=new Point(450,0),Size=new Size(100,38),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
             Action check=delegate(){
                 if(File.Exists(S(a,"cancelFile"))){decision="cancelled";form.Close();}
                 else if(!Available()){decision="desktop_unavailable";form.Close();}
@@ -106,7 +109,9 @@ public static class DesktopBridge {
             allow.Click+=delegate {check();if(!form.IsDisposed&&form.Visible){decision="approved";remembered=remember.Checked;form.Close();}};
             deny.Click+=delegate {decision="denied";form.Close();};
             form.AcceptButton=deny;form.CancelButton=deny;
-            form.Controls.AddRange(new Control[]{heading,identity,permission,remember,temporary,countdown,allow,deny});
+            buttons.Controls.AddRange(new Control[]{countdown,allow,deny});
+            foreach(Control control in new Control[]{heading,identity,permission,remember,temporary,buttons}){control.Margin=new Padding(0,0,0,12);flow.Controls.Add(control);}
+            form.Controls.Add(flow);
             timer.Interval=250;timer.Tick+=delegate {check();};form.Shown+=delegate {deny.Focus();check();timer.Start();};
             form.ShowDialog();timer.Stop();
         }
