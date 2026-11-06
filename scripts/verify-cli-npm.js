@@ -33,7 +33,15 @@ function verify(tarball,prefix) {
     const shim=path.join(prefix,'wdb.cmd');if(shim.includes('"')||shim.includes('%'))throw Error('Unsupported test prefix characters');
     assert.equal(JSON.parse(execFileSync(process.env.ComSpec||'cmd.exe',['/d','/s','/c',`""${shim}" --version --json"`],{encoding:'utf8',cwd:os.tmpdir(),windowsHide:true,windowsVerbatimArguments:true})).data.version,inspected.pkg.version);
   }else assert.equal(JSON.parse(execFileSync(path.join(prefix,'bin/wdb'),['--version','--json'],{encoding:'utf8',cwd:os.tmpdir()})).data.version,inspected.pkg.version);
-  return {status:'pass',platform:process.platform,arch:process.arch,node:process.version,tarball,prefix,installed,cli:path.join(installed,'src/cli.js'),version:actual.data.version,bytes:inspected.bytes,unpackedBytes:inspected.unpackedBytes,files:inspected.files.size,sha256:inspected.sha256};
+  // A private profile beside (not inside) the program installation survives both
+  // npm update and removal. No real credentials are needed for this invariant.
+  const profile=path.join(prefix,'validation-profile');fs.mkdirSync(profile);const config=path.join(profile,'devices.json');
+  const configBytes=Buffer.from(JSON.stringify({devices:[{url:'https://127.0.0.1:18766',clientId:'validation-only',token:'non-secret-fixture'}]}));fs.writeFileSync(config,configBytes);
+  const npmOptions=['--global','--prefix',prefix,'--ignore-scripts','--offline','--no-audit','--no-fund'];
+  npm(['install',...npmOptions,tarball]);assert.deepEqual(fs.readFileSync(config),configBytes);
+  npm(['uninstall',...npmOptions,inspected.pkg.name]);assert.deepEqual(fs.readFileSync(config),configBytes);assert.ok(!fs.existsSync(entry));
+  npm(['install',...npmOptions,tarball]);assert.equal(JSON.parse(execFileSync(process.execPath,[entry,'--version','--json'],{encoding:'utf8',windowsHide:true})).data.version,inspected.pkg.version);
+  return {status:'pass',platform:process.platform,arch:process.arch,node:process.version,tarball,prefix,installed,cli:path.join(installed,'src/cli.js'),version:actual.data.version,bytes:inspected.bytes,unpackedBytes:inspected.unpackedBytes,files:inspected.files.size,sha256:inspected.sha256,updateUninstallPreservedProfile:true};
 }
 if(require.main===module){try{const report=verify(process.argv[2],process.argv[3]);console.log(JSON.stringify(report,null,2));}catch(e){console.error(e.stack);process.exitCode=1;}}
 module.exports={inspect,verify};

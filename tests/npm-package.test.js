@@ -4,7 +4,7 @@ const {build}=require('../scripts/build-cli-npm');
 const {inspect}=require('../scripts/verify-cli-npm');
 test('npm bootstrap rejects unsupported Node before loading CLI and preserves JSON output',()=>{
  const bootstrap=fs.readFileSync(path.join(__dirname,'../bin/wdb.js'),'utf8').replace(/^#!.*\n/,'');
- for(const version of ['18.20.0','24.14.9','25.0.0','26.0.0']) {
+ for(const version of ['18.20.0','24.14.9','24.15.0-rc.1','25.0.0','26.0.0']) {
   let output='',required=false;const process={versions:{node:version},version:'v'+version,argv:['node','wdb','--json'],stdout:{write:s=>output+=s},stderr:{write(){assert.fail('JSON error must go to stdout');}}};
   vm.runInNewContext(bootstrap,{process,require(){required=true;}});assert.equal(required,false);assert.equal(process.exitCode,1);assert.equal(JSON.parse(output).error.code,'UNSUPPORTED_NODE');
  }

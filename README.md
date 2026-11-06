@@ -16,6 +16,8 @@ Windows 服务端 + Windows/macOS CLI + Agent Skill。macOS arm64 已具备启�
 
 ## 直接使用
 
+Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装器，共用数据和服务身份；本地构建、切换与人工签名续跑见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。当前为未签名 Development 包，不发布 npm。
+
 新版 CLI 分发采用同一个纯 JS npm tarball（Windows/macOS），需要 Node `>=24.15.0 <25`。本地构建/隔离安装见 [npm 客户端](docs/NPM-CLIENT.md)，尚未发布 registry。下方 portable 包与构建脚本保留为开发/历史入口。
 
 首次连接直接执行 `wdb connect <IP>`，无需提供 fingerprint 或 pairingCode，由服务器桌面弹窗决定同意/拒绝，可勾选“记住此客户端”。证书指纹自动保存，后续变化仍拒绝连接。临时许可在断开、服务重启或30分钟无请求后需重新确认；规则及Mac接口增补见 [连接授权](docs/CONNECTION-APPROVAL.md)。

@@ -116,6 +116,9 @@ function Commit-Install {
   $file=[IO.Path]::GetFullPath((Join-Path $InstallDirectory $relative));if(!$file.StartsWith($InstallDirectory+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe old ownership manifest'}
   if(Test-Path -LiteralPath $file -PathType Leaf){Remove-Item -LiteralPath $file -Force}
  }
+ # Legacy directory bundles had additional directories. Remove only empty ones;
+ # never recursively delete user-created content or an arbitrary install path.
+ foreach($directory in Get-ChildItem -LiteralPath $InstallDirectory -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending){if(!(Get-ChildItem -LiteralPath $directory.FullName -Force | Select-Object -First 1)){Remove-Item -LiteralPath $directory.FullName -Force}}
  $state.phase='committed';Save-State $state
 }
 function Rollback-Install {
@@ -127,7 +130,7 @@ function Rollback-Install {
    $file=[IO.Path]::GetFullPath((Join-Path $InstallDirectory $relative));if(!$file.StartsWith($InstallDirectory+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe rollback file'}
    if(!(Test-Path -LiteralPath (Join-Path $state.backup $relative)) -and (Test-Path -LiteralPath $file -PathType Leaf)){Remove-Item -LiteralPath $file -Force}
   }
-  foreach($file in Get-ChildItem -LiteralPath $state.backup -Recurse -File){$relative=$file.FullName.Substring($state.backup.Length+1);$dest=Join-Path $InstallDirectory $relative;New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null;Copy-Item -LiteralPath $file.FullName -Destination $dest -Force}
+  foreach($file in Get-ChildItem -LiteralPath $state.backup -Recurse -File){$relative=$file.FullName.Substring($state.backup.Length+1);$dest=Join-Path $InstallDirectory $relative;if((Test-Path -LiteralPath $dest -PathType Leaf) -and (Get-FileHash -LiteralPath $file.FullName).Hash -eq (Get-FileHash -LiteralPath $dest).Hash){continue};New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null;Copy-Item -LiteralPath $file.FullName -Destination $dest -Force}
  }
  if($state.oldInstallation){[IO.File]::WriteAllText((Join-Path $DataDirectory 'installation.json'),$state.oldInstallation,(New-Object Text.UTF8Encoding($false)))}
  if($state.oldService){Set-WdbServiceConfiguration -BinaryPath $state.oldService.binary;if($state.oldService.running){Start-Service WdbService}}
