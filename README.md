@@ -16,14 +16,14 @@ Windows 服务端 + Windows CLI + Agent Skill。localhost 功能已验证，Wind
 
 ## 直接使用
 
-首次配对现在需要服务器桌面弹窗同意，可勾选“记住此客户端”。临时许可在断开、服务重启或30分钟无请求后需重新确认；规则及Mac接口增补见 [连接授权](docs/CONNECTION-APPROVAL.md)。
+首次连接直接执行 `wdb connect <IP>`，无需提供 fingerprint 或 pairingCode，由服务器桌面弹窗决定同意/拒绝，可勾选“记住此客户端”。证书指纹自动保存，后续变化仍拒绝连接。临时许可在断开、服务重启或30分钟无请求后需重新确认；规则及Mac接口增补见 [连接授权](docs/CONNECTION-APPROVAL.md)。
 
 **局域网测试入口：** [Windows 客户端使用](docs/WINDOWS-CLIENT.md)、[服务端网络配置与验收](docs/LAN.md)、[本次交付记录](docs/LAN-DELIVERY-VERIFICATION.md)。本机已安装服务地址为 `https://172.20.115.75:18766`，设备 `qingwei / 2f493aacf427f3e9`；IP 变化后按网络文档更新规则。
 
 在本目录 PowerShell 中：
 
 ```powershell
-# 从本机受保护数据目录读取证书指纹与配对码，不显示秘密
+# 直接连接 localhost，新客户端在服务端弹窗中确认
 .\scripts\connect-local.ps1
 .\bin\wdb.cmd info --json
 .\bin\wdb.cmd shell --script 'whoami; Get-Date' --json

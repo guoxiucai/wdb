@@ -4,19 +4,18 @@ const {Bridge}=require('../src/server');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function setup(t,options={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-pairing-'));
- for(const name of ['tls.pfx','tls-password','helper-secret','pairing-code'])fs.copyFileSync(path.join(__dirname,'../.runtime/server',name),path.join(dir,name));
+ for(const name of ['tls.pfx','tls-password','helper-secret'])fs.copyFileSync(path.join(__dirname,'../.runtime/server',name),path.join(dir,name));
  let bridge;
- const f={dir,code:fs.readFileSync(path.join(dir,'pairing-code'),'utf8').trim(),get bridge(){return bridge;},async start(){bridge=new Bridge({dataDir:dir,...options});await bridge.listen(0);},async restart(){await bridge.close();await f.start();},request(method,url,body,token){return new Promise((resolve,reject)=>{
+ const f={dir,get bridge(){return bridge;},async start(){bridge=new Bridge({dataDir:dir,...options});await bridge.listen(0);},async restart(){await bridge.close();await f.start();},request(method,url,body,token){return new Promise((resolve,reject)=>{
   const req=https.request({host:'127.0.0.1',port:bridge.server.address().port,path:url,method,rejectUnauthorized:false,headers:token?{authorization:'Bearer '+token}:{}},res=>{let raw='';res.setEncoding('utf8');res.on('data',x=>raw+=x);res.on('end',()=>resolve({http:res.statusCode,...JSON.parse(raw)}));res.on('error',reject);});req.on('error',reject);req.end(body?JSON.stringify(body):undefined);
- });},pair(name='test'){return f.request('POST','/v1/pair',{name,pairingCode:f.code});}};
+ });},pair(name='test'){return f.request('POST','/v1/pair',{name});}};
  await f.start();t.after(async()=>{await bridge.close();fs.rmSync(dir,{recursive:true,force:true});});return f;
 }
-test('new client receives no authorization until a server decision; rejection and bad code issue no token',async t=>{
+test('new client needs no code but receives no authorization until server approval',async t=>{
  let answer,calls=0;const f=await setup(t,{approvePairing:async input=>{calls++;assert.equal(input.remoteAddress,'127.0.0.1');assert.equal(input.name,'a b');return new Promise(r=>answer=r);}});
- assert.equal((await f.request('POST','/v1/pair',{pairingCode:'wrong'})).error.code,'PAIRING_DENIED');assert.equal(calls,0);
  const pending=f.pair('a\u202eb');while(!answer)await delay(5);assert.equal(f.bridge.clients.length,0);
  assert.equal((await f.pair()).error.code,'PAIRING_BUSY');answer({decision:'denied',remember:true});
- const denied=await pending;assert.equal(denied.error.code,'PAIRING_REJECTED');assert.equal(f.bridge.clients.length,0);
+ const denied=await pending;assert.equal(denied.error.code,'PAIRING_REJECTED');assert.equal(f.bridge.clients.length,0);assert.equal(calls,1);
  assert.equal((await f.request('GET','/v1/health',null,'unapproved')).http,401);
 });
 test('remembered approval survives restart and disconnect; temporary approval requires renewed decision with same client ID',async t=>{
@@ -45,8 +44,14 @@ test('approval timeout and unavailable desktop cannot create an authorization',a
 });
 test('client disconnect cancels approval and a late allow cannot grant access',async t=>{
  let answer;const f=await setup(t,{approvePairing:()=>new Promise(r=>answer=r)});
- const req=https.request({host:'127.0.0.1',port:f.bridge.server.address().port,path:'/v1/pair',method:'POST',rejectUnauthorized:false});req.on('error',()=>{});req.end(JSON.stringify({pairingCode:f.code}));
+ const req=https.request({host:'127.0.0.1',port:f.bridge.server.address().port,path:'/v1/pair',method:'POST',rejectUnauthorized:false});req.on('error',()=>{});req.end(JSON.stringify({name:'cancel-test'}));
  while(!answer)await delay(5);req.destroy();while(f.bridge.pendingPairing)await delay(5);answer({decision:'approved',remember:true});await delay(15);assert.equal(f.bridge.clients.length,0);
+});
+
+test('legacy code cannot bypass local consent and code-free attempts remain rate limited',async t=>{
+ let calls=0;const f=await setup(t,{approvePairing:async()=>{calls++;return {decision:'denied'};}});
+ for(let i=0;i<10;i++)assert.equal((await f.request('POST','/v1/pair',i%2?{name:'plain'}:{pairingCode:'legacy'})).error.code,'PAIRING_REJECTED');
+ assert.equal((await f.pair()).error.code,'RATE_LIMITED');assert.equal(calls,10);assert.equal(f.bridge.clients.length,0);
 });
 test('only pairing flow may initiate the internal dialog, and revocation during renewal wins',async t=>{
  let remember=true,answer;const f=await setup(t,{approvePairing:async()=>remember?{decision:'approved',remember:false}:new Promise(r=>answer=r)});

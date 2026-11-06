@@ -8,9 +8,10 @@ const https = require('node:https');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { main, api, parseArgv, normalizeTarget, selectDevice } = require('../src/cli');
+const {discoverFingerprint}=require('../src/client-transport');
 
 let temporary, server, target, fingerprint, requestCount = 0, protocolVersion = 1;
-let approvalRequired=false,approvalDelay=0;
+let approvalRequired=false,approvalDelay=0,revoked=false,lastPairBody;
 const stored = new Map();
 function envelope(data, status = 'succeeded') { return { requestId: crypto.randomUUID(), deviceId: 'device-test', status, error: null, durationMs: 0, artifacts: [], data }; }
 before(async () => {
@@ -27,12 +28,13 @@ before(async () => {
     if (url.pathname === '/v1/pair') {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks));
+      lastPairBody=body;
       if(approvalDelay)await new Promise(r=>setTimeout(r,approvalDelay));
       if(body.name==='reject-me'){res.writeHead(403);res.end(JSON.stringify({error:{code:'PAIRING_REJECTED',message:'Rejected on server'}}));return;}
-      if (body.pairingCode !== 'test-secret') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'PAIRING_DENIED', message: 'Incorrect pairing code' } })); return; }
+      revoked=false;
       respond({ clientId: 'client-test', deviceId: 'device-test', token: 'private-token' }); return;
     }
-    if (req.headers.authorization !== 'Bearer private-token') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'No token' } })); return; }
+    if (revoked || req.headers.authorization !== 'Bearer private-token') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'No token' } })); return; }
     if (url.pathname === '/v1/info') { if(approvalRequired){res.writeHead(401);res.end(JSON.stringify({error:{code:'PAIRING_REQUIRED',message:'Approval required'}}));return;}respond({ version: '0.1.0', protocolVersion }); return; }
     if(url.pathname==='/v1/connection'&&req.method==='POST'){req.resume();approvalRequired=false;respond({clientId:'client-test',remembered:false});return;}
     if (url.pathname === '/v1/heartbeat' || url.pathname === '/v1/connection') { respond({ ok: true }); return; }
@@ -103,7 +105,8 @@ test('incompatible protocol is reported explicitly', async () => {
   finally { protocolVersion = 1; }
 });
 test('pair, shell, file/recursive transfers, disconnect, and reconnect', async () => {
-  const paired = await cli(['connect', target, '--fingerprint', fingerprint, '--pairing-code', 'test-secret']);
+  const paired = await cli(['connect', target]);
+  assert.equal(paired.result.data.fingerprint,fingerprint);assert.equal(lastPairBody.pairingCode,undefined);
   assert.equal(paired.code, 0); assert.equal(paired.result.data.clientId, 'client-test'); assert.ok(!paired.stdout.includes('private-token'));
   const shell = await cli(['shell', '--script', 'Write-Output 中文测试']);
   assert.equal(shell.result.data.result.stdout, '中文测试\n');
@@ -137,6 +140,40 @@ test('connect waits for server approval independently of ordinary request timeou
  }finally{approvalDelay=0;approvalRequired=false;}
 });
 test('server denial is returned and no new client credentials are saved',async()=>{
- const rejected=await cli(['connect',target,'--fingerprint',fingerprint,'--pairing-code','test-secret','--name','reject-me'],'rejected-client');assert.equal(rejected.code,1);assert.equal(rejected.result.error.code,'PAIRING_REJECTED');
+ const rejected=await cli(['connect',target,'--name','reject-me'],'rejected-client');assert.equal(rejected.code,1);assert.equal(rejected.result.error.code,'PAIRING_REJECTED');
  await assert.rejects(fs.stat(path.join(temporary,'rejected-client/devices.json')),{code:'ENOENT'});
+});
+
+test('automatic certificate discovery sends no HTTP request',async()=>{
+ const count=requestCount;assert.equal(await discoverFingerprint(target),fingerprint);assert.equal(requestCount,count);
+});
+
+test('explicit first pin mismatch does not prompt or persist a client',async()=>{
+ const count=requestCount,r=await cli(['connect',target,'--fingerprint','0'.repeat(64)],'bad-first-pin');
+ assert.equal(r.result.error.code,'CERTIFICATE_MISMATCH');assert.equal(requestCount,count);
+ await assert.rejects(fs.stat(path.join(temporary,'bad-first-pin/devices.json')),{code:'ENOENT'});
+});
+
+test('saved certificate mismatch never falls back to discovery, including legacy code arguments',async()=>{
+ const dir=path.join(temporary,'changed-pin');await fs.mkdir(dir);
+ const saved={devices:[{url:target,fingerprint:'0'.repeat(64),token:'private-token',deviceId:'device-test'}]};
+ const file=path.join(dir,'devices.json');await fs.writeFile(file,JSON.stringify(saved));
+ const count=requestCount,r=await cli(['connect',target,'--pairing-code','old-ignored-code'],'changed-pin');
+ assert.equal(r.result.error.code,'CERTIFICATE_MISMATCH');assert.equal(requestCount,count);
+ assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),saved);
+});
+
+test('revoked client can explicitly request fresh server consent without secrets',async()=>{
+ revoked=true;const r=await cli(['connect',target]);assert.equal(r.code,0,JSON.stringify(r.result));
+ assert.match(r.stderr,/Waiting for approval/);assert.equal(lastPairBody.pairingCode,undefined);
+});
+
+test('certificate discovery has a deadline and failure saves no trust',async()=>{
+ const net=require('node:net'),sockets=new Set(),stalled=net.createServer(s=>{sockets.add(s);s.on('error',()=>{});});
+ await new Promise(r=>stalled.listen(0,'127.0.0.1',r));
+ try{
+  const r=await cli(['connect',`127.0.0.1:${stalled.address().port}`,'--request-timeout','50'],'no-certificate');
+  assert.equal(r.result.error.code,'TRANSPORT_TIMEOUT');
+  await assert.rejects(fs.stat(path.join(temporary,'no-certificate/devices.json')),{code:'ENOENT'});
+ }finally{for(const s of sockets)s.destroy();await new Promise(r=>stalled.close(r));}
 });

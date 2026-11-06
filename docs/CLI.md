@@ -6,15 +6,15 @@ Windows x64 的 localhost 已验证，LAN 交付包与本机 LAN IP 自检已完
 
 新客户端配对需要服务器本机操作者在弹窗中同意。默认临时授权；勾选记住后持久授权。CLI默认等待150秒（`--approval-timeout`），拒绝/关闭/超时不授权。临时许可结束时运行connect重新确认，详见 [连接授权](CONNECTION-APPROVAL.md)。
 
-从服务端本机安装/诊断输出取得 SHA-256 证书指纹和配对码，再运行：
+直接连接服务器地址，无需手工提供指纹和配对码：
 
 ```powershell
-.\bin\wdb.cmd connect localhost:18766 --fingerprint <64位证书指纹> --pairing-code <配对码> --json
+.\bin\wdb.cmd connect localhost:18766 --json
 .\bin\wdb.cmd info --json
 .\bin\wdb.cmd devices --json
 ```
 
-客户端在发送令牌、配对码或操作请求前验证证书 SHA-256 指纹。指纹错误则连接失败，不自动接受新证书。首次配对授予完整调试权限；后续 `connect localhost:18766` 复用已保存的凭据。凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`，可用 `WDB_CONFIG` 或 `--config <目录>` 选择独立客户端身份。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
+首次连接自动获取证书 SHA-256，服务端弹窗同意后保存指纹及凭据；所有 HTTP 请求均先匹配本次/已保存的指纹。以后证书变化则失败，不自动接受。可选 `--fingerprint <SHA256>` 预先指定可信证书；旧 `--pairing-code` 参数不再参与授权。首次信任的边界见 [连接授权](CONNECTION-APPROVAL.md)。后续 `connect localhost:18766` 复用已保存的凭据。凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`，可用 `WDB_CONFIG` 或 `--config <目录>` 选择独立客户端身份。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
 
 `disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
 

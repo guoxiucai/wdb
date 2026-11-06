@@ -12,7 +12,7 @@ class Bridge {
   if(!/^[a-f0-9]{16}$/.test(this.config.deviceId))throw fail('INVALID_DEVICE_ID','Stored device ID must be a 16-character hexadecimal ID or a legacy UUID');
   atomic(path.join(this.dir,'config.json'),this.config);
   const installation=read(path.join(this.dir,'installation.json'),{});this.config.helperPort=options.helperPort||installation.helperPort||this.config.helperPort;
-  this.helperSecret=fs.readFileSync(path.join(this.dir,'helper-secret'),'utf8').trim();this.pairingCode=fs.readFileSync(path.join(this.dir,'pairing-code'),'utf8').trim();
+  this.helperSecret=fs.readFileSync(path.join(this.dir,'helper-secret'),'utf8').trim();
   this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();this.clientSockets=new Map();
   this.temporaryClients=new Map();
   for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
@@ -65,7 +65,8 @@ class Bridge {
    const u=new URL(req.url,'https://localhost');
    if(u.pathname==='/v1/pair'&&req.method==='POST'){
     const ip=req.socket.remoteAddress,attempt=this.pairAttempts.get(ip)||{count:0,until:Date.now()+60000};if(Date.now()>attempt.until){attempt.count=0;attempt.until=Date.now()+60000;}attempt.count++;this.pairAttempts.set(ip,attempt);if(attempt.count>10)throw fail('RATE_LIMITED','Pairing attempt limit reached; retry after one minute',429);
-    const b=await body(req);if(!equal(b.pairingCode||'',this.pairingCode))throw fail('PAIRING_DENIED','Invalid device pairing code',401);
+    // Local consent is the authorization gate. Legacy pairingCode fields are ignored.
+    const b=await body(req);
     const name=clientName(b.name);let approval;
     try{approval=await requestApproval(this,req,res,name,requestId);}catch(e){this.audit({requestId,op:'pair',status:'failed',error:{code:e.code},remoteAddress:req.socket.remoteAddress});throw e;}
     const token=crypto.randomBytes(32).toString('base64url');const c={id:crypto.randomUUID(),name,tokenHash:sha(token),createdAt:new Date().toISOString(),remoteAddress:req.socket.remoteAddress};this.clients.push(c);this.approve(c,approval.remember);this.audit({requestId,clientId:c.id,op:'pair',status:'succeeded',remembered:c.remembered});return respond({clientId:c.id,token,deviceId:this.config.deviceId,version:VERSION,remembered:c.remembered,...(!c.remembered?{temporaryIdleMs:this.options.temporaryIdleMs||TEMPORARY_IDLE_MS}:{})});

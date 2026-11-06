@@ -1,12 +1,12 @@
 # 首次连接：服务端同意、拒绝与记住
 
-首次配对仍需可信的服务端证书指纹和配对码。校验通过后，服务器当前登录用户的桌面显示精简的 **WDB 连接授权**：客户端名称、实际来源 IP、“记住此客户端”、同意/拒绝按钮及关闭倒计时。详细授权规则在本文说明，请求编号保留在服务端记录中。客户端只等待结果，不能在命令行要求服务端自动同意或记住。
+首次连接只需 `wdb connect <IP>`，无需手工提供 fingerprint 或 pairingCode。客户端自动获取服务端证书指纹，并固定本次请求使用的证书。服务器当前登录用户的桌面显示精简的 **WDB 连接授权**：客户端名称、实际来源 IP、“记住此客户端”、同意/拒绝按钮及关闭倒计时。只有本机操作者同意后才发放令牌，客户端核对服务器信息后保存指纹和凭据。客户端不能要求自动同意或记住。
 
 ## 使用
 
 ```powershell
 # 首次连接：服务器操作者必须在弹窗中作出决定
-wdb connect 172.20.115.75 --fingerprint <指纹> --pairing-code <配对码>
+wdb connect 172.20.115.75
 # 后续连接复用当前客户端凭据
 wdb connect 172.20.115.75
 wdb clients list --json
@@ -29,7 +29,13 @@ wdb clients revoke <clientId> --json
 
 临时客户端的凭据哈希与clientId保留，用于识别同一客户端和查询自己的历史任务；**临时允许状态只在服务内存中**。再次确认后沿用原clientId，已接受的长任务不因重新确认而丢失归属。`disconnect`不等于撤销身份；`clients revoke`会禁用令牌，已撤销的客户端不能仅靠旧令牌再次申请确认。
 
-升级前已经配对的客户端继续按“已记住”处理，保留既有授权。需要让某个旧客户端重新确认时，先撤销其授权，再用配对码重新配对。不删除整个服务数据目录。
+升级前已经配对的客户端继续按“已记住”处理，保留既有授权。撤销后客户端显式运行 `connect <IP>` 会重新申请本机批准，批准后建立新身份；普通命令不会自动申请。临时授权续期则保留原身份。不删除整个服务数据目录。
+
+## 证书与兼容
+
+默认采用首次使用信任（TOFU）：首次 TLS 握手只获取证书，不发送 HTTP 请求或凭据；后续配对和操作必须匹配该证书。成功授权后持久保存指纹，以后证书改变报 `CERTIFICATE_MISMATCH`，不自动覆盖。拒绝、超时、发现失败均不保存新身份。首次连接依赖当前网络到目标 IP 的可信性，TOFU 本身不能识别首次连接时的主动中间人；需要预先核验身份时可选 `--fingerprint <SHA256>`，但不作为常规连接前置要求。
+
+新客户端和服务端都应升级。旧 `--pairing-code` 参数/请求字段为兼容而接受，但新流程忽略，不参与授权。旧服务端仍要求配对码时应升级服务端。已有凭据、证书、设备 ID 和“记住”记录保留。
 
 ## CLI 状态与错误
 
@@ -37,7 +43,7 @@ wdb clients revoke <clientId> --json
 - 配对返回 `remembered:true|false`，临时连接另返回 `temporaryIdleMs`。
 - `clients list` 给出 `remembered` 与当前 `authorized`，不显示令牌/哈希。
 - 临时许可结束后，普通操作返回 `PAIRING_REQUIRED`；`devices` 显示 `approval_required`。watch不自动弹窗，操作者显式运行connect。
-- `PAIRING_REJECTED`：拒绝/关闭；`PAIRING_TIMEOUT`：服务端审批超时；`PAIRING_BUSY`：已有另一请求正在等待；`PAIRING_DESKTOP_UNAVAILABLE`：当前桌面不能审批。错误配对码依旧是 `PAIRING_DENIED`。
+- `PAIRING_REJECTED`：拒绝/关闭；`PAIRING_TIMEOUT`：服务端审批超时；`PAIRING_BUSY`：已有另一请求正在等待；`PAIRING_DESKTOP_UNAVAILABLE`：当前桌面不能审批。
 - 客户端等待期限先到或响应丢失可能返回 `REQUEST_OUTCOME_UNKNOWN`。不要自动重试；观察服务器窗口和授权列表后再显式连接。
 
 同一时刻只显示一个配对/重新确认弹窗，其他申请返回PAIRING_BUSY。客户端名称由客户端提供，不是安全身份；来源地址由服务器连接读取。永久授权仍依赖保存在客户端的Bearer凭据，复制凭据文件等于复制该客户端身份。
@@ -46,7 +52,7 @@ wdb clients revoke <clientId> --json
 
 协议仍为v1，本次为兼容扩展：
 
-1. `POST /v1/pair` 在正确配对码之后等待本地确认，最长120秒；同意后才返回token/clientId。没有“忽略弹窗”参数。
+1. 首次连接通过独立 TLS 握手获取证书 SHA-256，然后固定该指纹发送 `POST /v1/pair`，body仅需 `{"name":"mac-client"}`。等待本地确认最长120秒；同意后才返回token/clientId。没有“忽略弹窗”参数。已保存的指纹不重新发现或自动替换。
 2. 普通认证请求返回 `401 / PAIRING_REQUIRED` 时停止操作；仅显式connect可调用 **`POST /v1/connection`**，携带原Bearer，body `{}`，等待重新确认。
 3. 成功响应data为 `{connected:true,clientId,remembered}`，之后重新查询 `/v1/info`、更新本地connected和lastConnected。令牌及clientId不变；拒绝不恢复许可。
 4. `DELETE /v1/connection` 仍保留凭据；临时许可被清除，响应增加 `reauthorizationRequired:true`。

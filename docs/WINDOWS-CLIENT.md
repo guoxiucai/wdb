@@ -18,22 +18,19 @@ $env:PATH = (Resolve-Path .\bin).Path + ';' + $env:PATH
 
 本次准备的服务器为 **qingwei / 172.20.115.75:18766 / 2f493aacf427f3e9**。IP 如有变化，以服务器实际网卡地址为准，重新配置服务端防火墙的 LocalAddress。
 
-1. 在服务器本地执行 `scripts\show-pairing.ps1 -RevealCode`，取得 `fingerprint` 与 `pairingCode`，通过可信方式给测试操作者。指纹是证书 DER 的 SHA-256，不是设备 ID。
-2. 在客户端执行下面命令。配对码使用输入变量，避免将字面值写入命令历史；不要把凭据写入共享日志。这里的地址指 Windows **服务器**。
+1. 使用本次更新的客户端包，确认服务器用户已登录并解锁。
+2. 在客户端直接连接 Windows **服务器** IP，无需输入 fingerprint 或 pairingCode。
 3. 服务器会弹出“WDB连接授权”，由本机操作者点击同意或拒绝；勾选记住可让后续连接免重复确认。等待超时或拒绝时CLI返回失败，详见 [连接授权](CONNECTION-APPROVAL.md)。
 
 ```powershell
 $server = '172.20.115.75'
 Test-NetConnection $server -Port 18766
-$fingerprint = Read-Host '服务器 fingerprint'
-$pairingCode = Read-Host '服务器 pairingCode'
-wdb connect $server --fingerprint $fingerprint --pairing-code $pairingCode --name "$env:COMPUTERNAME-LAN" --json
-Remove-Variable pairingCode
+wdb connect $server --json
 wdb devices
 wdb info --device $server --json
 ```
 
-首次配对授予完整 WDB 调试权限。每台客户端自行配对，禁止把服务器私钥、helper-secret 或另一台客户端的 `devices.json` 当作安装材料复制。已经配对时只需 `wdb connect $server`。
+客户端名称默认为当前电脑名，可选 `--name <名称>`。同意授予完整 WDB 调试权限；成功后自动保存首次证书指纹和凭据，后续证书变化不会自动接受。每台客户端自行申请授权，禁止把服务器私钥、helper-secret 或另一台客户端的 `devices.json` 当作安装材料复制。首次信任边界与可选预核验指纹见 [连接授权](CONNECTION-APPROVAL.md)。
 
 ## 自动验证闭环
 
