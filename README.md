@@ -6,16 +6,13 @@ Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost�
 
 已实现并验证 TLS 指纹配对、客户端授权撤销、异步任务、用户 PowerShell、目录/大文件校验传输、UI Automation、窗口管理、截图、键鼠/Unicode 输入、真实触摸注入、日志查询/跟踪及 MP4 录屏。具体通过项与限制见 [验收记录](docs/ACCEPTANCE.md)，不把接口成功等同于实际应用验收。
 
-**本机当前使用普通用户后台进程提供 localhost 服务。** SCM 服务和登录用户助手已安装，但首次安装误复制了 Node 版本管理器代理，SYSTEM 服务子进程无法启动。构建/安装器已修复，离线包内是真正的 Node 运行时；需要再执行一次管理员修复来替换 Program Files 内的旧文件。普通用户模式会明确拒绝 `--admin` 和安装器执行，不伪装管理员成功。
+**2026-11-06 已完成后台服务修复和实机验证。** 服务安装在 `C:\Program Files\wdb`，开机自动启动，HTTPS 服务实际以 SYSTEM 身份运行；默认 shell 和桌面助手仍以登录用户身份运行，只有显式 `--admin` 使用管理员能力。已验证服务重启、配对保留、任务记录保留及真实 CLI 集成。首次安装的 Node 代理和 PowerShell 5.1 服务路径引号问题已修复。
 
-## 明早直接使用
+## 直接使用
 
 在本目录 PowerShell 中：
 
 ```powershell
-# 一次管理员修复：会弹 Windows UAC，保留配对和数据
-.\scripts\repair-service.ps1
-
 # 从本机受保护数据目录读取证书指纹与配对码，不显示秘密
 .\scripts\connect-local.ps1
 .\bin\wdb.cmd info --json
@@ -25,7 +22,7 @@ Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost�
 .\bin\wdb.cmd screenshot --json
 ```
 
-修复前也可以继续普通用户调试：`scripts\start-local.ps1` 启动隐藏后台进程；`scripts\stop-local.ps1` 仅停止它记录并核实身份的进程。服务默认只监听 `127.0.0.1:18766`，桌面助手在 `127.0.0.1:18767`。数据在 `C:\ProgramData\wdb`；默认 CLI 配置在 `%LOCALAPPDATA%\wdb\client`。截图/录像返回远端产物路径，用 `wdb pull <路径> <本地路径>` 取回。
+服务默认只监听 `127.0.0.1:18766`，桌面助手在 `127.0.0.1:18767`。数据在 `C:\ProgramData\wdb`；默认 CLI 配置在 `%LOCALAPPDATA%\wdb\client`。截图/录像返回远端产物路径，用 `wdb pull <路径> <本地路径>` 取回。需要修复旧安装时才运行 `scripts\repair-service.ps1`，通过正常 UAC 保留配置重新安装；失败会尝试恢复先前的普通用户调试进程。`scripts\start-local.ps1` 和 `stop-local.ps1` 仅用于无系统服务时的开发调试。
 
 桌面操作要求登录且解锁。窗口/控件引用来自最新查询；多设备连接必须明确 `--device`。默认不会覆盖文件，不会重试点击、书写或安装。具体命令和 JSON 契约见 [CLI 文档](docs/CLI.md)。
 
