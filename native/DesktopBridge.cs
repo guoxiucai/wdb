@@ -142,7 +142,7 @@ public static class DesktopBridge {
         return new {path=Path.GetFullPath(path),format="png",width=r.Width,height=r.Height,bounds=Rect(r),coordinateSpace="virtual-desktop-physical",layoutId=initialLayout,mapping=new {scaleX=1,scaleY=1,offsetX=r.X,offsetY=r.Y},method=method,bytes=new FileInfo(path).Length};
     }
     static AutomationElement Root(Dictionary<string,object>a) {return AutomationElement.FromHandle(Window(S(a,"window")));}
-    static object Control(AutomationElement e,string window,int depth) { var c=e.Current;object toggle;string toggleState=e.TryGetCurrentPattern(TogglePattern.Pattern,out toggle)?((TogglePattern)toggle).Current.ToggleState.ToString():null;return new {reference=new {window=window,runtimeId=e.GetRuntimeId()},name=c.Name,automationId=c.AutomationId,controlType=c.ControlType.ProgrammaticName.Replace("ControlType.",""),className=c.ClassName,enabled=c.IsEnabled,offscreen=c.IsOffscreen,bounds=Rect(c.BoundingRectangle),actions=e.GetSupportedPatterns().Select(p=>p.ProgrammaticName.Replace("PatternIdentifiers.Pattern","")).ToArray(),toggleState=toggleState,depth=depth}; }
+    static object Control(AutomationElement e,string window,int depth) { var c=e.Current;object toggle;string toggleState=e.TryGetCurrentPattern(TogglePattern.Pattern,out toggle)?((TogglePattern)toggle).Current.ToggleState.ToString():null;return new {reference=new {window=window,runtimeId=e.GetRuntimeId(),locator=new {name=c.Name,automationId=c.AutomationId,controlType=c.ControlType.ProgrammaticName.Replace("ControlType.","")}},name=c.Name,automationId=c.AutomationId,controlType=c.ControlType.ProgrammaticName.Replace("ControlType.",""),className=c.ClassName,enabled=c.IsEnabled,offscreen=c.IsOffscreen,bounds=Rect(c.BoundingRectangle),actions=e.GetSupportedPatterns().Select(p=>p.ProgrammaticName.Replace("PatternIdentifiers.Pattern","")).ToArray(),toggleState=toggleState,depth=depth}; }
     static List<object> Traverse(AutomationElement root,string window,int max,int depth) {
         var result=new List<object>();var queue=new Queue<Tuple<AutomationElement,int>>();queue.Enqueue(Tuple.Create(root,0));
         while(queue.Count>0 && result.Count<max){var item=queue.Dequeue();try{result.Add(Control(item.Item1,window,item.Item2));if(item.Item2<depth){var child=TreeWalker.ControlViewWalker.GetFirstChild(item.Item1);while(child!=null){queue.Enqueue(Tuple.Create(child,item.Item2+1));child=TreeWalker.ControlViewWalker.GetNextSibling(child);}}}catch(ElementNotAvailableException){}}
@@ -156,26 +156,29 @@ public static class DesktopBridge {
     }
     static object Find(Dictionary<string,object>a) {var elements=Root(a).FindAll(TreeScope.Subtree,Query(a));var found=new List<object>();int limit=Math.Min(I(a,"limit",100),5000);for(int i=0;i<elements.Count && i<limit;i++)found.Add(Control(elements[i],S(a,"window"),-1));return new {controls=found,count=elements.Count,truncated=elements.Count>limit};}
     static AutomationElement Resolve(Dictionary<string,object>a) {
-        Require(V(a,"reference")!=null,"INVALID_ARGUMENT","Control reference required.");var reference=D(a["reference"]);string win=S(reference,"window");var ids=A(reference["runtimeId"]).Select(Convert.ToInt32).ToArray();var root=AutomationElement.FromHandle(Window(win));var all=root.FindAll(TreeScope.Subtree,new PropertyCondition(AutomationElement.RuntimeIdProperty,ids));
+        Cancelled(a);Require(V(a,"reference")!=null,"INVALID_ARGUMENT","Control reference required.");var reference=D(a["reference"]);string win=S(reference,"window");var ids=A(reference["runtimeId"]).Select(Convert.ToInt32).ToArray();var root=AutomationElement.FromHandle(Window(win));
+        Condition condition=V(reference,"locator")!=null?Query(D(reference["locator"])):new PropertyCondition(AutomationElement.RuntimeIdProperty,ids);
+        var all=root.FindAll(TreeScope.Subtree,condition);Cancelled(a);
         for(int i=0;i<all.Count;i++){try{if(all[i].GetRuntimeId().SequenceEqual(ids))return all[i];}catch(ElementNotAvailableException){}}
         throw new Failure("STALE_CONTROL","Control reference is stale; query the window again.");
     }
     static object UiAction(Dictionary<string,object>a) {
-        Trace(a,"resolve.begin");var e=Resolve(a);Trace(a,"resolve.completed");string action=S(a,"action");string method=S(a,"method","uia");
+        Trace(a,"resolve.begin");var e=Resolve(a);Trace(a,"resolve.completed");Cancelled(a);string action=S(a,"action");string method=S(a,"method","uia");
         if(method=="input") {Require(action=="click","INVALID_ARGUMENT","Input method supports click; use input.key/text for keyboard events.");var r=e.Current.BoundingRectangle;Require(!r.IsEmpty && !e.Current.IsOffscreen,"CONTROL_UNAVAILABLE","Control is offscreen.");WindowAction(new Dictionary<string,object>{{"window",S(D(a["reference"]),"window")},{"action","focus"}});Mouse(new Dictionary<string,object>{{"x",(int)(r.X+r.Width/2)},{"y",(int)(r.Y+r.Height/2)},{"action","click"}});return new {method="SendInput",action=action};}
         Require(method=="uia","INVALID_ARGUMENT","method must be uia or input.");object pattern;
         switch(action) {
-            case "invoke": Trace(a,"pattern.begin");Require(e.TryGetCurrentPattern(InvokePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","InvokePattern unavailable.");Trace(a,"invoke.begin");((InvokePattern)pattern).Invoke();Trace(a,"invoke.completed");break;
-            case "value":Require(e.TryGetCurrentPattern(ValuePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","ValuePattern unavailable.");((ValuePattern)pattern).SetValue(S(a,"value"));break;
-            case "toggle":Require(e.TryGetCurrentPattern(TogglePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","TogglePattern unavailable.");((TogglePattern)pattern).Toggle();break;
-            case "select":Require(e.TryGetCurrentPattern(SelectionItemPattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","SelectionItemPattern unavailable.");((SelectionItemPattern)pattern).Select();break;
-            case "expand":case "collapse":Require(e.TryGetCurrentPattern(ExpandCollapsePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","ExpandCollapsePattern unavailable.");if(action=="expand")((ExpandCollapsePattern)pattern).Expand();else ((ExpandCollapsePattern)pattern).Collapse();break;
+            case "invoke": Trace(a,"pattern.begin");pattern=ActionPattern(e,InvokePattern.Pattern,a);Trace(a,"invoke.begin");((InvokePattern)pattern).Invoke();Trace(a,"invoke.completed");break;
+            case "value":pattern=ActionPattern(e,ValuePattern.Pattern,a);((ValuePattern)pattern).SetValue(S(a,"value"));break;
+            case "toggle":pattern=ActionPattern(e,TogglePattern.Pattern,a);((TogglePattern)pattern).Toggle();break;
+            case "select":pattern=ActionPattern(e,SelectionItemPattern.Pattern,a);((SelectionItemPattern)pattern).Select();break;
+            case "expand":case "collapse":pattern=ActionPattern(e,ExpandCollapsePattern.Pattern,a);if(action=="expand")((ExpandCollapsePattern)pattern).Expand();else ((ExpandCollapsePattern)pattern).Collapse();break;
             case "focus":e.SetFocus();break;
             default:throw new Failure("INVALID_ARGUMENT","Unknown UIA action.");
         }
         Trace(a,"observe.begin");object observed=null;try{observed=Control(e,S(D(a["reference"]),"window"),-1);}catch(ElementNotAvailableException){}Trace(a,"observe.completed");
         return new {method="uia",action=action,observed=observed};
     }
+    static object ActionPattern(AutomationElement element,AutomationPattern kind,Dictionary<string,object>a) {object pattern;Require(element.TryGetCurrentPattern(kind,out pattern),"PATTERN_UNAVAILABLE",kind.ProgrammaticName+" unavailable.");Cancelled(a);return pattern;}
     static object Wait(Dictionary<string,object>a) {int timeout=Math.Max(0,Math.Min(I(a,"timeoutMs",10000),300000));string state=S(a,"state","appeared");Require(state=="appeared"||state=="disappeared"||state=="enabled"||state=="disabled","INVALID_ARGUMENT","Invalid wait state.");var timer=Stopwatch.StartNew();while(true){Cancelled(a);var found=Root(a).FindAll(TreeScope.Subtree,Query(a));bool ok=state=="disappeared"?found.Count==0:found.Count>0;if(ok&&(state=="enabled"||state=="disabled"))ok=found.Cast<AutomationElement>().All(e=>e.Current.IsEnabled==(state=="enabled"));if(ok)return new {state=state,elapsedMs=timer.ElapsedMilliseconds,count=found.Count};if(timer.ElapsedMilliseconds>=timeout)throw new Failure("TIMEOUT","Control wait timed out; operation was not retried.");Thread.Sleep(100);}}
     static void Cancelled(Dictionary<string,object>a) {if(S(a,"cancelFile")!="" && File.Exists(S(a,"cancelFile")))throw new Failure("CANCELLED","Input task was cancelled; held input released.");}
     static void Delay(int ms,Dictionary<string,object>a){var w=Stopwatch.StartNew();while(w.ElapsedMilliseconds<ms){Cancelled(a);Thread.Sleep((int)Math.Min(10,ms-w.ElapsedMilliseconds));}}

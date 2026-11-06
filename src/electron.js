@@ -9,7 +9,7 @@ const SAFE_UIA=new Set(['CONTROL_NOT_FOUND','STALE_CONTROL','PATTERN_UNAVAILABLE
 const errorInfo=e=>({code:e.code||'ELECTRON_ERROR',message:e.message,details:e.details,artifacts:e.artifacts||[]});
 function winArg(value){return '"'+String(value).replace(/(\\*)"/g,'$1$1\\"').replace(/(\\+)$/,'$1$1')+'"';}
 async function checkPort(port){const probe=net.createServer();await new Promise((resolve,reject)=>{probe.once('error',()=>reject(fail('CDP_PORT_IN_USE','Choose an unused CDP port')));probe.listen(port,'127.0.0.1',resolve);});await new Promise(resolve=>probe.close(resolve));}
-async function runElectron(operation,args,ctx,{native,cdp=runCdp}={}){
+async function executeElectron(operation,args,ctx,{native,cdp=runCdp}={}){
   const status=await native('desktop.status',{},ctx);if(!status.available)throw fail('DESKTOP_UNAVAILABLE','Electron debugging requires the logged-in unlocked desktop');
   if(operation==='launch'){
     if(typeof args.path!=='string'||!path.isAbsolute(args.path)||!fs.existsSync(args.path))throw fail('INVALID_ARGUMENT','launch requires an existing absolute application path');
@@ -62,5 +62,13 @@ async function runElectron(operation,args,ctx,{native,cdp=runCdp}={}){
     }
   }
   throw Object.assign(fail('NO_USABLE_UI_BACKEND','No requested backend located a usable control; inspect electron observe'),{details:{attempts},artifacts:attempts.flatMap(a=>a.error?.artifacts||[])});
+}
+async function runElectron(operation,args,ctx,deps={}){
+  const timeout=Number(ctx.timeoutMs||120000),deadline=Date.now()+timeout;
+  const signal=AbortSignal.any([AbortSignal.timeout(timeout),...(ctx.signal?[ctx.signal]:[])]);
+  const limited={...ctx,signal};Object.defineProperty(limited,'timeoutMs',{enumerable:true,get:()=>Math.max(1,deadline-Date.now())});
+  const bounded=fn=>async(op,values,child)=>{if(signal.aborted)throw fail(ctx.signal?.aborted?'CANCELLED':'TIMEOUT','Electron task ended before dispatch');return fn(op,values,{...child,signal,timeoutMs:Math.min(child.timeoutMs||timeout,Math.max(1,deadline-Date.now()))});};
+  try{return await executeElectron(operation,args,limited,{native:bounded(deps.native),cdp:bounded(deps.cdp||runCdp)});}
+  catch(e){if(signal.aborted&&e.code!=='ACTION_OUTCOME_UNKNOWN')e.code=ctx.signal?.aborted?'CANCELLED':'TIMEOUT';throw e;}
 }
 module.exports={runElectron,winArg};

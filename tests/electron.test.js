@@ -28,3 +28,12 @@ test('visual fallback verifies layout and target window before one physical clic
 test('Electron refuses a locked desktop before discovering or controlling pages',async()=>{
   await assert.rejects(runElectron('targets',{},ctx,{native:async()=>({available:false}),cdp:async()=>assert.fail('must not dispatch')}),{code:'DESKTOP_UNAVAILABLE'});
 });
+test('one task deadline covers lookup and prevents late action dispatch',async()=>{
+  const calls=[];
+  await assert.rejects(runElectron('action',{backend:'uia',window:'fixture',name:'Open'},{...ctx,timeoutMs:30},{native:async(op,args,context)=>{
+    calls.push(op);if(op==='desktop.status')return {available:true};
+    if(op==='ui.find'){await new Promise(resolve=>setTimeout(resolve,50));assert.equal(context.signal.aborted,true);return {count:1,controls:[{reference:{window:'fixture',runtimeId:[1]}}]};}
+    assert.fail('Must not dispatch after lookup exceeded deadline');
+  }}),{code:'ACTION_OUTCOME_UNKNOWN'});
+  assert.deepEqual(calls,['desktop.status','ui.find']);
+});

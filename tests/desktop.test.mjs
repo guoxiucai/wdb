@@ -35,6 +35,7 @@ test('native desktop observation, UIA, input, true multitouch, stale references 
     assert.equal(call('ui.action',{reference:toggle.reference,action:'toggle'}).observed.toggleState,'On');
     call('ui.action',{reference:input.reference,action:'value',value:'中文 English !@#'});
     call('ui.action',{reference:button.reference,action:'invoke'});assert.match(fs.readFileSync(log,'utf8'),/CLICK 1 TEXT 中文 English/);
+    const cancelUi=path.join(tmp,'cancel-uia');fs.writeFileSync(cancelUi,'cancel');const beforeUiCancel=fs.readFileSync(log,'utf8');assert.equal(request('ui.action',{reference:button.reference,action:'invoke',cancelFile:cancelUi}).error.code,'CANCELLED');assert.equal(fs.readFileSync(log,'utf8'),beforeUiCancel,'Cancelled UIA operation must not invoke');
     call('ui.wait',{window,name:'wdb apply',state:'enabled',timeoutMs:1000});
     assert.equal(request('ui.wait',{window,name:'missing',state:'appeared',timeoutMs:100}).error.code,'TIMEOUT');
     call('windows.action',{window,action:'focus'});

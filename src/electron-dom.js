@@ -5,10 +5,10 @@ function queryPage(args) {
   const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
   const name=e=>clean(e.getAttribute('aria-label')||(e.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ')||e.labels?.[0]?.textContent||e.innerText||e.getAttribute('title')||e.getAttribute('alt')||e.getAttribute('placeholder'));
   const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden';};
-  const summary=e=>{const r=e.getBoundingClientRect();return {tag:e.localName,id:e.id,testId:e.getAttribute('data-testid'),role:e.getAttribute('role'),name:name(e).slice(0,500),type:e.getAttribute('type'),value:e.type==='password'?undefined:typeof e.value==='string'?e.value.slice(0,2000):undefined,disabled:!!e.disabled||e.getAttribute('aria-disabled')==='true',visible:visible(e),bounds:{x:r.x,y:r.y,width:r.width,height:r.height}};};
+  const summary=e=>{const r=e.getBoundingClientRect();return {tag:e.localName,id:e.id,className:e.getAttribute('class'),testId:e.getAttribute('data-testid'),role:e.getAttribute('role'),name:name(e).slice(0,500),type:e.getAttribute('type'),value:e.type==='password'?undefined:typeof e.value==='string'?e.value.slice(0,2000):undefined,disabled:!!e.disabled||e.getAttribute('aria-disabled')==='true',visible:visible(e),bounds:{x:r.x,y:r.y,width:r.width,height:r.height}};};
   const roots=[document],all=[];for(let i=0;i<roots.length;i++)for(const e of roots[i].querySelectorAll('*')){all.push(e);if(e.shadowRoot)roots.push(e.shadowRoot);}
   let matches;
-  try {matches=args.selector?roots.flatMap(root=>Array.from(root.querySelectorAll(args.selector))):all.filter(e=>e.matches('button,input,textarea,select,a,[role],[tabindex],[data-testid]'));}
+  try {matches=args.selector?roots.flatMap(root=>Array.from(root.querySelectorAll(args.selector))):all.filter(e=>e.matches('button,input,textarea,select,a,[role],[tabindex],[data-testid],[aria-label],[title],[onclick]'));}
   catch(e){return problem('INVALID_SELECTOR',e.message);}
   if(args.name!==undefined)matches=matches.filter(e=>name(e)===args.name);
   if(args.visible!==false)matches=matches.filter(visible);
