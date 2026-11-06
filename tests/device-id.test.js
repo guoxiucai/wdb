@@ -9,6 +9,7 @@ test('new device IDs have exactly 16 separator-free characters and persist acros
 test('legacy device IDs migrate without changing credentials, task IDs or task results',async()=>{
  const dir=directory(),legacy='e032c011-1a94-4882-887c-b8e9c62d1ce1',id=normalizeDeviceId(legacy),token=crypto.randomBytes(24).toString('hex'),clientId=crypto.randomUUID(),taskId=crypto.randomUUID();let bridge;
  try{
+  assert.equal(id,'2f493aacf427f3e9','The legacy migration mapping must remain stable across releases');
   atomic(path.join(dir,'config.json'),{deviceId:legacy,retentionHours:24,maxArtifactBytes:1024**3,maxOutputBytes:1024**2,helperPort:18767});atomic(path.join(dir,'clients.json'),[{id:clientId,name:'migration-test',tokenHash:sha(token)}]);
   atomic(path.join(dir,'tasks',taskId,'task.json'),{id:taskId,deviceId:legacy,clientId,op:'shell',status:'succeeded',createdAt:new Date().toISOString(),endedAt:new Date().toISOString(),data:{stdout:'preserved',deviceId:legacy}});
   bridge=new Bridge({dataDir:dir});await bridge.listen(0);assert.equal(bridge.config.deviceId,id);assert.equal(bridge.config.legacyDeviceId,legacy);assert.equal(normalizeDeviceId(legacy.toUpperCase()),id);assert.equal(bridge.tasks.get(taskId).id,taskId);assert.equal(bridge.tasks.get(taskId).data.deviceId,legacy,'Application result payload must remain untouched');

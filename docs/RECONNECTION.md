@@ -6,14 +6,16 @@
 
 ```text
 STATE              HOSTNAME             ADDRESS                          DEVICE ID
-online             qingwei              https://127.0.0.1:18766          e032c011-1a94-4882-887c-b8e9c62d1ce1
+online             qingwei              https://127.0.0.1:18766          2f493aacf427f3e9
 ```
 
 - `hostname` 是服务端 Windows 计算机名，用于识别和显示，可以重复或改名；不是安全身份。`connect --name` 设置的是客户端授权记录名称，不是服务端别名。
 - `url` 是 HTTPS 地址与端口，用于网络访问。localhost 验证显示 `127.0.0.1:18766`；LAN 场景使用目标 IP 或主机地址。IP 变化后需更新地址，不按同名设备自动迁移授权。
-- `deviceId` 是服务端持久化 UUID，保存在数据目录的 `config.json`；服务进程或 Windows 服务重启后不变。删除数据后重新初始化会生成新 ID。证书指纹用于连接前验证服务器，响应还检查 `deviceId`。
+- `deviceId` 是固定 **16 个小写十六进制字符**的设备标识，不含分隔符，由 8 个随机字节生成并保存在数据目录的 `config.json`；服务进程或 Windows 服务重启后不变。删除数据后重新初始化会生成新 ID。证书指纹用于连接前验证服务器，响应还检查 `deviceId`。
 
-`--device` 支持地址、UUID、已记录的设备名；名称重复时返回 `AMBIGUOUS_DEVICE`，必须改用地址或 UUID。JSON 列表的 `enabled` 表示本地是否允许使用该设备，`connected` 表示本次探测是否在线；不再把历史配对记录当作实时连接状态。离线仍保留最近记录的设备名。
+`--device` 支持地址、16 位设备 ID、已记录的设备名；名称重复时返回 `AMBIGUOUS_DEVICE`，必须改用地址或设备 ID。JSON 列表的 `enabled` 表示本地是否允许使用该设备，`connected` 表示本次探测是否在线；不再把历史配对记录当作实时连接状态。离线仍保留最近记录的设备名。
+
+旧 UUID 在更新后的服务和客户端中自动映射为同一 16 位 ID（`SHA256("wdb-device-id-v1:" + 小写旧UUID)` 的前 16 个十六进制字符），无需重新配对。迁移保留客户端授权、证书和历史任务 ID/结果；历史报告和审计日志保留当时记录。升级时同步更新 CLI。短 ID 可以直接用于 `wdb disconnect 2f493aacf427f3e9` 或 `--device 2f493aacf427f3e9`。
 
 | connectionState | 含义 |
 |---|---|
