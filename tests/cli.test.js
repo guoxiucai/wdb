@@ -12,6 +12,7 @@ const {discoverFingerprint}=require('../src/client-transport');
 
 let temporary, server, target, fingerprint, requestCount = 0, protocolVersion = 1;
 let approvalRequired=false,approvalDelay=0,revoked=false,lastPairBody;
+const requests=[];
 const stored = new Map();
 function envelope(data, status = 'succeeded') { return { requestId: crypto.randomUUID(), deviceId: 'device-test', status, error: null, durationMs: 0, artifacts: [], data }; }
 before(async () => {
@@ -24,6 +25,7 @@ before(async () => {
   server = https.createServer({ key: await fs.readFile(key), cert: certificate }, async (req, res) => {
     requestCount++;
     const url = new URL(req.url, 'https://localhost');
+    requests.push(req.method+' '+url.pathname);
     const respond = data => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(envelope(data))); };
     if (url.pathname === '/v1/pair') {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -31,11 +33,13 @@ before(async () => {
       lastPairBody=body;
       if(approvalDelay)await new Promise(r=>setTimeout(r,approvalDelay));
       if(body.name==='reject-me'){res.writeHead(403);res.end(JSON.stringify({error:{code:'PAIRING_REJECTED',message:'Rejected on server'}}));return;}
+      if(body.name==='timeout-me'){res.writeHead(408);res.end(JSON.stringify({error:{code:'PAIRING_TIMEOUT',message:'Approval timed out'}}));return;}
+      if(body.name==='slow-me')await new Promise(r=>setTimeout(r,1200));
       revoked=false;
       respond({ clientId: 'client-test', deviceId: 'device-test', token: 'private-token' }); return;
     }
     if (revoked || req.headers.authorization !== 'Bearer private-token') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'No token' } })); return; }
-    if (url.pathname === '/v1/info') { if(approvalRequired){res.writeHead(401);res.end(JSON.stringify({error:{code:'PAIRING_REQUIRED',message:'Approval required'}}));return;}respond({ version: '0.1.0', protocolVersion }); return; }
+    if (url.pathname === '/v1/info'||url.pathname==='/v1/health') { if(approvalRequired){res.writeHead(401);res.end(JSON.stringify({error:{code:'PAIRING_REQUIRED',message:'Approval required'}}));return;}respond({ version: '0.1.0', protocolVersion, hostname:'test-server',...(url.pathname==='/v1/info'?{capabilities:['shell','files'],desktop:{available:true}}:{}) }); return; }
     if(url.pathname==='/v1/connection'&&req.method==='POST'){req.resume();approvalRequired=false;respond({clientId:'client-test',remembered:false});return;}
     if (url.pathname === '/v1/heartbeat' || url.pathname === '/v1/connection') { respond({ ok: true }); return; }
     if (url.pathname === '/v1/tasks' && req.method === 'POST') {
@@ -79,10 +83,10 @@ after(async () => {
   await new Promise(resolve => server.close(resolve));
   await fs.rm(temporary, { recursive: true, force: true });
 });
-async function cli(args, configName = 'client') {
+async function cli(args, configName = 'client', json = true) {
   let stdout = '', stderr = '';
-  const code = await main([...args, '--json', '--config', path.join(temporary, configName)], { stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } } });
-  return { code, result: JSON.parse(stdout), stderr, stdout };
+  const code = await main([...args, ...(json?['--json']:[]), '--config', path.join(temporary, configName)], { stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } } });
+  return { code, result: json?JSON.parse(stdout):undefined, stderr, stdout };
 }
 test('parser preserves PowerShell content after -- and validates address', () => {
   assert.deepEqual(parseArgv(['shell', '--json', '--', 'Write-Output', '--foo']).positional, ['shell', 'Write-Output', '--foo']);
@@ -106,8 +110,10 @@ test('incompatible protocol is reported explicitly', async () => {
 });
 test('pair, shell, file/recursive transfers, disconnect, and reconnect', async () => {
   const paired = await cli(['connect', target]);
-  assert.equal(paired.result.data.fingerprint,fingerprint);assert.equal(lastPairBody.pairingCode,undefined);
-  assert.equal(paired.code, 0); assert.equal(paired.result.data.clientId, 'client-test'); assert.ok(!paired.stdout.includes('private-token'));
+  assert.deepEqual(paired.result.data,{address:new URL(target).host,state:'connected'});assert.equal(lastPairBody.pairingCode,undefined);
+  const saved=JSON.parse(await fs.readFile(path.join(temporary,'client/devices.json'),'utf8')).devices[0];
+  assert.equal(saved.fingerprint,fingerprint);assert.equal(saved.clientId,'client-test');
+  assert.equal(paired.code, 0); assert.ok(!paired.stdout.includes('private-token'));
   const shell = await cli(['shell', '--script', 'Write-Output 中文测试']);
   assert.equal(shell.result.data.result.stdout, '中文测试\n');
   const source = path.join(temporary, '中文 space.bin'), output = path.join(temporary, '下载 space.bin');
@@ -126,7 +132,7 @@ test('pair, shell, file/recursive transfers, disconnect, and reconnect', async (
   assert.equal(await fs.readFile(path.join(temporary, 'download-dir/子目录/文件.txt'), 'utf8'), '你好世界');
   assert.equal((await cli(['disconnect', target])).code, 0);
   assert.equal((await cli(['info'])).result.error.code, 'NO_DEVICE');
-  assert.equal((await cli(['connect', target])).code, 0);
+  const resumed=await cli(['connect',target]);assert.equal(resumed.code,0);assert.equal(resumed.result.data.state,'connected');
   assert.equal((await cli(['info'])).result.data.version, '0.1.0');
 });
 test('connect waits for server approval independently of ordinary request timeout and renews temporary identity',async()=>{
@@ -135,7 +141,7 @@ test('connect waits for server approval independently of ordinary request timeou
   const paired=await cli(['connect',target,'--fingerprint',fingerprint,'--pairing-code','test-secret','--request-timeout','30','--approval-timeout','1000'],'approval-client');
   assert.equal(paired.code,0,JSON.stringify(paired.result));assert.match(paired.stderr,/Waiting for approval/);assert.equal(paired.stdout.trim().split('\n').length,1);
   approvalRequired=true;
-  const renewed=await cli(['connect',target],'approval-client');assert.equal(renewed.code,0);assert.equal(renewed.result.data.clientId,'client-test');assert.match(renewed.stderr,/Waiting for approval/);
+  const renewed=await cli(['connect',target],'approval-client');assert.equal(renewed.code,0);assert.equal(renewed.result.data.state,'connected');assert.match(renewed.stderr,/Waiting for approval/);
   const saved=JSON.parse(await fs.readFile(path.join(temporary,'approval-client/devices.json'),'utf8'));assert.equal(saved.devices[0].remembered,false);
  }finally{approvalDelay=0;approvalRequired=false;}
 });
@@ -156,10 +162,10 @@ test('explicit first pin mismatch does not prompt or persist a client',async()=>
 
 test('saved certificate mismatch never falls back to discovery, including legacy code arguments',async()=>{
  const dir=path.join(temporary,'changed-pin');await fs.mkdir(dir);
- const saved={devices:[{url:target,fingerprint:'0'.repeat(64),token:'private-token',deviceId:'device-test'}]};
+ const saved={devices:[{url:target,fingerprint:'0'.repeat(64),token:'private-token',deviceId:'device-test',connected:true}]};
  const file=path.join(dir,'devices.json');await fs.writeFile(file,JSON.stringify(saved));
  const count=requestCount,r=await cli(['connect',target,'--pairing-code','old-ignored-code'],'changed-pin');
- assert.equal(r.result.error.code,'CERTIFICATE_MISMATCH');assert.equal(requestCount,count);
+ assert.equal(r.result.error.code,'CERTIFICATE_MISMATCH');assert.equal(r.result.data.state,'failed');assert.equal(requestCount,count);
  assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),saved);
 });
 
@@ -173,7 +179,49 @@ test('certificate discovery has a deadline and failure saves no trust',async()=>
  await new Promise(r=>stalled.listen(0,'127.0.0.1',r));
  try{
   const r=await cli(['connect',`127.0.0.1:${stalled.address().port}`,'--request-timeout','50'],'no-certificate');
-  assert.equal(r.result.error.code,'TRANSPORT_TIMEOUT');
+  assert.equal(r.result.error.code,'TRANSPORT_TIMEOUT');assert.equal(r.result.data.state,'timeout');assert.equal(r.result.status,'timed_out');
   await assert.rejects(fs.stat(path.join(temporary,'no-certificate/devices.json')),{code:'ENOENT'});
+  const dir=path.join(temporary,'was-online');await fs.mkdir(dir);
+  const url=`https://127.0.0.1:${stalled.address().port}`;
+  await fs.writeFile(path.join(dir,'devices.json'),JSON.stringify({devices:[{url,fingerprint,token:'private-token',deviceId:'device-test',connected:true}]}));
+  const offline=await cli(['connect',url,'--request-timeout','50','--reconnect-timeout','0'],'was-online',false);
+  assert.equal(offline.code,1);assert.equal(offline.stdout,`connection to 127.0.0.1:${stalled.address().port} timed out (TRANSPORT_TIMEOUT)\n`);
  }finally{for(const s of sockets)s.destroy();await new Promise(r=>stalled.close(r));}
+});
+
+test('connect prints one brief line and probes live health before reporting already connected',async()=>{
+ const start=requests.length,address=new URL(target).host;
+ const first=await cli(['connect',target],'brief-client',false);
+ assert.equal(first.code,0);assert.equal(first.stdout,`connected to ${address}\n`);
+ assert.deepEqual(requests.slice(start),['POST /v1/pair','GET /v1/health']);
+ const repeatStart=requests.length;
+ const repeat=await cli(['connect',target],'brief-client',false);
+ assert.equal(repeat.code,0);assert.equal(repeat.stdout,`already connected to ${address}\n`);assert.equal(repeat.stderr,'');
+ assert.deepEqual(requests.slice(repeatStart),['GET /v1/health']);
+ const json=await cli(['connect',target],'brief-client');
+ assert.deepEqual(json.result.data,{address,state:'already_connected'});assert.equal(json.result.status,'succeeded');
+ const info=await cli(['info'],'brief-client');
+ assert.deepEqual(info.result.data.capabilities,['shell','files']);assert.equal(info.result.data.desktop.available,true);
+ assert.equal(info.result.data.connection.fingerprint,fingerprint);assert.equal(info.result.data.connection.clientId,'client-test');assert.equal(info.result.data.connection.remembered,true);
+ assert.ok(!info.stdout.includes('private-token'));
+ await cli(['disconnect',target],'brief-client');
+ const resumed=await cli(['connect',target],'brief-client',false);assert.equal(resumed.stdout,`connected to ${address}\n`);
+});
+
+test('denied and timed-out approvals have concise text and distinct JSON states',async()=>{
+ const address=new URL(target).host;
+ for(const [name,state,code,status,text] of [
+  ['reject-me','failed','PAIRING_REJECTED','failed',`failed to connect to ${address} (PAIRING_REJECTED)\n`],
+  ['timeout-me','timeout','PAIRING_TIMEOUT','timed_out',`connection to ${address} timed out (PAIRING_TIMEOUT)\n`]
+ ]){
+  const plain=await cli(['connect',target,'--name',name],name,false);assert.equal(plain.code,1);assert.equal(plain.stdout,text);
+  const json=await cli(['connect',target,'--name',name],name);assert.equal(json.code,1);assert.equal(json.result.status,status);assert.equal(json.result.error.code,code);assert.deepEqual(json.result.data,{address,state});
+  await assert.rejects(fs.stat(path.join(temporary,name,'devices.json')),{code:'ENOENT'});
+ }
+});
+
+test('a sent approval request timing out keeps its uncertain-outcome error',async()=>{
+ const r=await cli(['connect',target,'--name','slow-me','--approval-timeout','1000'],'approval-timeout');
+ assert.equal(r.code,1);assert.equal(r.result.status,'timed_out');assert.equal(r.result.data.state,'timeout');assert.equal(r.result.error.code,'REQUEST_OUTCOME_UNKNOWN');
+ await assert.rejects(fs.stat(path.join(temporary,'approval-timeout/devices.json')),{code:'ENOENT'});
 });

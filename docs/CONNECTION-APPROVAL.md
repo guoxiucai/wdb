@@ -40,7 +40,7 @@ wdb clients revoke <clientId> --json
 ## CLI 状态与错误
 
 - 首次/需要重新确认时，stderr显示等待服务器批准；`--json` stdout仍只有最终JSON。
-- 配对返回 `remembered:true|false`，临时连接另返回 `temporaryIdleMs`。
+- 服务端配对API返回 `remembered:true|false`，临时连接另返回 `temporaryIdleMs`；CLI内部保存这些信息。`connect`默认只输出一行成功/已连接/失败/超时，`--json`的data只含address/state；详情用`info`，记住状态和客户端ID在`data.connection`中。
 - `clients list` 给出 `remembered` 与当前 `authorized`，不显示令牌/哈希。
 - 临时许可结束后，普通操作返回 `PAIRING_REQUIRED`；`devices` 显示 `approval_required`。watch不自动弹窗，操作者显式运行connect。
 - `PAIRING_REJECTED`：拒绝/关闭；`PAIRING_TIMEOUT`：服务端审批超时；`PAIRING_BUSY`：已有另一请求正在等待；`PAIRING_DESKTOP_UNAVAILABLE`：当前桌面不能审批。
@@ -54,7 +54,7 @@ wdb clients revoke <clientId> --json
 
 1. 首次连接通过独立 TLS 握手获取证书 SHA-256，然后固定该指纹发送 `POST /v1/pair`，body仅需 `{"name":"mac-client"}`。等待本地确认最长120秒；同意后才返回token/clientId。没有“忽略弹窗”参数。已保存的指纹不重新发现或自动替换。
 2. 普通认证请求返回 `401 / PAIRING_REQUIRED` 时停止操作；仅显式connect可调用 **`POST /v1/connection`**，携带原Bearer，body `{}`，等待重新确认。
-3. 成功响应data为 `{connected:true,clientId,remembered}`，之后重新查询 `/v1/info`、更新本地connected和lastConnected。令牌及clientId不变；拒绝不恢复许可。
+3. 成功响应data为 `{connected:true,clientId,remembered}`，之后重新查询 `/v1/health`、更新本地connected和lastConnected。令牌及clientId不变；拒绝不恢复许可。CLI对外connect只返回状态，显式info命令才查询详细信息。
 4. `DELETE /v1/connection` 仍保留凭据；临时许可被清除，响应增加 `reauthorizationRequired:true`。
 5. `/v1/health` 的 `connectionApproval:true` 表示支持该功能。旧版已授权CLI可继续操作；新配对/临时授权恢复请升级CLI，否则旧的短请求超时可能提前结束等待。
 

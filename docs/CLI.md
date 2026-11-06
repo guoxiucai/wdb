@@ -14,6 +14,19 @@ Windows x64 的 localhost 已验证，LAN 交付包与本机 LAN IP 自检已完
 .\bin\wdb.cmd devices --json
 ```
 
+`connect`默认只输出一行结果，详细信息由`info`查询：
+
+```text
+connected to 172.20.115.75:18766
+already connected to 172.20.115.75:18766
+failed to connect to 172.20.115.75:18766 (PAIRING_REJECTED)
+connection to 172.20.115.75:18766 timed out (PAIRING_TIMEOUT)
+```
+
+首次同意、主动断开后重连、临时许可重新确认成功均为`connected`。本地身份已启用且在线/授权检查通过才返回`already connected`，不重复审批；不能仅凭本地记录把离线设备判为已连接。等待人工审批时stderr有简短提示。
+
+`connect --json`保留通用JSON信封，`data`只含`address`和`state`：`connected`、`already_connected`、`failed`或`timeout`。成功/已连接的顶层`status=succeeded`且退出码0；失败为`failed`、超时为`timed_out`，退出码均1，`error`保留原因。不再返回嵌套info、指纹、clientId或remembered；这些连接详情在`info --json`的`data.connection`中。服务端配对接口不变。已发送审批请求后超时仍保留`REQUEST_OUTCOME_UNKNOWN`，先核对服务端状态再重试。
+
 首次连接自动获取证书 SHA-256，服务端弹窗同意后保存指纹及凭据；所有 HTTP 请求均先匹配本次/已保存的指纹。以后证书变化则失败，不自动接受。可选 `--fingerprint <SHA256>` 预先指定可信证书；旧 `--pairing-code` 参数不再参与授权。首次信任的边界见 [连接授权](CONNECTION-APPROVAL.md)。后续 `connect localhost:18766` 复用已保存的凭据。凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`，可用 `WDB_CONFIG` 或 `--config <目录>` 选择独立客户端身份。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
 
 `disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。

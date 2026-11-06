@@ -42,7 +42,9 @@ Test-NetConnection $server -Port 18766
 
 服务端操作者核对客户端名和来源 IP，**勾选“记住此客户端”并点击“同意”**，以便后续稳定性测试不被再次审批打断。服务端弹窗最多等待120秒；客户端默认等待150秒。
 
-通过标准：connect 的 `status=succeeded`、`data.remembered=true`；devices 中目标 `connectionState=online`；info 的 `protocolVersion=1`、`desktop.available=true`，设备 ID 是16位无分隔符字符串。证书指纹自动保存，不需要从服务端抄取。普通 stdout JSON 不包含令牌。
+通过标准：首次connect 的 `status=succeeded`、`data.state=connected`；devices 中目标 `connectionState=online`；info 的 `protocolVersion=1`、`desktop.available=true`、`connection.remembered=true`，设备 ID 是16位无分隔符字符串。证书指纹自动保存，不需要从服务端抄取。普通 stdout JSON 不包含令牌。connect只返回地址和状态；客户端ID、指纹和记住状态通过info的`data.connection`读取。
+
+再次执行`& $wdb connect $server`应仅显示`already connected to 172.20.115.75:18766`；`--json`对应`data.state=already_connected`，无需再次审批。失败时仅提示原因码，超时有单独提示；示例见 [CLI输出说明](CLI.md)。
 
 人类可读输出示例（列间空白可能不同）：
 
@@ -174,7 +176,7 @@ $caseConfig = Join-Path $env:LOCALAPPDATA ('wdb\validation\case-' + [guid]::NewG
 | 拒绝 | 点击拒绝 | `PAIRING_REJECTED`，该新配置没有保存devices.json |
 | 关闭 | 直接关闭弹窗 | 同上；不会建立授权 |
 | 超时 | 120秒内不操作 | `PAIRING_TIMEOUT`，不保存新身份 |
-| 临时同意 | 同意但不勾选记住；执行下面disconnect/connect | 首次 `remembered=false`，再次连接重新弹窗；同意后clientId不变 |
+| 临时同意 | 同意但不勾选记住；执行下面disconnect/connect | `info --config $caseConfig --device $server --json`显示`data.connection.remembered=false`；再次连接重新弹窗，同意后info中的clientId不变 |
 | 临时授权遇到重启 | 临时同意后按第6节A重启 | 普通命令返回 `PAIRING_REQUIRED`，显式connect再次请求确认 |
 | 临时授权闲置 | 停止该身份所有CLI/watch请求至少30分钟 | 后续操作要求重新确认；可作为延后验收项 |
 
