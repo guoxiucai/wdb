@@ -10,6 +10,7 @@ const { execFileSync } = require('node:child_process');
 const { main, api, parseArgv, normalizeTarget, selectDevice } = require('../src/cli');
 
 let temporary, server, target, fingerprint, requestCount = 0, protocolVersion = 1;
+let approvalRequired=false,approvalDelay=0;
 const stored = new Map();
 function envelope(data, status = 'succeeded') { return { requestId: crypto.randomUUID(), deviceId: 'device-test', status, error: null, durationMs: 0, artifacts: [], data }; }
 before(async () => {
@@ -26,11 +27,14 @@ before(async () => {
     if (url.pathname === '/v1/pair') {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks));
+      if(approvalDelay)await new Promise(r=>setTimeout(r,approvalDelay));
+      if(body.name==='reject-me'){res.writeHead(403);res.end(JSON.stringify({error:{code:'PAIRING_REJECTED',message:'Rejected on server'}}));return;}
       if (body.pairingCode !== 'test-secret') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'PAIRING_DENIED', message: 'Incorrect pairing code' } })); return; }
       respond({ clientId: 'client-test', deviceId: 'device-test', token: 'private-token' }); return;
     }
     if (req.headers.authorization !== 'Bearer private-token') { res.writeHead(401); res.end(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'No token' } })); return; }
-    if (url.pathname === '/v1/info') { respond({ version: '0.1.0', protocolVersion }); return; }
+    if (url.pathname === '/v1/info') { if(approvalRequired){res.writeHead(401);res.end(JSON.stringify({error:{code:'PAIRING_REQUIRED',message:'Approval required'}}));return;}respond({ version: '0.1.0', protocolVersion }); return; }
+    if(url.pathname==='/v1/connection'&&req.method==='POST'){req.resume();approvalRequired=false;respond({clientId:'client-test',remembered:false});return;}
     if (url.pathname === '/v1/heartbeat' || url.pathname === '/v1/connection') { respond({ ok: true }); return; }
     if (url.pathname === '/v1/tasks' && req.method === 'POST') {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -151,4 +155,19 @@ test('symlinks, overwrite, and filename aliases respect the local filesystem', {
     if (aliases) assert.equal(second.result.error.code, 'ALREADY_EXISTS');
     assert.equal(await fs.readFile(a, 'utf8'), 'replacement 🌍');
   }
+});
+
+test('connect waits for server approval independently of ordinary request timeout and renews temporary identity',async()=>{
+ approvalDelay=100;
+ try{
+  const paired=await cli(['connect',target,'--fingerprint',fingerprint,'--pairing-code','test-secret','--request-timeout','30','--approval-timeout','1000'],'approval-client');
+  assert.equal(paired.code,0,JSON.stringify(paired.result));assert.match(paired.stderr,/Waiting for approval/);assert.equal(paired.stdout.trim().split('\n').length,1);
+  approvalRequired=true;
+  const renewed=await cli(['connect',target],'approval-client');assert.equal(renewed.code,0);assert.equal(renewed.result.data.clientId,'client-test');assert.match(renewed.stderr,/Waiting for approval/);
+  const saved=JSON.parse(await fs.readFile(path.join(temporary,'approval-client/devices.json'),'utf8'));assert.equal(saved.devices[0].remembered,false);
+ }finally{approvalDelay=0;approvalRequired=false;}
+});
+test('server denial is returned and no new client credentials are saved',async()=>{
+ const rejected=await cli(['connect',target,'--fingerprint',fingerprint,'--pairing-code','test-secret','--name','reject-me'],'rejected-client');assert.equal(rejected.code,1);assert.equal(rejected.result.error.code,'PAIRING_REJECTED');
+ await assert.rejects(fs.stat(path.join(temporary,'rejected-client/devices.json')),{code:'ENOENT'});
 });

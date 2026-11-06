@@ -2,7 +2,9 @@
 
 版本：2026-11-06；协议基线 `/v1`、`protocolVersion:1`、产品版本 `0.1.0`。Windows LAN 支持提交 `4e88694`，独立 CLI/验证脚本提交 `ad15ad6`。本文是 Mac 端并行开发交接文档，Mac 安装包与实机结果尚未交付。
 
-后续实现状态：Mac 启动器、配置路径/迁移、arm64 离线构建与客户端测试已落地，使用 [MACOS-CLIENT.md](MACOS-CLIENT.md)，验证边界见 [MACOS-VERIFICATION.md](MACOS-VERIFICATION.md)。以下保留交接时的现状描述；其中“当前 Mac 回落到 `~/wdb/client`”及“尚待创建启动器”已由新实现替代。PC 端首次配对的同意/拒绝/记住交互由 Windows 侧另行调整，本文原有 `/v1/pair` 仍是当前 CLI 兼容基线。
+后续实现状态：Mac 启动器、配置路径/迁移、arm64 离线构建与客户端测试已落地，使用 [MACOS-CLIENT.md](MACOS-CLIENT.md)，验证边界见 [MACOS-VERIFICATION.md](MACOS-VERIFICATION.md)。以下保留交接时的现状描述；其中“当前 Mac 回落到 `~/wdb/client`”及“尚待创建启动器”已由新实现替代。
+
+**首次连接审批增补：** 新客户端必须由Windows端弹窗同意，支持记住/临时授权；临时许可结束后显式connect经`POST /v1/connection`重新确认。必须同时实现 [CONNECTION-APPROVAL.md](CONNECTION-APPROVAL.md)，其规则优先于本文早期单纯配对流程。
 
 ## 1. 目标和复用边界
 
@@ -97,7 +99,7 @@ Ctrl+C：watch/follow 正常结束；普通长任务中止客户端等待不代�
 1. 将 `<IP>` 标准化为 `https://<IP>:18766`；只允许 HTTPS origin，禁止 URL 用户名/密码、业务路径、query/hash。
 2. 建立 TLS，取得服务端叶证书原始 DER，计算 SHA-256，和人工可信渠道给出的 64 位 hex 指纹比较（接受冒号分隔输入，存储小写无冒号）。
 3. **指纹比较成功后**才允许 flush HTTP 请求头、Bearer、配对码和请求体。当前 `openRequest()` 延迟 `req.end()` 并在 `secureConnect` 比对；不能简单使用 `rejectUnauthorized:false` 就认为完成认证。Node HTTPS 支持 TLS 相关选项，参见 [官方 HTTPS API](https://nodejs.org/api/https.html#httpsrequestoptions-callback)。
-4. 首次 `POST /v1/pair`，body `{"name":"mac-client","pairingCode":"<secret>"}`。响应 `data` 为 `clientId/token/deviceId/version`。token 是 32 随机字节的 base64url 字符串，只在配对响应中明文返回；服务器保存 tokenHash。
+4. 首次 `POST /v1/pair`，body `{"name":"mac-client","pairingCode":"<secret>"}`，等待服务器本地审批（最多120秒，CLI默认等待150秒），仅同意后响应 `data` 为 `clientId/token/deviceId/version/remembered`。token 是 32 随机字节的 base64url 字符串，只在配对响应中明文返回；服务器保存 tokenHash。
 5. 此后发送 `Authorization: Bearer <token>`。调用 `/v1/info` 检查协议/能力并记录 hostname。不得把 token 放入 URL、诊断输出或共享报告。
 
 配对码当前是安装时生成、持久保存的随机值，不是单次使用或自动过期 OTP；每个来源地址每分钟最多 10 次配对尝试，错误返回 `PAIRING_DENIED`，超限 `RATE_LIMITED`。`--name` 是客户端授权记录名称，不是服务器昵称。
@@ -132,6 +134,7 @@ Ctrl+C：watch/follow 正常结束；普通长任务中止客户端等待不代�
 | GET `/v1/health` | 无 | version、protocolVersion、deviceId、hostname、serverProcessId、taskSubmissionDeduplication |
 | GET `/v1/info` | 无 | capabilities、desktop、execution、平台/版本/配额等 |
 | POST `/v1/heartbeat` | `{}` | connected:true；续期客户端输入租约 |
+| POST `/v1/connection` | 原Bearer、`{}` | 临时许可结束后重新弹窗审批；返回connected/clientId/remembered |
 | DELETE `/v1/connection` | 无 | disconnected:true、credentialsRetained:true；取消该客户端输入 |
 | GET `/v1/clients` | 无 | clients 数组，不含 token/hash |
 | DELETE `/v1/clients/<clientId>` | 无 | revoked；禁止后续请求、请求取消该客户端活动任务 |

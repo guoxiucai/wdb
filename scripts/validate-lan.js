@@ -18,7 +18,7 @@ const common=['--device',options.device,'--json','--reconnect-timeout','15000',.
 const report={startedAt:new Date().toISOString(),client:{platform:process.platform,arch:process.arch,hostname:os.hostname(),node:process.version},target:options.device,steps:[],passed:false};
 let remoteDir;
 function run(label,args){
- const start=Date.now(),p=spawnSync(process.execPath,[cli,...args,...common],{encoding:'utf8',windowsHide:true,timeout:90000,maxBuffer:32*1024*1024});
+ const start=Date.now(),p=spawnSync(process.execPath,[cli,...args,...common],{encoding:'utf8',windowsHide:true,timeout:args[0]==='connect'?180000:90000,maxBuffer:32*1024*1024});
  let result;try{result=JSON.parse(p.stdout);}catch{throw Error(`${label}: invalid CLI output (${p.error?.message||p.stderr})`);}
  fs.writeFileSync(path.join(output,label+'.json'),JSON.stringify(result,null,2));
  const task=result.data?.taskId?result.data:null;

@@ -1,5 +1,7 @@
 # 自动重连与设备标识
 
+新增 [服务端连接确认](CONNECTION-APPROVAL.md)：已经记住的客户端沿用本页重连规则；临时授权在disconnect、服务重启或30分钟无请求后失效，需要显式connect让本机操作者再次确认。普通命令/watch不会自动发起审批。
+
 ## 设备如何标识
 
 `wdb devices` 实时探测已配对设备，同时展示状态、设备名、服务地址和唯一 ID，例如：
@@ -23,6 +25,7 @@ online             qingwei              https://127.0.0.1:18766          2f493aa
 | offline | 服务或网络当前不可达；保留凭据，后续可以自动恢复 |
 | disconnected | 用户主动断开，不自动恢复，需再次 connect |
 | unauthorized | 授权无效或撤销 |
+| approval_required | 临时许可结束，需connect并在服务器重新确认 |
 | identity_mismatch | 证书指纹或 deviceId 改变 |
 | incompatible | 协议版本不兼容 |
 

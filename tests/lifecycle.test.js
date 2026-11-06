@@ -52,7 +52,7 @@ test('two independent localhost devices accept two clients each and isolate task
   const devices = [];
   for (let index = 0; index < 2; index++) {
     const dir = stateDirectory();
-    const bridge = new Bridge({ dataDir: dir });
+    const bridge = new Bridge({ dataDir: dir, approvePairing: async () => ({decision:'approved',remember:true}) });
     const server = await bridge.listen(0);
     const port = server.address().port;
     devices.push({ dir, bridge, port, clients: await Promise.all([pair(port, dir, 'A'), pair(port, dir, 'B')]) });
@@ -94,7 +94,7 @@ test('restart marks incomplete persisted work unknown; retention never removes a
   const original = { id, clientId: 'client-a', deviceId: 'device-a', op: 'shell', status: 'running', createdAt: new Date().toISOString(), startedAt: new Date().toISOString(), artifacts: [] };
   atomic(path.join(taskDir, 'task.json'), original);
   fs.writeFileSync(path.join(taskDir, 'stdout.live'), 'output persisted before interruption');
-  const bridge = new Bridge({ dataDir: dir });
+  const bridge = new Bridge({ dataDir: dir, approvePairing: async () => ({decision:'approved',remember:true}) });
   t.after(async () => { await bridge.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   const recovered = bridge.tasks.get(id);
   assert.equal(recovered.status, 'unknown');
@@ -118,7 +118,7 @@ test('restart marks incomplete persisted work unknown; retention never removes a
 
 test('interrupted file upload removes partial output and releases destination reservation', async t => {
   const dir = stateDirectory();
-  const bridge = new Bridge({ dataDir: dir });
+  const bridge = new Bridge({ dataDir: dir, approvePairing: async () => ({decision:'approved',remember:true}) });
   const server = await bridge.listen(0);
   const port = server.address().port;
   t.after(async () => { await bridge.close(); fs.rmSync(dir, { recursive: true, force: true }); });
@@ -158,7 +158,7 @@ test('real user helper preserves shell work across disconnect and cancels on exp
     helper.once('error', error => { clearTimeout(timer); reject(error); });
     helper.once('exit', code => { clearTimeout(timer); reject(new Error(`Helper exited ${code}: ${helperError}`)); });
   });
-  const bridge = new Bridge({ dataDir: dir, helperPort });
+  const bridge = new Bridge({ dataDir: dir, helperPort, approvePairing: async () => ({decision:'approved',remember:true}) });
   t.after(async () => {
     for (const task of bridge.tasks.values()) bridge.cancel(task);
     await until(() => bridge.active.size === 0, 10000);
@@ -222,7 +222,7 @@ test('real user helper preserves shell work across disconnect and cancels on exp
 
 test('cancelling accepted or already-aborted work prevents process side effects', async t => {
   const dir = stateDirectory();
-  const bridge = new Bridge({ dataDir: dir });
+  const bridge = new Bridge({ dataDir: dir, approvePairing: async () => ({decision:'approved',remember:true}) });
   t.after(async () => { await bridge.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   const marker = path.join(dir, 'must-not-exist.txt');
   const task = await bridge.submit({ id: 'early-cancel-client' }, { op: 'shell', args: { admin: true, command: `Set-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value unsafe` } });

@@ -55,6 +55,7 @@ public static class DesktopBridge {
         string layout=S(a,"layoutId");
         if(layout!="") Require(layout==Layout(),"DISPLAY_CHANGED","Display layout changed; observe screens again before using coordinates.");
         switch(op) {
+            case "connection.approve": return ApproveConnection(a);
             case "screens": return new {coordinateSpace="virtual-desktop-physical",layoutId=Layout(),virtualBounds=Rect(SystemInformation.VirtualScreen),monitors=Screens()};
             case "screenshot": return Screenshot(a);
             case "windows.list": return Windows(a);
@@ -80,6 +81,41 @@ public static class DesktopBridge {
         try { return SwitchDesktop(desktop); } finally { CloseDesktop(desktop); }
     }
     static object Status() { return new {available=Available(),sessionId=Process.GetCurrentProcess().SessionId,identity=System.Security.Principal.WindowsIdentity.GetCurrent().Name,coordinateSpace="virtual-desktop-physical",layoutId=Layout()}; }
+    static object ApproveConnection(Dictionary<string,object>a) {
+        string decision="denied";bool remembered=false;
+        DateTime deadline=DateTime.UtcNow.AddMilliseconds(Math.Max(1000,Math.Min(120000,I(a,"timeoutMs",120000))));
+        Application.EnableVisualStyles();
+        using(var form=new Form()) using(var timer=new System.Windows.Forms.Timer()) {
+            form.Text="WDB 连接授权";form.AutoSize=true;form.AutoSizeMode=AutoSizeMode.GrowAndShrink;
+            form.Font=new Font("Microsoft YaHei UI",10F);form.AutoScaleMode=AutoScaleMode.Dpi;
+            form.FormBorderStyle=FormBorderStyle.FixedDialog;form.MaximizeBox=false;form.MinimizeBox=false;
+            form.StartPosition=FormStartPosition.CenterScreen;form.TopMost=true;form.ShowInTaskbar=true;
+            var flow=new FlowLayoutPanel{FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(20)};
+            var heading=new Label{Text="允许此客户端连接？",AutoSize=true,MaximumSize=new Size(360,0),Font=new Font("Microsoft YaHei UI",11F,FontStyle.Bold)};
+            var identity=new Label{Text="客户端："+S(a,"name"),AutoEllipsis=true,Size=new Size(360,26),AccessibleName="客户端："+S(a,"name")};
+            var address=new Label{Text="来源："+S(a,"remoteAddress"),AutoEllipsis=true,Size=new Size(360,26),ForeColor=SystemColors.GrayText};
+            var remember=new CheckBox{Text="记住此客户端",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
+            var buttons=new Panel{Size=new Size(360,38)};
+            var countdown=new Label{Location=new Point(0,10),Size=new Size(120,26),ForeColor=SystemColors.GrayText};
+            var allow=new Button{Text="同意",Location=new Point(160,0),Size=new Size(96,36),AccessibleName="同意连接"};
+            var deny=new Button{Text="拒绝",Location=new Point(264,0),Size=new Size(96,36),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+            Action check=delegate(){
+                if(File.Exists(S(a,"cancelFile"))){decision="cancelled";form.Close();}
+                else if(!Available()){decision="desktop_unavailable";form.Close();}
+                else if(DateTime.UtcNow>=deadline){decision="timed_out";form.Close();}
+                else countdown.Text=Math.Ceiling((deadline-DateTime.UtcNow).TotalSeconds)+" 秒后关闭";
+            };
+            allow.Click+=delegate {check();if(!form.IsDisposed&&form.Visible){decision="approved";remembered=remember.Checked;form.Close();}};
+            deny.Click+=delegate {decision="denied";form.Close();};
+            form.AcceptButton=deny;form.CancelButton=deny;
+            buttons.Controls.AddRange(new Control[]{countdown,allow,deny});
+            foreach(Control control in new Control[]{heading,identity,address,remember,buttons}){control.Margin=new Padding(0,0,0,8);flow.Controls.Add(control);}
+            form.Controls.Add(flow);
+            timer.Interval=250;timer.Tick+=delegate {check();};form.Shown+=delegate {deny.Focus();check();timer.Start();};
+            form.ShowDialog();timer.Stop();
+        }
+        return new {decision=decision,remember=decision=="approved"&&remembered};
+    }
     static object[] Screens() { return Screen.AllScreens.Select((s,i)=> {uint x=96,y=96; try {GetDpiForMonitor(MonitorFromPoint(new POINT(s.Bounds.Left+1,s.Bounds.Top+1),2),0,out x,out y);}catch{} return (object)new {index=i,name=s.DeviceName,primary=s.Primary,bounds=Rect(s.Bounds),workArea=Rect(s.WorkingArea),dpiX=x,dpiY=y};}).ToArray(); }
     static string Layout() { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(Json.Serialize(Screens())))).Replace("-","").ToLowerInvariant(); }
     static IntPtr Window(string id) {

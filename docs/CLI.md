@@ -4,6 +4,8 @@ Windows x64 的 localhost 已验证，LAN 交付包与本机 LAN IP 自检已完
 
 ## 配对和选择设备
 
+新客户端配对需要服务器本机操作者在弹窗中同意。默认临时授权；勾选记住后持久授权。CLI默认等待150秒（`--approval-timeout`），拒绝/关闭/超时不授权。临时许可结束时运行connect重新确认，详见 [连接授权](CONNECTION-APPROVAL.md)。
+
 从服务端本机安装/诊断输出取得 SHA-256 证书指纹和配对码，再运行：
 
 ```powershell

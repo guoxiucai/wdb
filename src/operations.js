@@ -103,7 +103,7 @@ async function record(op,args,ctx){
 }
 async function runOperation(op,args,ctx,config={}){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
- const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.','electron.','flutter.'].some(p=>op.startsWith(p));
+ const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.','electron.','flutter.','connection.approve'].some(p=>op.startsWith(p));
  const userShell=op==='shell'&&!args.admin;
  if(!config.isHelper&&(desktop||userShell))return helperRequest(op,args,ctx,config);
  if(op==='shell')return shell(args,ctx);

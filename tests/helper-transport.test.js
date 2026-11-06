@@ -5,6 +5,7 @@ test('helper response preserves UTF-8 characters split across network chunks',as
  const server=http.createServer(async(req,res)=>{req.resume();res.setHeader('content-type','application/json');for(const byte of bytes){res.write(Buffer.from([byte]));await new Promise(r=>setImmediate(r));}res.end();});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  const result=await runOperation('screens',{}, {id:'unicode-test',dir:__dirname,timeoutMs:3000},{helperPort:server.address().port,helperSecret:'test-only'});assert.deepEqual(result,expected);assert.equal(Buffer.byteLength(result.text),Buffer.byteLength(expected.text));
  const flutter=await runOperation('flutter.info',{}, {id:'flutter-route',dir:__dirname,timeoutMs:3000},{helperPort:server.address().port,helperSecret:'test-only'});assert.deepEqual(flutter,expected);
+ const approval=await runOperation('connection.approve',{}, {id:'approval-route',dir:__dirname,timeoutMs:3000},{helperPort:server.address().port,helperSecret:'test-only'});assert.deepEqual(approval,expected);
 });
 
 test('helper startup refusal is retried before dispatch, but a lost reply is not replayed',async t=>{

@@ -4,7 +4,7 @@ const {Bridge}=require('../src/server');const {main}=require('../src/cli');const
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function setup(t){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-reconnect-'));for(const name of ['tls.pfx','tls-password','helper-secret','pairing-code'])fs.copyFileSync(path.join(__dirname,'../.runtime/server',name),path.join(dir,name));
- const bridge=new Bridge({dataDir:dir});await bridge.listen(0);const target='https://127.0.0.1:'+bridge.server.address().port;
+ const bridge=new Bridge({dataDir:dir,approvePairing:async()=>({decision:'approved',remember:true})});await bridge.listen(0);const target='https://127.0.0.1:'+bridge.server.address().port;
  // Read the server certificate with an unauthenticated TLS handshake; never print credentials.
  const tls=require('node:tls');const fingerprint=await new Promise((resolve,reject)=>{const s=tls.connect({host:'127.0.0.1',port:bridge.server.address().port,rejectUnauthorized:false},()=>{resolve(crypto.createHash('sha256').update(s.getPeerCertificate().raw).digest('hex'));s.destroy();});s.on('error',reject);});
  const seed={url:target,fingerprint};setSession(seed,{'reconnect-timeout':2000,'request-timeout':300});const paired=await api(seed,'POST','/v1/pair',{pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')});const device={...seed,...paired.data,connected:true};
