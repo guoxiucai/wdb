@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
+const {execFileSync}=require('node:child_process');
+const {Bridge}=require('../src/server');
+const {api,withTransport}=require('../src/client-transport');
+let tlsRoot;
+function certificate(){if(tlsRoot)return tlsRoot;tlsRoot=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-stream-cert-'));const openssl=process.platform==='win32'?'C:\\Program Files\\Git\\usr\\bin\\openssl.exe':'openssl';for(const args of [['req','-x509','-newkey','rsa:2048','-nodes','-keyout',path.join(tlsRoot,'key.pem'),'-out',path.join(tlsRoot,'cert.pem'),'-days','1','-subj','/CN=localhost'],['pkcs12','-export','-out',path.join(tlsRoot,'tls.pfx'),'-inkey',path.join(tlsRoot,'key.pem'),'-in',path.join(tlsRoot,'cert.pem'),'-passout','pass:fixture','-keypbe','AES-256-CBC','-certpbe','AES-256-CBC','-macalg','sha256']])execFileSync(openssl,args,{stdio:'ignore',windowsHide:true});process.once('exit',()=>fs.rmSync(tlsRoot,{recursive:true,force:true}));return tlsRoot;}
+async function fixture(t,options={}){const cert=certificate(),dir=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-stream-server-'));fs.copyFileSync(path.join(cert,'tls.pfx'),path.join(dir,'tls.pfx'));fs.writeFileSync(path.join(dir,'tls-password'),'fixture');fs.writeFileSync(path.join(dir,'helper-secret'),'fixture-helper');const bridge=new Bridge({dataDir:dir,approvePairing:async()=>({decision:'approved',remember:true}),...options});await bridge.listen(0);const seed={url:'https://127.0.0.1:'+bridge.server.address().port,fingerprint:crypto.createHash('sha256').update(new crypto.X509Certificate(fs.readFileSync(path.join(cert,'cert.pem'))).raw).digest('hex')};const pair=await withTransport(()=>api(seed,'POST','/v1/pair',{name:'stream-test'}));const device={...seed,...pair.data,connected:true};t.after(async()=>{await bridge.close();fs.rmSync(dir,{recursive:true,force:true});});return {bridge,device,dir,cert};}
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn,ms=3000){const start=Date.now();while(!fn()){if(Date.now()-start>ms)throw Error('Condition timed out');await delay(10);}}
+module.exports={fixture,delay,until};

@@ -5,6 +5,7 @@ const {ROOT,argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require
 const {newDeviceId,normalizeDeviceId}=require('./device-id');
 const {requestApproval,clientName,TEMPORARY_IDLE_MS}=require('./pairing');
 const {TaskEvents}=require('./task-events');
+const {ServerStreams}=require('./server-streams');
 const VERSION=require('../package.json').version;
 class Bridge {
  constructor(options={}){
@@ -17,6 +18,7 @@ class Bridge {
   this.helperSecret=fs.readFileSync(path.join(this.dir,'helper-secret'),'utf8').trim();
   this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();this.clientSockets=new Map();
   this.temporaryClients=new Map();this.taskEvents=new TaskEvents();
+  this.streams=new ServerStreams({deviceId:this.config.deviceId,authorize:req=>{const c=req.owner||this.identify(req);if(c.revokedAt||!this.clients.includes(c))throw fail('UNAUTHORIZED','Client was revoked',401);if(!this.isApproved(c))throw fail('PAIRING_REQUIRED','Client authorization expired',401);return c;},renew:c=>{if(c.remembered===false)this.temporaryClients.set(c.id,Date.now());},audit:event=>this.audit(event),factories:options.streamFactories||{}});
   for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
   this.timer=setInterval(()=>{for(const [id,a] of this.active){const t=this.tasks.get(id);if(t.op.startsWith('input.')&&Date.now()-(this.leases.get(t.clientId)||0)>10000)this.cancel(t,'CONTROL_CONNECTION_LOST');}this.cleanup();},1000);this.timer.unref();
  }
@@ -82,7 +84,7 @@ class Bridge {
     return respond({connected:true,clientId:c.id,remembered:c.remembered!==false});
    }
    client=this.auth(req,u.pathname!=='/v1/health');
-   if(u.pathname==='/v1/health'&&req.method==='GET')return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),serverProcessId:process.pid,taskSubmissionDeduplication:true,connectionApproval:true,taskEvents:true});
+   if(u.pathname==='/v1/health'&&req.method==='GET')return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),serverProcessId:process.pid,taskSubmissionDeduplication:true,connectionApproval:true,taskEvents:true,streaming:this.streams.capabilities()});
    if(u.pathname==='/v1/info'&&req.method==='GET'){
     const dir=path.join(this.dir,'tasks','.status');fs.mkdirSync(dir,{recursive:true});let desktop;
     try{desktop=await runOperation('desktop.status',{}, {id:'status',dir,timeoutMs:5000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){desktop={available:false,error:{code:e.code,message:e.message}};}
@@ -91,9 +93,9 @@ class Bridge {
     return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,serverProcessId:process.pid,execution,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','electron','flutter','input','touch','logs',...(execution.isElevated?['apps']:[]),...(recording?['record']:[])],desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
    }
    if(u.pathname==='/v1/heartbeat'&&req.method==='POST')return respond({connected:true});
-   if(u.pathname==='/v1/connection'&&req.method==='DELETE'){this.taskEvents.disconnect(client.id);this.leases.delete(client.id);this.temporaryClients.delete(client.id);for(const t of this.tasks.values())if(t.clientId===client.id&&t.op.startsWith('input.'))this.cancel(t,'DISCONNECTED');return respond({disconnected:true,credentialsRetained:true,reauthorizationRequired:client.remembered===false});}
+   if(u.pathname==='/v1/connection'&&req.method==='DELETE'){this.streams.disconnect(client.id);this.taskEvents.disconnect(client.id);this.leases.delete(client.id);this.temporaryClients.delete(client.id);for(const t of this.tasks.values())if(t.clientId===client.id&&t.op.startsWith('input.'))this.cancel(t,'DISCONNECTED');return respond({disconnected:true,credentialsRetained:true,reauthorizationRequired:client.remembered===false});}
    if(u.pathname==='/v1/clients'&&req.method==='GET')return respond({clients:this.clients.map(({tokenHash,...c})=>({...c,remembered:c.remembered!==false,authorized:!c.revokedAt&&this.isApproved(c)}))});
-   if(u.pathname.startsWith('/v1/clients/')&&req.method==='DELETE'){const id=decodeURIComponent(u.pathname.split('/').pop()),c=this.clients.find(c=>c.id===id);if(!c)throw fail('CLIENT_NOT_FOUND','Client not found',404);c.revokedAt=new Date().toISOString();this.persistClients();this.leases.delete(id);for(const t of this.tasks.values())if(t.clientId===id)this.cancel(t,'AUTHORIZATION_REVOKED');for(const socket of this.clientSockets.get(id)||[])if(socket!==req.socket)socket.destroy();return respond({revoked:id});}
+   if(u.pathname.startsWith('/v1/clients/')&&req.method==='DELETE'){const id=decodeURIComponent(u.pathname.split('/').pop()),c=this.clients.find(c=>c.id===id);if(!c)throw fail('CLIENT_NOT_FOUND','Client not found',404);c.revokedAt=new Date().toISOString();this.persistClients();this.streams.disconnect(id,'UNAUTHORIZED');this.leases.delete(id);for(const t of this.tasks.values())if(t.clientId===id)this.cancel(t,'AUTHORIZATION_REVOKED');for(const socket of this.clientSockets.get(id)||[])if(socket!==req.socket)socket.destroy();return respond({revoked:id});}
    if(u.pathname==='/v1/tasks'&&req.method==='POST')return respond(await this.submit(client,await body(req)),'accepted',202);
    if(u.pathname==='/v1/tasks'&&req.method==='GET')return respond({tasks:[...this.tasks.values()].filter(t=>t.clientId===client.id)});
    const events=/^\/v1\/tasks\/([^/]+)\/events$/.exec(u.pathname);
@@ -122,9 +124,9 @@ class Bridge {
   }finally{await fs.promises.rm(temp,{force:true}).catch(()=>{});this.uploads.delete(p.toLowerCase());}
  }
  listen(port=18766,host='127.0.0.1'){
-  const server=https.createServer({pfx:fs.readFileSync(path.join(this.dir,'tls.pfx')),passphrase:fs.readFileSync(path.join(this.dir,'tls-password'),'utf8'),minVersion:'TLSv1.2'},(req,res)=>this.route(req,res));server.requestTimeout=0;server.headersTimeout=30000;this.server=server;return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>resolve(server));});
+  const server=https.createServer({pfx:fs.readFileSync(path.join(this.dir,'tls.pfx')),passphrase:fs.readFileSync(path.join(this.dir,'tls-password'),'utf8'),minVersion:'TLSv1.2'},(req,res)=>this.route(req,res));server.requestTimeout=0;server.headersTimeout=30000;this.streams.attach(server);this.server=server;return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>resolve(server));});
  }
- close(){clearInterval(this.timer);this.taskEvents.close();if(this.pendingPairing){this.pendingPairing.controller.abort();try{fs.writeFileSync(path.join(this.pendingPairing.dir,'cancel'),'SERVICE_STOPPED');}catch{}}return new Promise(r=>{this.server?.close(r);this.server?.closeAllConnections();if(!this.server)r();});}
+ async close(){clearInterval(this.timer);await this.streams.close();this.taskEvents.close();if(this.pendingPairing){this.pendingPairing.controller.abort();try{fs.writeFileSync(path.join(this.pendingPairing.dir,'cancel'),'SERVICE_STOPPED');}catch{}}return new Promise(r=>{this.server?.close(r);this.server?.closeAllConnections();if(!this.server)r();});}
 }
 if(require.main===module){const a=argv();const bridge=new Bridge({dataDir:a['data-dir'],helperPort:a['helper-port']});bridge.listen(Number(a.port||18766),a.host||'127.0.0.1').then(()=>console.log(JSON.stringify({event:'server-ready',port:Number(a.port||18766),deviceId:bridge.config.deviceId,pid:process.pid}))).catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={Bridge};

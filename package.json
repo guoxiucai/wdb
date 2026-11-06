@@ -4,7 +4,9 @@
   "private": true,
   "description": "Windows Debug Bridge server and portable CLI",
   "type": "commonjs",
-  "bin": { "wdb": "src/cli.js" },
+  "bin": {
+    "wdb": "src/cli.js"
+  },
   "scripts": {
     "test": "node --test tests/*.test.js",
     "test:client": "node --test tests/cli.test.js tests/macos-client.test.js tests/client-portable.test.js tests/transport-events.test.js",
@@ -13,5 +15,10 @@
     "start": "node src/server.js",
     "helper": "node src/helper.js"
   },
-  "engines": { "node": ">=24.15.0 <25" }
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "dependencies": {
+    "ws": "8.22.1"
+  }
 }
