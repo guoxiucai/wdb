@@ -2,6 +2,8 @@
 
 日期：2026-11-06。远端代码已快进到 `41f00e4`，本地实现基于该提交继续开发。最终候选 BuildId 为 `windows-final-05`，构建源码为干净提交 `61f93c9841cc17253d9a12a2c4d3248698f179f8`；后续提交仅补充验收脚本和报告，不改变该候选包的字节。
 
+收尾推送前再次同步了远端 `e27cf0b`：仅增加下一阶段的交互式 shell / TCP forwarding 设计文档及索引，已合并保留；没有服务端、客户端或安装器代码变化，不影响上述冻结产物。这些下一阶段功能不属于本次实现范围。
+
 本机闭环结果：安装矩阵 12 项全部通过，安装后 SSE 8 项全部通过，3 轮各 13 步业务检查和 3 次录屏均通过。最后恢复为 with-node，WdbService Running / Automatic，桌面助手可用；源码隔离及普通用户程序目录权限检查也通过。该结果只覆盖本文列出的本机范围。
 
 用户确认的开发参数：`wdb-cli-local-test`、`UNLICENSED`、`WDB Development`。所有 WDB 安装器均为未签名 Development 包，`releaseReady:false`。未执行 npm publish，也未上传安装包。
