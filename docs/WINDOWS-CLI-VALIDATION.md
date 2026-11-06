@@ -9,32 +9,36 @@
 | 角色 | 准备事项 |
 |---|---|
 | 服务端 | WdbService 已安装并运行；用户保持登录、桌面解锁，能够看到并操作授权弹窗 |
-| 客户端 | 解压整个 `wdb-client-windows-x64.zip`；无需安装 Node/npm 或 WdbService |
+| 客户端 | 安装 Node/npm `>=24.15.0 <25`，使用同一个 npm tarball；不安装 WdbService |
 | 网络 | 客户端可访问服务端 TCP 18766；无需开放 18767、Electron CDP 或 Flutter VM Service 端口 |
 | 本次目标 | `172.20.115.75:18766`，设备名 `qingwei`，设备 ID `2f493aacf427f3e9`；IP 变化时以实际地址为准 |
 
-**客户端 PowerShell**：进入解压后的 `wdb-client-windows-x64` 目录，执行一次。后续未标注“服务端”的命令均在这个终端执行。
+**客户端 PowerShell**：进入 tarball 所在目录，执行一次。以下开发包名是 `wdb-cli-local-test`，正式包名配置后应对应替换。后续未标注“服务端”的命令均在这个终端执行。先与交付的 SHA256SUMS.txt 核对 tarball SHA-256。
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-package.ps1 -Kind Client -PackageDirectory .
-if ($LASTEXITCODE -ne 0) { throw '客户端包校验失败，请重新解压完整包' }
-$wdb = (Resolve-Path .\bin\wdb.cmd).Path
+Get-FileHash .\wdb-cli-local-test-0.1.0.tgz -Algorithm SHA256
+$wdbPrefix = Join-Path $env:LOCALAPPDATA 'wdb-cli-validation'
+npm install -g --prefix $wdbPrefix .\wdb-cli-local-test-0.1.0.tgz --ignore-scripts --offline --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw '客户端安装失败' }
+$wdbRoot = Join-Path $wdbPrefix 'node_modules\wdb-cli-local-test'
+$wdb = Join-Path $wdbPrefix 'wdb.cmd'
 $server = '172.20.115.75'
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
 $env:WDB_CONFIG = Join-Path $env:LOCALAPPDATA ('wdb\validation\' + $runId)
 $resultDir = Join-Path (Get-Location) ('lan-result-' + $runId)
 New-Item -ItemType Directory -Path $resultDir -Force | Out-Null
-Get-Content .\BUILD-INFO.json | Tee-Object -FilePath (Join-Path $resultDir 'build-info.json')
+Get-Content (Join-Path $wdbRoot 'BUILD-INFO.json') | Tee-Object -FilePath (Join-Path $resultDir 'build-info.json')
+& $wdb --version --json
 & $wdb --help
 Test-NetConnection $server -Port 18766
 ```
 
-通过标准：包校验返回 `verified`；帮助中的 connect 不要求配对码；`TcpTestSucceeded=True`。`$wdb` 固定使用本次解压的 CLI，避免 PATH 中旧版命令干扰。独立配置放在当前用户目录，不覆盖日常客户端身份；同一次验证始终使用此配置。
+通过标准：SHA-256 与交付清单一致；版本命令正常；帮助中的 connect 不要求配对码；`TcpTestSucceeded=True`。`$wdb` 固定使用本次安装的 CLI，避免 PATH 中旧版命令干扰。独立配置放在当前用户目录，不覆盖日常客户端身份；同一次验证始终使用此配置。旧 portable 包仍可按 [历史入口](WINDOWS-CLIENT.md) 校验，并把 `$wdb` 指向其 `bin\wdb.cmd`。
 
 ## 2. 首次连接、设备信息与记住
 
 ```powershell
-& $wdb connect $server --name "$env:COMPUTERNAME-LAN验收" --json |
+& $wdb connect $server --json |
     Tee-Object -FilePath (Join-Path $resultDir 'connect.json')
 & $wdb devices --json | Tee-Object -FilePath (Join-Path $resultDir 'devices.json')
 & $wdb info --device $server --json | Tee-Object -FilePath (Join-Path $resultDir 'info.json')
@@ -50,13 +54,15 @@ Test-NetConnection $server -Port 18766
 
 ```text
 STATE              HOSTNAME             ADDRESS                          DEVICE ID
-online             qingwei              https://172.20.115.75:18766       2f493aacf427f3e9
+online             qingwei              172.20.115.75:18766               2f493aacf427f3e9
 ```
 
 ## 3. 基础功能：一条命令完成13步
 
+开发验证脚本不属于 npm 运行依赖。把同一源码版本的 `scripts/validate-lan.js` 复制到当前目录（或在仓库执行并调整脚本路径），通过 `--cli` 显式指定已安装产物：
+
 ```powershell
-& .\runtime\node.exe .\scripts\validate-lan.js --device $server --config $env:WDB_CONFIG --output $resultDir
+node .\validate-lan.js --cli (Join-Path $wdbRoot 'src\cli.js') --device $server --config $env:WDB_CONFIG --output $resultDir
 $report = Get-Content (Join-Path $resultDir 'report.json') -Raw | ConvertFrom-Json
 $report | Select-Object passed, error, cleanupError, fileRoundtripVerified
 $report.steps | Format-Table label, status, durationMs

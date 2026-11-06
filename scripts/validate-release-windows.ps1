@@ -43,7 +43,8 @@ function Verify-Mode([string]$Mode,[string]$Label,[switch]$Operations){
  if($service.State -ne 'Running' -or $service.StartName -ne 'LocalSystem' -or $service.PathName -notlike "*--node `"$expected`"*"){throw 'SCM runtime binding/identity incorrect'}
  $task=Get-ScheduledTask -TaskName WdbDesktopHelper
  if($task.Actions.Arguments -notlike "*--node `"$expected`"*" -or $task.Principal.RunLevel -ne 'Limited'){throw 'Interactive helper runtime/permissions incorrect'}
- $helperNodes=@(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {$_.ExecutablePath -ieq $expected -and $_.CommandLine -like '*wdb\src\helper.js*' -and $_.SessionId -gt 0})
+ $helperNodes=@()
+ for($attempt=0;$attempt -lt 20;$attempt++){$helperNodes=@(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {$_.ExecutablePath -ieq $expected -and $_.CommandLine -like '*wdb\src\helper.js*' -and $_.SessionId -gt 0});if($helperNodes.Count -eq 1){break};Start-Sleep -Milliseconds 500}
  if($helperNodes.Count -ne 1){throw 'Expected one interactive helper on the bound runtime'}
  $rule=Get-NetFirewallRule -Name WdbService-LAN -ErrorAction SilentlyContinue
  if($rule -and ($rule | Get-NetFirewallApplicationFilter).Program -ine $expected){throw 'Firewall runtime binding differs'}
@@ -108,11 +109,12 @@ try {
   $diagOutput=Join-Path $OutputDirectory 'missing-runtime-diagnose.json'
   $diagError=Join-Path $OutputDirectory 'missing-runtime-diagnose.stderr'
   $diagProcess=Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$env:ProgramFiles+'\wdb\scripts\service.ps1" diagnose') -RedirectStandardOutput $diagOutput -RedirectStandardError $diagError -PassThru
+  # Retain the handle before a short-lived Windows PowerShell child exits.
+  $null=$diagProcess.Handle
   if(!$diagProcess.WaitForExit(20000)){Stop-Process -Id $diagProcess.Id -Force;throw 'Runtime diagnostic exceeded 20 seconds; restoring the test runtime'}
-  if($diagProcess.ExitCode -ne 0){throw 'Runtime diagnostic failed'}
   $diag=Get-Content -LiteralPath $diagOutput -Raw | ConvertFrom-Json
-  if($diag.runtime.status -ne 'invalid'){throw 'Missing bound runtime was not diagnosed'}
-  Add-Check 'removed-external-runtime-diagnosed' @{scmMayRemainRunning=$true;runtimeStatus='invalid';pathFallback=$false}
+  if($diag.runtime.status -ne 'invalid' -or $diag.runtime.error -notlike "Node runtime not found: $ExternalNode.*"){throw 'Missing bound runtime was not diagnosed'}
+  Add-Check 'removed-external-runtime-diagnosed' @{scmMayRemainRunning=$true;runtimeStatus='invalid';diagnosticExitCode=$diagProcess.ExitCode;pathFallback=$false}
  }finally{Stop-Service WdbService -ErrorAction SilentlyContinue;if(Test-Path -LiteralPath $missingPath){Move-Item -LiteralPath $missingPath -Destination $ExternalNode};Start-Service WdbService;Start-ScheduledTask WdbDesktopHelper}
  $null=Install-Exe with-node 'switch-back-with-node'
  Verify-Mode with-node 'switch-back-with-node'

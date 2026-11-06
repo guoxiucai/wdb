@@ -1,12 +1,15 @@
 [CmdletBinding()]
 param(
  [ValidateSet('Preflight','Begin','Commit','Finish','Rollback','Install','Uninstall')][string]$Action,
- [string]$SourceDirectory=(Split-Path $PSScriptRoot -Parent),
+ [string]$SourceDirectory,
  [string]$InstallDirectory="$env:ProgramFiles\wdb",[string]$DataDirectory="$env:ProgramData\wdb",
  [string]$DesktopUser,[string]$NodePath,[string]$RuntimeMode,[string]$ListenAddress,
  [int]$Port=18766,[int]$HelperPort=18767
 )
 $ErrorActionPreference='Stop'
+# Windows PowerShell 5.1 advanced-script parameter defaults can run before
+# PSScriptRoot is initialized. Resolve the default after parameter binding.
+if(!$SourceDirectory){$SourceDirectory=Split-Path $PSScriptRoot -Parent}
 . (Join-Path $PSScriptRoot 'payload-common.ps1')
 . (Join-Path $PSScriptRoot 'resolve-node.ps1')
 . (Join-Path $PSScriptRoot 'service-config.ps1')

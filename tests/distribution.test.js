@@ -42,3 +42,11 @@ test('Windows service diagnostics return bounded JSON with plain log lines',{ski
  const output=execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'../scripts/service.ps1'),'diagnose'],{encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:256*1024,env});
  const result=JSON.parse(output);assert.ok(result.logs);assert.ok(Buffer.byteLength(output)<128*1024);for(const lines of Object.values(result.logs)){assert.ok(lines.length<=40);assert.ok(lines.every(line=>typeof line==='string'));}
 });
+test('Windows installer without SourceDirectory reaches its preflight guards',{skip:process.platform!=='win32'},()=>{
+ const env={...process.env};delete env.PSModulePath;delete env.PSMODULEPATH;
+ // A non-product path is rejected before any writes, including when tests run
+ // elevated. This exercises the same omitted parameter as the real uninstaller.
+ assert.throws(()=>execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'../scripts/installer-action.ps1'),'-Action','Preflight','-InstallDirectory',path.join(os.tmpdir(),'wdb-invalid-install-root')],{encoding:'utf8',windowsHide:true,timeout:10000,env,stdio:'pipe'}),error=>{
+  const output=String(error.stderr);assert.match(output,/normal Windows administrator consent|fixed Program Files/);assert.doesNotMatch(output,/empty string|ParameterArgumentValidationErrorEmptyString/);return true;
+ });
+});

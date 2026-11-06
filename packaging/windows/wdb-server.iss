@@ -138,11 +138,14 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var Code: Integer; Args: String;
+var Code: Integer; Args: String; Started: Boolean;
 begin
   if CurUninstallStep <> usUninstall then Exit;
   Args := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + Quoted(ExpandConstant('{app}\scripts\installer-action.ps1')) +
     ' -Action Uninstall -InstallDirectory ' + Quoted(ExpandConstant('{app}'));
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Args, '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+  Code := -1;
+  Started := ExecAndLogOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Args, '', SW_HIDE, ewWaitUntilTerminated, Code, nil);
+  Log('WDB action Uninstall, exit ' + IntToStr(Code));
+  if not Started or (Code <> 0) then
     RaiseException('Could not stop/remove WDB service. Program files retained; retry as administrator.');
 end;
