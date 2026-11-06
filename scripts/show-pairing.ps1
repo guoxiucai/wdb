@@ -7,6 +7,8 @@ $result = [ordered]@{
     hostname = $env:COMPUTERNAME
     deviceId = $config.deviceId
     port = $installation.port
+    pairingMode = 'server-approval'
+    pairingCodeRequired = $false
     fingerprint = (Get-Content -LiteralPath (Join-Path $DataDirectory 'fingerprint') -Raw).Trim()
     addresses = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object IPAddress, InterfaceAlias)
 }

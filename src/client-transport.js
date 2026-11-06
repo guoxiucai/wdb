@@ -1,5 +1,7 @@
 'use strict';
 const https=require('node:https');
+const tls=require('node:tls');
+const net=require('node:net');
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const crypto=require('node:crypto');
@@ -8,6 +10,22 @@ const sessions=new WeakMap();
 const transient=new Set(['ECONNRESET','ECONNREFUSED','ETIMEDOUT','EHOSTUNREACH','ENETUNREACH','EPIPE','EAI_AGAIN','ENOTFOUND','ECONNABORTED','TRANSPORT_TIMEOUT','ERR_STREAM_PREMATURE_CLOSE']);
 class CliError extends Error {constructor(code,message,extra){super(message);this.code=code;this.extra=extra;}}
 function normalizeFingerprint(value){const fingerprint=String(value||'').replace(/:/g,'').toLowerCase();if(!/^[a-f0-9]{64}$/.test(fingerprint))throw new CliError('FINGERPRINT_REQUIRED','Provide the 64-digit SHA-256 certificate fingerprint displayed by the server.');return fingerprint;}
+// First contact uses TOFU. This socket sends no HTTP data or credentials; all
+// subsequent requests, including pairing, must match the discovered certificate.
+function discoverFingerprint(url,timeoutMs=10000){
+ return new Promise((resolve,reject)=>{
+  const target=new URL(url),host=target.hostname.replace(/^\[|\]$/g,'');
+  const socket=tls.connect({host,port:Number(target.port||443),servername:net.isIP(host)?undefined:host,rejectUnauthorized:false,minVersion:'TLSv1.2'});
+  const timer=setTimeout(()=>socket.destroy(new CliError('TRANSPORT_TIMEOUT','Server certificate discovery timed out.')),timeoutMs);
+  socket.once('error',reject);
+  socket.once('close',()=>{clearTimeout(timer);reject(new CliError('ECONNRESET','Connection closed before certificate discovery completed.'));});
+  socket.once('secureConnect',()=>{
+   const raw=socket.getPeerCertificate().raw;
+   if(!raw){socket.destroy(new CliError('INVALID_CERTIFICATE','Server did not present a certificate.'));return;}
+   resolve(crypto.createHash('sha256').update(raw).digest('hex'));socket.destroy();
+  });
+ });
+}
 function setSession(device,options={},io,configDir){
  const number=(key,fallback,min)=>{const value=options[key]===undefined?fallback:Number(options[key]);if(!Number.isFinite(value)||value<min)throw new CliError('INVALID_ARGUMENT',`--${key} must be >= ${min}.`);return value;};
  sessions.set(device,{reconnectMs:number('reconnect-timeout',60000,0),requestMs:number('request-timeout',10000,1),io,configDir});
@@ -16,7 +34,7 @@ async function ensureEnabled(device){const dir=sessions.get(device)?.configDir;i
 function openRequest(device,method,pathname,headers={},timeoutMs=30000){
  return new Promise((resolve,reject)=>{
   const expected=normalizeFingerprint(device.fingerprint);
-  const req=https.request(new URL(pathname,device.url),{method,rejectUnauthorized:false,agent:false,headers:{...(device.token?{authorization:'Bearer '+device.token}:{}),...headers}});
+  const req=https.request(new URL(pathname,device.url),{method,rejectUnauthorized:false,minVersion:'TLSv1.2',agent:false,headers:{...(device.token?{authorization:'Bearer '+device.token}:{}),...headers}});
   const connectTimer=setTimeout(()=>req.destroy(new CliError('TRANSPORT_TIMEOUT','Connection handshake timed out.')),timeoutMs);
   req.setTimeout(timeoutMs,()=>req.destroy(new CliError('TRANSPORT_TIMEOUT','Connection timed out; inspect task state before repeating an operation.')));
   req.once('close',()=>clearTimeout(connectTimer));req.on('error',reject);
@@ -76,4 +94,4 @@ async function discoverServer(device,policy={}){
  let result;try{result=await api(device,'GET','/v1/health',undefined,policy.timeoutMs,policy);}catch(e){if(e.statusCode!==404)throw e;result=await api(device,'GET','/v1/info',undefined,policy.timeoutMs,policy);}
  let session=sessions.get(device);if(!session){setSession(device);session=sessions.get(device);}session.deduplication=result.data?.taskSubmissionDeduplication===true;return result;
 }
-module.exports={CliError,normalizeFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer};
+module.exports={CliError,normalizeFingerprint,discoverFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer};

@@ -4,7 +4,7 @@
 
 后续实现状态：Mac 启动器、配置路径/迁移、arm64 离线构建与客户端测试已落地，使用 [MACOS-CLIENT.md](MACOS-CLIENT.md)，验证边界见 [MACOS-VERIFICATION.md](MACOS-VERIFICATION.md)。以下保留交接时的现状描述；其中“当前 Mac 回落到 `~/wdb/client`”及“尚待创建启动器”已由新实现替代。
 
-**首次连接审批增补：** 新客户端必须由Windows端弹窗同意，支持记住/临时授权；临时许可结束后显式connect经`POST /v1/connection`重新确认。必须同时实现 [CONNECTION-APPROVAL.md](CONNECTION-APPROVAL.md)，其规则优先于本文早期单纯配对流程。
+**首次连接最新修订：** 只需 `wdb connect <IP>`，不要求用户提供 fingerprint 或 pairingCode。自动发现并固定首次证书，由Windows弹窗同意后保存凭据，支持记住/临时授权；已有指纹不自动替换。临时许可结束后显式connect经`POST /v1/connection`重新确认。同步本仓库最新共享 CLI/transport，并实现 [CONNECTION-APPROVAL.md](CONNECTION-APPROVAL.md)。
 
 ## 1. 目标和复用边界
 
@@ -32,7 +32,7 @@
 | hostname / deviceId | `qingwei` / `2f493aacf427f3e9` |
 | HTTPS | 自签名证书 + 证书 DER SHA-256 固定指纹，TLS 至少 1.2 |
 | 入站范围 | Ethernet 当前 IPv4、18766、LocalSubnet，具体规则 `WdbService-LAN` |
-| 配对材料 | 服务器本地 `scripts\show-pairing.ps1 -RevealCode`；不在 Git 或交付包中 |
+| 首次连接 | 仅服务器 IP；客户端自动获取证书，Windows 本机弹窗确认 |
 | GUI 前提 | Windows 用户登录、桌面解锁、WdbDesktopHelper 正常 |
 
 先确认 Mac 与服务器可路由，使用明确 IP，不依赖发现协议。若不在同一可达子网，按服务器 `docs/LAN.md` 配置明确来源地址范围，不关闭防火墙。只有 18766 是客户端连接入口；18767、Electron CDP、Dart VM Service 都是 Windows 服务器内部地址。
@@ -43,12 +43,12 @@
 node --version
 node src/cli.js --version --json
 export WDB_CONFIG="$HOME/Library/Application Support/wdb/client-dev"
-node src/cli.js connect 172.20.115.75 --fingerprint '<可信指纹>' --pairing-code '<配对码>' --json
+node src/cli.js connect 172.20.115.75 --json
 node src/cli.js info --device 172.20.115.75 --json
 node scripts/validate-lan.js --device 172.20.115.75 --output ./artifacts/mac-lan-smoke
 ```
 
-以上占位值只用于说明；实际配对码从终端变量/安全输入读取，避免字面值进入 shell 历史、日志或提交。开发终端没有配置 `WDB_CONFIG` 时，当前共享代码在 Mac 会回落到 `~/wdb/client`，并非 `~/Library/Application Support`；不要把计划中的目录当作已实现行为。
+首连等待 Windows 桌面确认即可，不读取配对材料。开发终端没有配置 `WDB_CONFIG` 时，当前共享代码在 Mac 会回落到 `~/wdb/client`，并非 `~/Library/Application Support`；不要把计划中的目录当作已实现行为。
 
 ## 3. CLI 与本地适配
 
@@ -97,12 +97,12 @@ Ctrl+C：watch/follow 正常结束；普通长任务中止客户端等待不代�
 ### TLS 与配对
 
 1. 将 `<IP>` 标准化为 `https://<IP>:18766`；只允许 HTTPS origin，禁止 URL 用户名/密码、业务路径、query/hash。
-2. 建立 TLS，取得服务端叶证书原始 DER，计算 SHA-256，和人工可信渠道给出的 64 位 hex 指纹比较（接受冒号分隔输入，存储小写无冒号）。
-3. **指纹比较成功后**才允许 flush HTTP 请求头、Bearer、配对码和请求体。当前 `openRequest()` 延迟 `req.end()` 并在 `secureConnect` 比对；不能简单使用 `rejectUnauthorized:false` 就认为完成认证。Node HTTPS 支持 TLS 相关选项，参见 [官方 HTTPS API](https://nodejs.org/api/https.html#httpsrequestoptions-callback)。
-4. 首次 `POST /v1/pair`，body `{"name":"mac-client","pairingCode":"<secret>"}`，等待服务器本地审批（最多120秒，CLI默认等待150秒），仅同意后响应 `data` 为 `clientId/token/deviceId/version/remembered`。token 是 32 随机字节的 base64url 字符串，只在配对响应中明文返回；服务器保存 tokenHash。
+2. 已保存身份使用原指纹；新身份若指定可选 `--fingerprint` 则使用该值，否则 `discoverFingerprint()` 建立独立 TLS 握手，取得叶证书 DER 的 SHA-256 后关闭，不发送 HTTP 数据。握手有独立期限。存储64位小写 hex；接受可选输入中的冒号分隔。
+3. 新 TLS 连接中**指纹比较成功后**才允许 flush HTTP 请求头、Bearer 和请求体；发现后换证书也必须失败。`openRequest()` 延迟 `req.end()` 并在 `secureConnect` 比对，不能仅设置 `rejectUnauthorized:false`。默认是 TOFU，不能识别首次连接时的主动中间人；可选预核验指纹提供额外身份核对。Node API 见 [官方 HTTPS API](https://nodejs.org/api/https.html#httpsrequestoptions-callback)。
+4. 首次 `POST /v1/pair`，body仅 `{"name":"mac-client"}`，等待服务器本地审批（最多120秒，CLI默认等待150秒），仅同意后响应 `data` 为 `clientId/token/deviceId/version/remembered`。token 是 32 随机字节的 base64url 字符串，只在配对响应中明文返回；服务器保存 tokenHash。成功查询 info 后才持久保存本地指纹/凭据，拒绝或失败不保存新身份。
 5. 此后发送 `Authorization: Bearer <token>`。调用 `/v1/info` 检查协议/能力并记录 hostname。不得把 token 放入 URL、诊断输出或共享报告。
 
-配对码当前是安装时生成、持久保存的随机值，不是单次使用或自动过期 OTP；每个来源地址每分钟最多 10 次配对尝试，错误返回 `PAIRING_DENIED`，超限 `RATE_LIMITED`。`--name` 是客户端授权记录名称，不是服务器昵称。
+配对码不再参与授权；为兼容旧客户端接受但忽略 `pairingCode` 字段。每个来源地址每分钟最多 10 次配对尝试，超限 `RATE_LIMITED`；同一时刻仅一个审批窗口。旧服务器仍返回 `PAIRING_DENIED` 时升级服务端。`--name` 是客户端授权记录名称，不是服务器昵称。
 
 身份分别处理：hostname 可重复/改名；url 是访问入口；deviceId 为 8 随机字节生成的 **16 位小写 hex**；证书指纹是安全信任锚。只有设备 ID 改短，**clientId、taskId、requestId、submissionId 仍是完整 UUID**。旧 device UUID 迁移计算 `SHA256('wdb-device-id-v1:' + lower(uuid)).slice(0,16)`，复用 `device-id.js`。
 
@@ -212,7 +212,7 @@ Electron：CDP endpoint 如 `http://127.0.0.1:9222` 指 Windows 本机，target 
 | 步骤 | 交付 | 独立验证后提交 |
 |---|---|---|
 | M1 启动与配置 | bin/wdb、LF/执行位、Mac 默认路径/迁移方案 | 从任意 cwd/空格路径启动；不依赖全局 Node；版本、JSON、0700/0600 |
-| M2 身份与设备 | 共享 transport/CLI 在 Mac 的适配 | 正确/错误指纹、配对、复用token、ID不符、撤销、多目标歧义；错误指纹时服务收到0请求 |
+| M2 身份与设备 | 共享 transport/CLI 在 Mac 的适配 | 无参数首连、审批拒绝/超时、首次自动固定指纹、可选错误指纹、已有证书变化、复用token、ID不符、撤销、多目标歧义；错误指纹时服务收到0请求 |
 | M3 任务与重连 | 复用任务状态/去重/取消、信号行为 | 接受回包丢失仅执行一次；网络恢复；service重启unknown；Ctrl+C等待与cancel区别 |
 | M4 文件与产物 | Mac本地路径/Unicode/发布语义 | 中文目录、空格、hash不符、中断、覆盖、>4GB、≥1GB性能；拉取截图/MP4可打开 |
 | M5 全命令与 Skill | 参数文件、PowerShell、UIA/CDP/Flutter、Skill入口 | 在同一 Windows 三类应用完成观察→动作→状态验证；多客户端共享桌面约束 |
@@ -247,4 +247,4 @@ wdb-client-macos-arm64/
 
 在构建机从官方发布下载运行时并核验固定 hash，提取 bin/node 和 LICENSE。交付机不联网下载依赖；不打包 Windows exe/FFmpeg、测试证书、devices.json、tokens、调试 URI、截图。校验清单覆盖每个交付文件，BUILD-INFO 记录产品/协议版本、git commit、Node版本、darwin/arm64、构建时间；避免用服务 version=0.1.0 作为唯一可追溯标记。测试正常系统运行/分发策略；不要把禁用 Gatekeeper 或全局清除隔离属性当作安装步骤。
 
-本仓库提交源码和文档；Windows 离线包由构建脚本生成在被忽略的 dist 目录。Mac 开发者同步仓库后从 M1 开始，无需等待 Windows 远端吞吐验收。配对指纹/码单独由服务器本地读取，不通过 Git 传递。
+本仓库提交源码和文档；Windows 离线包由构建脚本生成在被忽略的 dist 目录。Mac 开发者同步仓库后从 M1 开始，无需等待 Windows 远端吞吐验收或取得配对材料。

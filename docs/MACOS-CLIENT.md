@@ -19,25 +19,16 @@ export PATH="$PWD/bin:$PATH"
 
 ## 首次连接
 
-Windows 本地 PowerShell 执行：
+Mac 仅需指定 Windows 地址：
 
-```powershell
-& 'C:\Program Files\wdb\scripts\show-pairing.ps1' -RevealCode
-```
-
-从可信渠道取得 `fingerprint` 和 `pairingCode`。当前服务没有“连接时 PC 弹窗同意”的交互，配对码是安装时生成并持久保存的授权凭据。不要从一次未经验证的网络握手自动信任证书。
-
-在 Mac 默认 zsh 中安全读取输入，避免把字面配对码留在历史记录：
-
-```zsh
-read 'fingerprint?Windows 证书 SHA-256 指纹: '
-read -s 'pairingCode?Windows 配对码: '; print
-wdb connect 172.20.115.75 --fingerprint "$fingerprint" --pairing-code "$pairingCode" --name mac-client --json
-unset pairingCode fingerprint
+```sh
+wdb connect 172.20.115.75 --name mac-client --json
 wdb info --device 172.20.115.75 --json
 ```
 
-之后 `wdb connect 172.20.115.75 --json` 复用已保存的 token，不再传配对码。`disconnect` 只停用连接；需要撤销授权时使用 `clients revoke <clientId>`。
+Windows 当前用户桌面会显示连接授权，由操作者选择同意/拒绝和是否记住。CLI 默认等待150秒（`--approval-timeout`），服务器弹窗120秒后过期。拒绝、关闭或超时不保存新身份。首次自动发现证书并固定后续请求，审批成功且 info 核对后保存指纹和 token；已有证书变化不会自动接受。可选 `--fingerprint` 支持事先核验；默认首次信任的边界见 [CONNECTION-APPROVAL.md](CONNECTION-APPROVAL.md)。无需读取或传递配对码。
+
+之后 `wdb connect 172.20.115.75 --json` 复用已保存的 token。勾选记住的授权跨 disconnect/服务重启保留；临时许可在 disconnect、服务重启或30分钟无认证请求后结束，再次 connect 会重新弹窗，沿用原 clientId。普通操作及 watch 不自动申请确认。`disconnect` 保留凭据；需要撤销授权时使用 `clients revoke <clientId>`。
 
 配置优先级：`--config` > `WDB_CONFIG` > `~/Library/Application Support/wdb/client`。默认目录不存在且旧 `~/wdb/client/devices.json` 存在时，自动复制并原子发布凭据，保留旧文件；新目录已存在（即使为空）时不迁移、不合并。显式配置目录不触发迁移。Mac 每次读取或写入会将目录和凭据文件权限收紧为 0700/0600，并拒绝配置目录或凭据文件本身是符号链接。
 

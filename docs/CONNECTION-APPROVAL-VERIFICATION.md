@@ -1,6 +1,22 @@
 # 连接审批验证（2026-11-06）
 
-## 自动测试
+## 最新修订：仅地址连接，已验证
+
+实现提交 `f6b7066` 取消人工 fingerprint/pairingCode 前置条件。最新标准回归 **73项：72通过、0失败、1个需人工参与的服务测试默认跳过**，记录 `artifacts/simple-connect-full-tests.log`。针对性20项通过，包含无配对码审批、无HTTP数据的证书发现、发现超时、拒绝不保存、可选错误指纹、已有证书变化不重新信任、旧参数不绕过弹窗、频率限制和临时/持久授权。
+
+2026-11-06 14:34—14:36（Asia/Shanghai），已更新本机服务，使用独立 Windows 客户端包与全新配置执行 `wdb connect 172.20.115.75 --name WDB直连验收 --json`（另用 `--config` 隔离验收身份），**没有传入指纹或配对码，也没有读取服务端配对材料**：
+
+- 真实“WDB连接授权”窗口出现，服务器收到本机“同意且记住”的决定；14:34:30客户端返回成功，指纹和凭据自动保存。测试工具没有代点按钮。
+- 新客户端ID为 `4e2b56ff-74b3-4ef8-9977-3ba52cc9da90`，设备ID保持 `2f493aacf427f3e9`。
+- 独立客户端完成13步闭环：info、用户shell、中文目录/随机文件往返校验、显示器/窗口查询、截图拉取、disconnect/connect和清理。
+- 再次重启WdbService，进程PID由636变为32076；直接connect成功，原客户端/设备身份不变。审计仅1次pair、0次重新审批。
+- 安装目录的核心服务/客户端源码与本次提交一致；服务端/客户端包校验及Skill校验通过。
+
+本机证据：`artifacts/simple-connect-live.json`、`simple-connect-smoke/report.json`、`simple-connect-before-restart.json`、`simple-connect-after-restart.json`、`simple-connect-verification.json`。此处为同机LAN地址的真实安装验证；另一台电脑和macOS网络验收仍分别进行。
+
+以下为早期版本历史记录；其中人工配对码规则已由上述修订取代。
+
+## 早期版本自动测试
 
 标准回归：**67项，66通过，0失败，1个真实服务测试默认跳过**（`artifacts/approval-full-tests.log`）。其中新审批覆盖：
 

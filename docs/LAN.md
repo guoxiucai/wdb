@@ -6,7 +6,7 @@
 
 ```powershell
 & 'C:\Program Files\wdb\scripts\set-network.ps1' -Mode Lan -LocalAddress '172.20.115.75'
-& 'C:\Program Files\wdb\scripts\show-pairing.ps1' -RevealCode
+& 'C:\Program Files\wdb\scripts\show-pairing.ps1'
 ```
 
 脚本将服务设为 `0.0.0.0:18766` 以兼容 localhost 和 LAN；防火墙规则 `WdbService-LAN` 只允许指定本机 IPv4/网卡、已安装 Node 程序、HTTPS 端口、`LocalSubnet` 来源，禁止边缘穿越。规则覆盖 Windows 的所有网络类别，因此无需把当前 Public 网络改为 Private。它不关闭防火墙，不开放 18767、CDP 或 Dart VM 端口，不覆盖已有企业防火墙策略。
@@ -18,7 +18,7 @@
 & 'C:\Program Files\wdb\scripts\set-network.ps1' -Mode Localhost
 ```
 
-管理脚本会重启服务，应在本地终端执行；不要在将被重启的 WDB shell 任务里执行它。服务重启可能中断正在运行的任务。后台服务已完成安装的机器无需重复 UAC 配对；用户从另一台电脑配对只需指纹和配对码。
+管理脚本会重启服务，应在本地终端执行；不要在将被重启的 WDB shell 任务里执行它。服务重启可能中断正在运行的任务。后台服务已完成安装的机器无需重复 UAC；用户从另一台电脑执行 `wdb connect <服务器IP>`，由服务器桌面弹窗确认，无需手工指纹或配对码。
 
 ## 客户端与阶段验收
 
@@ -26,8 +26,8 @@ Windows 客户端步骤见 [WINDOWS-CLIENT.md](WINDOWS-CLIENT.md)。Mac 并行�
 
 | 阶段 | 操作与证据 | 通过标准 |
 |---|---|---|
-| LAN 连通 | 另一台 Windows 连接服务器 IP，查看防火墙、网卡/网段 | TCP 18766 通；正确指纹配对成功；助手/调试端口不需要外部开放 |
-| 身份与认证 | `devices` / `info`；隔离配置使用错误指纹、错误配对码 | 名称/IP/16 字符 ID 正确；错误身份/认证立即失败 |
+| LAN 连通 | 另一台 Windows 直接连接服务器 IP，查看防火墙、网卡/网段 | TCP 18766 通；弹窗同意后成功；助手/调试端口不需要外部开放 |
+| 身份与认证 | `devices` / `info`；隔离配置检查拒绝、超时和错误指纹 | 名称/IP/16 字符 ID 正确；拒绝无凭据；已保存证书变化立即失败 |
 | 基础闭环 | `runtime\node.exe scripts\validate-lan.js --device <IP> --output <目录>` | report 通过；人工查看截图确属服务器 |
 | 多客户端 | Windows 与后续 Mac 分别配对，同时查询和提交任务 | 请求、任务、产物归属对应客户端；共享桌面不提供焦点隔离 |
 | 网络中断 | 长 shell 输出唯一标记，保存任务 ID；客户端 watch；拔测试客户端网线/暂断其测试网络再恢复 | 原任务无重复执行；重新查询原 ID；watch 恢复 online |

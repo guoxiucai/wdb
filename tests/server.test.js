@@ -6,8 +6,10 @@ test('HTTPS authentication, task isolation, files, cancellation, persistence',as
  const request=(method,url,b,token,headers={})=>new Promise((resolve,reject)=>{const r=https.request({hostname:'127.0.0.1',port,path:url,method,rejectUnauthorized:false,headers:{...(token?{authorization:'Bearer '+token}:{}),...headers}},res=>{const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>{const raw=Buffer.concat(chunks);resolve({status:res.statusCode,headers:res.headers,data:res.headers['content-type']?.includes('json')?JSON.parse(raw):raw});});});r.on('error',reject);r.end(Buffer.isBuffer(b)?b:b?JSON.stringify(b):undefined);});
  t.after(async()=>{await bridge.close();fs.rmSync(dir,{recursive:true,force:true});});
  assert.equal((await request('GET','/v1/info')).status,401);
- assert.equal((await request('POST','/v1/pair',{pairingCode:'bad'})).status,401);
- const pair=await request('POST','/v1/pair',{name:'A',pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')});assert.equal(pair.status,200);const token=pair.data.data.token;
+ bridge.options.approvePairing=async()=>({decision:'denied'});
+ assert.equal((await request('POST','/v1/pair',{name:'denied'})).status,403);
+ bridge.options.approvePairing=async()=>({decision:'approved',remember:true});
+ const pair=await request('POST','/v1/pair',{name:'A'});assert.equal(pair.status,200);const token=pair.data.data.token;
  const b=(await request('POST','/v1/pair',{name:'B',pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')})).data.data;
  assert.equal((await request('GET','/v1/info',null,token)).data.data.protocolVersion,1);
  bridge.leases.set(pair.data.data.clientId,1);
