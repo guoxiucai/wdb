@@ -6,6 +6,7 @@ const {newDeviceId,normalizeDeviceId}=require('./device-id');
 const {requestApproval,clientName,TEMPORARY_IDLE_MS}=require('./pairing');
 const {TaskEvents}=require('./task-events');
 const {ServerStreams}=require('./server-streams');
+const {ForwardServer}=require('./forward-server');
 const VERSION=require('../package.json').version;
 class Bridge {
  constructor(options={}){
@@ -18,7 +19,8 @@ class Bridge {
   this.helperSecret=fs.readFileSync(path.join(this.dir,'helper-secret'),'utf8').trim();
   this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();this.clientSockets=new Map();
   this.temporaryClients=new Map();this.taskEvents=new TaskEvents();
-  this.streams=new ServerStreams({deviceId:this.config.deviceId,authorize:req=>{const c=req.owner||this.identify(req);if(c.revokedAt||!this.clients.includes(c))throw fail('UNAUTHORIZED','Client was revoked',401);if(!this.isApproved(c))throw fail('PAIRING_REQUIRED','Client authorization expired',401);return c;},renew:c=>{if(c.remembered===false)this.temporaryClients.set(c.id,Date.now());},audit:event=>this.audit(event),factories:options.streamFactories||{}});
+  this.forwarding=new ForwardServer();
+  this.streams=new ServerStreams({deviceId:this.config.deviceId,authorize:req=>{const c=req.owner||this.identify(req);if(c.revokedAt||!this.clients.includes(c))throw fail('UNAUTHORIZED','Client was revoked',401);if(!this.isApproved(c))throw fail('PAIRING_REQUIRED','Client authorization expired',401);return c;},renew:c=>{if(c.remembered===false)this.temporaryClients.set(c.id,Date.now());},audit:event=>this.audit(event),factories:options.streamFactories||this.forwarding.factories()});
   for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
   this.timer=setInterval(()=>{for(const [id,a] of this.active){const t=this.tasks.get(id);if(t.op.startsWith('input.')&&Date.now()-(this.leases.get(t.clientId)||0)>10000)this.cancel(t,'CONTROL_CONNECTION_LOST');}this.cleanup();},1000);this.timer.unref();
  }

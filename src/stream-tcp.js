@@ -1,0 +1,12 @@
+'use strict';
+const net=require('node:net');
+const {Flow}=require('./stream-flow');const {error,check}=require('./stream-protocol');
+function connectTcp(target,signal,timeoutMs=5000){return new Promise((resolve,reject)=>{const socket=net.connect({...target,allowHalfOpen:true});socket.pause();let settled=false;const timer=setTimeout(()=>fail(error('TARGET_CONNECT_FAILED','Target connect timed out')),timeoutMs);const abort=()=>fail(error('STREAM_INTERRUPTED','TCP connect cancelled'));const fail=e=>{if(settled)return;settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);socket.destroy();reject(e.code==='STREAM_INTERRUPTED'?e:error('TARGET_CONNECT_FAILED',`Target ${target.host}:${target.port}: ${e.message}`));};socket.once('error',fail);socket.once('connect',()=>{if(settled)return;settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);socket.removeListener('error',fail);socket.on('error',()=>{});resolve(socket);});signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();});}
+function listenTcp(server,endpoint,signal){return new Promise((resolve,reject)=>{let finished=false;const abort=()=>{server.close();done(error('STREAM_INTERRUPTED','Listener creation cancelled'));},failed=e=>done(error(e.code==='EADDRINUSE'?'PORT_IN_USE':'INVALID_ARGUMENT',`Cannot listen on ${endpoint.host}:${endpoint.port}: ${e.message}`));function done(e){if(finished)return;finished=true;signal?.removeEventListener('abort',abort);server.removeListener('error',failed);e?reject(e):resolve({host:endpoint.host,port:server.address().port});}server.once('error',failed);server.listen({host:endpoint.host,port:endpoint.port,ipv6Only:endpoint.host==='::1'},()=>{if(signal?.aborted){server.close();return;}done();});signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();});}
+function attachTcp(channel,socket,budget){
+ const flow=new Flow(channel,socket,socket,{tcp:true,budget});let cleaned=false;
+ socket.on('close',hadError=>{if(cleaned||channel.closed)return;if(!hadError&&flow.localFin&&flow.remoteFin&&flow.finSent&&flow.outBytes===0&&flow.inBytes===0)channel.close();else channel.fail(error('STREAM_INTERRUPTED','TCP closed without both FIN directions'));});
+ const close=()=>{if(cleaned)return;cleaned=true;flow.stop();socket.destroy();};channel.once('closed',close);channel.once('failure',close);
+ return {flow,activate:()=>flow.activate(),close};
+}
+module.exports={connectTcp,listenTcp,attachTcp};

@@ -13,7 +13,7 @@ const { StringDecoder } = require('node:string_decoder');
 const DEFAULT_PORT = 18766;
 const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
-const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version']);
+const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version','interactive']);
 const {CliError,normalizeFingerprint,discoverFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer,withTransport,supportsTaskEvents,consumeTaskEvents,isTransient}=require('./client-transport');
 const {normalizeDeviceId}=require('./device-id');
 function parseArgv(argv) {
@@ -437,6 +437,8 @@ const HELP = `wdb — Windows Debug Bridge
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
   wdb clients list | clients revoke <clientId>
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]
+  wdb forward <tcp:listen-port> <tcp:target-port> [--json]
+  wdb reverse <tcp:listen-port> <tcp:target-port> [--json]
   wdb task list|get <id>|wait <id>|cancel <id>|output <id>|delete <id>
   wdb push <local-file-or-dir> <remote-path> [--overwrite]
   wdb pull <remote-file> <local-path> [--overwrite]
@@ -515,6 +517,7 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   }
   const device = selectDevice(config, command === 'disconnect' ? words[0] || options.device : options.device, command === 'disconnect');
   setSession(device,options,io,dir);
+  if(command==='forward'||command==='reverse')return {options,streamExit:await require('./forward-client').runForward(device,command,words,options,io)};
   let result;
   if (command === 'disconnect') {
     device.connected = false; await saveConfig(dir, config);
@@ -590,11 +593,13 @@ async function runMain(argv, io) {
   let parsed;
   try {
     parsed = parseArgv(argv);
-    const { help, result, options } = await execute(argv, io, parsed);
+    const { help, result, options, streamExit } = await execute(argv, io, parsed);
+    if(streamExit!==undefined)return streamExit;
     if (help) { io.stdout.write(help); return 0; }
     printResult(result, { ...options, command: options.version ? undefined : parsed.positional[0] }, io); return exitCode(result);
   } catch (error) {
     const command = parsed?.positional[0];
+    if(command==='forward'||command==='reverse'){if(parsed.options.json)io.stdout.write(JSON.stringify({event:'closed',direction:command,reason:'failed',error:{code:error.code||'CLIENT_ERROR',message:error.message}})+'\n');else io.stderr.write(`${error.code||'CLIENT_ERROR'}: ${error.message}\n`);return 1;}
     const result = command === 'connect' ? connectionError(error, parsed.positional[1])
       : error.envelope || makeEnvelope(error.extra || null, { status: 'failed', error: { code: error.code || 'CLIENT_ERROR', message: error.message } });
     printResult(result, { command, json: argv.includes('--json') || argv.includes('--json=true') }, io);
