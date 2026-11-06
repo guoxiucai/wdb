@@ -1,90 +1,271 @@
-# wdb — Windows Debug Bridge
+<p align="center">
+  <img src="docs/assets/wdb-icon.png" width="144" height="144" alt="WDB：连接终端与桌面的桥梁" />
+</p>
 
-Windows 服务端 + Windows/macOS CLI + Agent Skill。macOS arm64 已具备启动器、私有配置迁移和离线包，并完成跨机器的仅地址首连、Windows人工同意并记住、13步LAN文件/截图/重连验证。Mac 使用见 [客户端指南](docs/MACOS-CLIENT.md)，实际通过项与待验证项见 [Mac 验收记录](docs/MACOS-VERIFICATION.md)。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
+<h1 align="center">WDB · Windows Debug Bridge</h1>
 
-## 当前状态
+<p align="center"><strong>用一套 CLI 连接、操作和调试 Windows，让开发者与 AI Agent 共用同一条调试通路。</strong></p>
 
-已实现并验证 TLS 指纹配对、客户端授权撤销、异步任务、用户 PowerShell、目录/大文件校验传输、UI Automation、窗口管理、截图、键鼠/Unicode 输入、真实触摸注入、日志查询/跟踪及 MP4 录屏。具体通过项与限制见 [验收记录](docs/ACCEPTANCE.md)，不把接口成功等同于实际应用验收。
+<p align="center">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="版本 0.1.0" />
+  <img src="https://img.shields.io/badge/server-Windows-0078D4" alt="Windows 服务端" />
+  <img src="https://img.shields.io/badge/CLI-Windows%20%7C%20macOS-333333" alt="Windows 与 macOS CLI" />
+  <img src="https://img.shields.io/badge/Node.js-24.15%2B%20%28%3C25%29-43853D" alt="Node.js 24.15 及以上、小于 25" />
+  <img src="https://img.shields.io/badge/status-Development-orange" alt="开发测试阶段" />
+</p>
 
-已内置 Electron 的 CDP + UIA + 视觉调试：目标发现、控件查询、点击/输入、等待、脚本、截图和console采集，继续走现有认证服务与CLI。EasiClass三通道实测及自研应用配置见 [Electron指南](docs/ELECTRON.md) 和 [验证报告](docs/ELECTRON-VERIFICATION.md)。
+<p align="center">
+  <a href="#quick-start">快速开始</a> ·
+  <a href="#commands">核心命令</a> ·
+  <a href="#how-it-works">工作原理</a> ·
+  <a href="#agent-skill">Agent Skill</a> ·
+  <a href="#documentation">完整文档</a> ·
+  <a href="#development">参与开发</a>
+</p>
 
-已内置 Flutter VM Service/Inspector + UIA + 视觉调试，可查询Widget与属性、等待状态、采集事件及内存。鸿镜Debug已完成UIA最大化/还原，以及UIA模式不支持→视觉折叠→Inspector确认→恢复的闭环，见 [Flutter指南](docs/FLUTTER.md) 和 [验证报告](docs/FLUTTER-VERIFICATION.md)。
+## 项目介绍
 
-**2026-11-06 已完成后台服务修复和实机验证。** 服务安装在 `C:\Program Files\wdb`，开机自动启动，HTTPS 服务实际以 SYSTEM 身份运行；默认 shell 和桌面助手仍以登录用户身份运行，只有显式 `--admin` 使用管理员能力。已验证服务重启、配对保留、任务记录保留及真实 CLI 集成。首次安装的 Node 代理和 PowerShell 5.1 服务路径引号问题已修复。
+WDB 由 Windows 后台服务、跨平台 CLI 和 Agent Skill 组成。可以在本机或局域网中执行脚本、传输文件、观察桌面、操作应用、采集日志，也可以进入交互终端或建立 TCP 端口转发。命令提供结构化结果，便于自动化系统查询状态、验证操作和处理失败。
 
-用户指定的 EasiClass 安装包已完成强制覆盖、启动观察及卸载，见[部署记录](docs/app-deployment-verification.md)。无触摸屏设备上已通过 10 指 30 秒 / 60 Hz 与录屏并行验证；需要关闭 Windows 系统多指手势以让应用接收输入，本次测试后已恢复原开关。详见[触摸复验](docs/touch-verification-20261106.md)，真实业务画布和 LAN / macOS 仍分别验收。
+WDB 面向 Windows 应用调试，独立于 Android adb；截图与录屏用于观察和取证，目前不提供实时远程桌面视频串流。
 
-## 直接使用
+**当前为 0.1.0 开发测试版。** Windows 服务已完成安装、升级、回滚、卸载、SSE 重连，以及交互 shell / 转发的实机验证。30 分钟持续会话测试覆盖普通用户与 SYSTEM shell、双向 TCP 长连接和周期负载；这不代表 30 分钟持续满带宽测试。证据与未覆盖项见 [Windows 验证报告](docs/STREAMING-WINDOWS-VERIFICATION.md)。
 
-Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装器，共用数据和服务身份；本地构建、切换与人工签名续跑见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。当前为未签名 Development 包，不发布 npm。[本机分发验收](docs/WINDOWS-DISTRIBUTION-VERIFICATION.md)记录了最终包、12 项安装检查和 8 项实机 SSE 结果。
+> 正式 npm 包与 GitHub Release 尚未发布。当前本地包名为 `wdb-cli-local-test`，安装器为未签名 `Development` 版，项目许可暂为 `UNLICENSED`，正式开源许可证待维护者确定。
 
-新版 CLI 分发采用同一个纯 JS npm tarball（Windows/macOS），需要 Node `>=24.15.0 <25`。本地构建/隔离安装见 [npm 客户端](docs/NPM-CLIENT.md)，尚未发布 registry。下方 portable 包与构建脚本保留为开发/历史入口。
+## 核心能力
 
-首次连接直接执行 `wdb connect <IP>`，无需提供 fingerprint 或 pairingCode，由服务器桌面弹窗决定同意/拒绝，可勾选“记住此客户端”。证书指纹自动保存，后续变化仍拒绝连接。临时许可在断开、服务重启或30分钟无请求后需重新确认；规则及Mac接口增补见 [连接授权](docs/CONNECTION-APPROVAL.md)。
+| 能力 | 用途 |
+| --- | --- |
+| 设备连接与授权 | 仅用地址发起连接；服务端弹窗同意 / 拒绝，可记住客户端；查看状态、断开和撤销授权 |
+| 任务与脚本 | PowerShell 批处理、任务查询 / 取消、SSE 输出与按任务 ID 恢复 |
+| 交互式 shell | Windows ConPTY；PowerShell / cmd / 已安装的 pwsh；中文、窗口尺寸、Ctrl+C 和终端恢复 |
+| TCP 转发 | `forward` / `reverse`；传输 TCP 字节，支持半关闭；监听和目标均限制为 loopback |
+| 文件与应用部署 | 文件 / 目录推拉、SHA-256 校验、显式覆盖、安装 / 更新 / 卸载 |
+| 桌面与输入 | 窗口管理、UI Automation、截图、键鼠 / Unicode 输入、Windows 触摸注入 |
+| Electron 调试 | CDP + UIA + 视觉观察与操作；目标发现、DOM 查询、脚本和 console |
+| Flutter 调试 | VM Service / Inspector + UIA + 视觉；Widget / 属性观察与操作验证 |
+| 日志与录屏 | Windows 事件 / 文件日志、跟踪输出、MP4 录制及产物下载 |
+| AI Agent | 同一套 CLI 与 Skill；先观察、再操作、后验证，无需在服务端配置模型密钥 |
 
-**局域网测试入口：** [Windows CLI 验证指导](docs/WINDOWS-CLI-VALIDATION.md)、[Windows 客户端使用](docs/WINDOWS-CLIENT.md)、[服务端网络配置与验收](docs/LAN.md)、[本次交付记录](docs/LAN-DELIVERY-VERIFICATION.md)。本机已安装服务地址为 `https://172.20.115.75:18766`，设备 `qingwei / 2f493aacf427f3e9`；IP 变化后按网络文档更新规则。
+## 平台与验证范围
 
-在本目录 PowerShell 中：
+| 组件 | 当前范围 |
+| --- | --- |
+| Windows 服务端 | x64；安装预检要求桌面版 build 19045+、.NET Framework 4.8、Windows PowerShell 5.1；本轮实测 Windows 11 build 28000 |
+| Windows CLI | npm 纯 JS 客户端；基础命令、SSE、交互 shell 与 TCP 转发已实测 |
+| macOS CLI | Apple Silicon 基础客户端已完成跨机器首连、文件、截图和重连验证；npm 安装及新增交互 shell / 转发仍待 Mac 实机验收 |
+| 应用适配 | 希沃白板 5、EasiClass、鸿镜的结果分别记录；控件可访问性和构建类型会影响调试能力 |
+
+桌面操作需要目标用户已登录且解锁。Flutter Inspector 依赖应用提供相应调试服务；不能把 Debug 验证结果推广到所有 Release 应用。模拟触摸的通过也不等同于触摸屏硬件或业务画布验收。详见 [应用验收](docs/ACCEPTANCE.md)、[Electron](docs/ELECTRON-VERIFICATION.md)、[Flutter](docs/FLUTTER-VERIFICATION.md) 和 [Mac 验收](docs/MACOS-VERIFICATION.md)。
+
+<a id="quick-start"></a>
+
+## 快速开始
+
+### 1. 安装 Windows 服务端
+
+使用本地构建的以下一种安装器；[GitHub Releases](https://github.com/guoxiucai/wdb/releases) 作为后续正式下载入口，当前未发布正式产物。
+
+| 安装器 | 适用场景 |
+| --- | --- |
+| `wdb-server-0.1.0-windows-x64-with-node-Development-setup.exe` | 自带固定版本 Node，目标机器无需安装 Node、npm、Git 或编译器 |
+| `wdb-server-0.1.0-windows-x64-external-node-Development-setup.exe` | 使用系统已安装的合格 Node；要求受保护的安装路径、有效签名和匹配版本 |
+
+双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
+
+首次安装默认监听 `127.0.0.1:18766`。本机验证可以直接连接 `localhost`。需要另一台电脑连接时，在**服务器本机的管理员 PowerShell** 中运行以下命令，将示例 IP 换成服务器实际 IPv4：
 
 ```powershell
-# 直接连接 localhost，新客户端在服务端弹窗中确认
-.\scripts\connect-local.ps1
-.\bin\wdb.cmd info --json
-.\bin\wdb.cmd shell --script 'whoami; Get-Date' --json
-.\bin\wdb.cmd screens --json
-.\bin\wdb.cmd windows list --json
-.\bin\wdb.cmd screenshot --json
+& 'C:\Program Files\wdb\scripts\set-network.ps1' -Mode Lan -LocalAddress 192.168.1.10
 ```
 
-服务默认只监听 `127.0.0.1:18766`，桌面助手在 `127.0.0.1:18767`。数据在 `C:\ProgramData\wdb`；默认 CLI 配置在 `%LOCALAPPDATA%\wdb\client`。截图/录像返回远端产物路径，用 `wdb pull <路径> <本地路径>` 取回。修复安装可重新运行同版本 EXE；完整的已安装 payload 也可运行 `scripts\repair-service.ps1`，通过正常 UAC 保留配置重新绑定服务。升级失败会尝试恢复旧程序与运行时。`scripts\start-local.ps1` 和 `stop-local.ps1` 仅用于无系统服务时的开发调试。
+该操作更新监听与防火墙并重启服务，默认允许本地子网；不要在将被重启的 WDB shell 内执行。桌面 helper 始终只监听本机 loopback。升级、静默安装、诊断、卸载与完整构建步骤见 [Windows 安装器指南](docs/WINDOWS-INSTALLERS.md)，网络配置见 [LAN 指南](docs/LAN.md)。
 
-桌面操作要求登录且解锁。窗口/控件引用来自最新查询；多设备连接必须明确 `--device`。默认不会覆盖文件，不会重试点击、书写或安装。具体命令和 JSON 契约见 [CLI 文档](docs/CLI.md)。
+### 2. 安装 CLI
 
-连接中断时，CLI 默认自动恢复最多 60 秒，已接受的任务按 ID 去重恢复，不重复执行。`wdb devices --watch` 同时显示设备名、地址、唯一 ID 和实时在线状态，服务自动重启后自动恢复观察。边界与故障注入方法见[重连文档](docs/RECONNECTION.md)。
-
-## 构建和离线交付
-
-当前分发构建使用 `scripts/build-release.ps1` 的 Prepare / Package / Finalize 三阶段，同时生成 npm 包和两种 EXE，命令见[安装器指南](docs/WINDOWS-INSTALLERS.md)。人工签名清单与完整目标矩阵保留在 [分发与服务端打包实现交接](docs/DISTRIBUTION-AND-PACKAGING.md)。下列命令是保留的开发目录包入口。
-
-**后续双向通信能力（待实现）：** [交互式 Shell 与 TCP 端口转发实现交接](docs/INTERACTIVE-SHELL-AND-FORWARDING.md) 定义同 HTTPS 端口 WSS、Windows ConPTY、forward/reverse 协议，以及 Windows 先实现、Mac 后接入的验证流程。
-
-```powershell
-.\scripts\build.ps1
-# 独立客户端（不含 Windows 服务、FFmpeg 和桌面桥）
-.\scripts\build-client.ps1
-```
-
-旧目录包输出到 `dist\wdb-windows-x64`，保留开发调试能力。新机器部署使用上文的独立 EXE，开发源码安装需显式 `-Development`。开发机器首次准备录屏依赖才需 `scripts\fetch-ffmpeg.ps1`。当前安装、升级、诊断和卸载以[安装器指南](docs/WINDOWS-INSTALLERS.md)为准。
-
-独立客户端输出 `dist\wdb-client-windows-x64`，解压即可使用；服务端与客户端包均带 `BUILD-INFO.json` 记录源码提交和运行时。`dist` 不提交 Git，交付时压缩整个目录并保留校验清单。
-
-Agent Skill 在 `skills/wdb/SKILL.md`。将整个 `skills/wdb` 目录复制到 Codex/Claude Code 的 skills 目录，并确保 `bin\wdb.cmd` 在 PATH 中，或在调用时使用完整路径。Skill 指导先控件、必要时截图、操作后验证、超时先查询，服务端不配置模型密钥。
-
-在 Apple Silicon Mac 构建独立客户端：
+Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=24.15.0 <25`**。当前先安装本地开发包：
 
 ```sh
-./scripts/build-client-macos.sh
-./dist/wdb-client-macos-arm64/bin/wdb --version --json
-./dist/wdb-client-macos-arm64/runtime/node ./dist/wdb-client-macos-arm64/scripts/verify-package.js
+npm install -g ./wdb-cli-local-test-0.1.0.tgz --omit=optional --ignore-scripts
+wdb --version
+wdb --help
 ```
 
-构建首次下载并校验固定版本 Node；交付包无需全局 Node/npm，解压后直接使用 `bin/wdb`，支持空格路径和符号链接入口。Mac 的 Agent 使用同一个 `skills/wdb`。共享客户端回归可运行 `npm run test:client`（Node 24+）或使用包内 Node 执行该命令列出的三个测试文件，不需要 Windows 服务测试数据。
+Windows PowerShell 如限制 npm 生成的 `.ps1` 启动器，可使用 `wdb.cmd`。安装不包含服务端、不下载 Node、不执行安装 hook；Agent Skill 单独安装。
 
-## 验证和提交
+**npm 地址占位：** `https://www.npmjs.com/package/<待确定的正式包名>`。正式包名确定并发布后再提供 registry 安装命令。当前本地包的生成、隔离安装、配置路径和卸载见 [npm CLI 指南](docs/NPM-CLIENT.md)。历史 portable 包入口见 [Windows 客户端](docs/WINDOWS-CLIENT.md) / [Mac 客户端](docs/MACOS-CLIENT.md)。
+
+### 3. 连接设备
+
+```sh
+# 同一台 Windows
+wdb connect localhost
+# 或从局域网客户端连接；请替换示例 IP
+wdb connect 192.168.1.10
+wdb devices
+wdb info
+```
+
+首次连接时，在服务器桌面的“允许此客户端连接？”窗口选择同意或拒绝；可勾选记住。**无需手工提供 fingerprint 或 pairingCode。** `connect` 只返回简要连接结果，重复连接提示已连接；`info` 返回详细信息。
+
+```text
+connected to 192.168.1.10:18766
+already connected to 192.168.1.10:18766
+```
+
+证书指纹在首次连接时保存，后续变化会拒绝连接。可选 `--fingerprint <SHA256>` 预先指定可信证书。未记住的授权在主动断开、服务重启或闲置 30 分钟后需要重新确认；拒绝、关闭和超时均不授权。完整规则见 [连接授权](docs/CONNECTION-APPROVAL.md)。
+
+### 4. 执行与验证
 
 ```powershell
-# 标准测试：证书、认证、CLI、文件、任务、恢复、取消、权限、日志编码
-npm test
-# 真实桌面测试：会打开自己的测试窗口并操作它，勿同时人工操作桌面
-node --test tests/desktop.test.mjs
-# 已运行服务的集成测试
-$env:WDB_TEST_DATA_DIR = 'C:\ProgramData\wdb'
-$env:WDB_TEST_URL = 'https://127.0.0.1:18766'
-node --test tests/cli-live.test.js
-# 大文件压力测试，会生成并清理专用目录内的测试文件
-node scripts/validate-transfer.js
+wdb shell --script 'whoami; Get-Date' --json
+wdb windows list --json
+wdb screenshot --json
+# 将截图结果中的远端路径替换到下面的命令
+wdb pull '<远端截图路径>' './screen.png'
+
+# 需要真实终端；Ctrl+C 发送给远端，Ctrl+] 退出会话
+wdb shell
+
+# 将客户端 9223 端口转发到 Windows 服务端本机 9222
+wdb forward tcp:9223 tcp:9222
+# 将 Windows 服务端本机 9000 转发到客户端本机 3000
+wdb reverse tcp:9000 tcp:3000
 ```
 
-标准测试需要测试证书：首次在开发机执行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/init-data.ps1`。测试数据、凭据、生成文件和本机应用截图均忽略于 Git。分步方案见 [实施计划](docs/IMPLEMENTATION.md)，每个验证完成的阶段独立提交，后续问题用修复提交。
+转发命令各自在前台运行，用 Ctrl+C 停止。端口目标需要已有程序监听。交互 shell / 转发断线即结束，**不自动重连或重放**；批处理任务的查询与恢复另按任务 ID 处理。
 
-离线包携带 Node 而不携带 npm；在解压目录可用 `runtime\node.exe --test tests/*.test.js` 运行同一套标准测试，先执行 `scripts/init-data.ps1` 初始化独立测试证书。
+<a id="commands"></a>
+
+## 核心命令速查
+
+| 命令 | 说明 | 详细文档 |
+| --- | --- | --- |
+| `connect` / `devices` / `info` / `disconnect` | 连接、实时设备列表、详情、主动断开 | [CLI](docs/CLI.md) |
+| `clients list` / `clients revoke <clientId>` | 查询与撤销客户端授权 | [连接授权](docs/CONNECTION-APPROVAL.md) |
+| `shell --script '...'` / `shell --script-file ...` | 一次性 PowerShell 任务；默认普通用户 | [CLI](docs/CLI.md) |
+| `task list\|get\|wait\|cancel\|output\|delete` | 查询状态、等待输出、取消与清理任务 | [任务与 SSE](docs/TASK-EVENTS.md) |
+| `shell` / `shell --program cmd` | 交互终端；显式 `--admin` 使用 SYSTEM | [交互 shell](docs/STREAMING.md) |
+| `forward tcp:9223 tcp:9222` | 客户端监听 → 服务端 loopback 目标 | [TCP 转发](docs/STREAMING.md) |
+| `reverse tcp:9000 tcp:3000` | 服务端监听 → 客户端 loopback 目标 | [TCP 转发](docs/STREAMING.md) |
+| `push <本地> <远端>` / `pull <远端> <本地>` | 文件或目录传输；覆盖需 `--overwrite`，拉目录加 `--recursive` | [文件传输](docs/CLI.md) |
+| `desktop status` / `screens` / `windows list` | 桌面会话、显示器与窗口信息 | [桌面操作](docs/CLI.md) |
+| `ui tree\|find\|action\|wait` | UIA 查询、操作与等待 | [UIA](docs/CLI.md) |
+| `screenshot` / `record start\|stop` | 截图与 MP4 录屏；产物通过 `pull` 取回 | [CLI](docs/CLI.md) |
+| `mouse` / `key` / `text` / `touch` | 键鼠、Unicode 文本与触摸轨迹 | [输入](docs/CLI.md) |
+| `electron` / `flutter` | 应用专用调试通道 | [Electron](docs/ELECTRON.md) · [Flutter](docs/FLUTTER.md) |
+| `app launch\|list\|install\|update\|uninstall` | 启动与部署应用 | [CLI](docs/CLI.md) |
+| `logs events\|file` | 事件 / 文件日志，可跟踪输出 | [CLI](docs/CLI.md) |
+
+常规命令使用 `--json` 获取结构化结果，复杂参数使用 `--args-file file.json` 避免终端转义差异。多设备时显式加 `--device <地址或设备ID>`；设备 ID 为无分隔符的 16 字符串。`devices --watch` 持续观察连接状态。交互 shell 要求 TTY，不支持 `--json`；转发的 `--json` 输出生命周期 NDJSON。
+
+完整参数、错误语义、文件路径和操作示例请查 [CLI 手册](docs/CLI.md) 及 [交互与转发手册](docs/STREAMING.md)，也可随时运行 `wdb --help`。
+
+<a id="how-it-works"></a>
+
+## 工作原理
+
+![WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理](docs/assets/wdb-architecture.svg)
+
+CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：HTTPS 处理命令、任务和文件，SSE 推送任务状态 / 输出，WSS 承载交互终端与 TCP 双向字节流。无需额外开放交互服务端口。
+
+Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通用户 helper 执行。只有显式 `--admin` 才请求 SYSTEM shell。流通道有窗口、配额、租约和关闭回收；ConPTY 进程树由 Windows Job 管理。协议细节见 [交互与转发设计](docs/INTERACTIVE-SHELL-AND-FORWARDING.md)。
+
+<a id="agent-skill"></a>
+
+## 与 AI Agent 配合
+
+将整个 [`skills/wdb`](skills/wdb) 目录放入所用 Agent 的 Skill 搜索目录，并确保 `wdb` 在该 Agent 的 PATH 中。具体使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
+
+Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观察确认结果；UIA 不可用时按应用选择 CDP、Flutter Inspector 或视觉坐标。自动化脚本使用 `shell --script`，需要人类终端的交互 shell 单独使用。请求超时先查任务状态，避免重复点击、安装或输入。
+
+## 权限与使用边界
+
+- 首次连接必须由目标设备上的用户同意；后续校验证书及客户端凭据。首次信任的局限与可选预置指纹见 [连接授权](docs/CONNECTION-APPROVAL.md)。
+- WDB 提供执行脚本、文件和桌面操作能力；只授权可信客户端。记住的客户端可用 `clients revoke` 撤销；`disconnect` 仅断开，不撤销持久授权。
+- 默认仅 localhost；LAN 模式显式启用并限制防火墙来源。helper、CDP 和 VM Service 调试端点保持本机访问，不直接暴露公网。
+- UIA 和应用调试接口取决于应用自身实现。Electron 的 CDP 与可访问性是两条通路；Flutter 的具体构建要求见对应指南。
+- 错误或超时不保证操作尚未发生。任务重连查询与交互流终止的区别见 [重连规则](docs/RECONNECTION.md)。安全问题报告方式见 [SECURITY.md](SECURITY.md)。
+
+<a id="documentation"></a>
+
+## 文档导航
+
+| 主题 | 文档 |
+| --- | --- |
+| 安装与分发 | [Windows 服务端](docs/WINDOWS-INSTALLERS.md) · [npm CLI](docs/NPM-CLIENT.md) · [打包设计](docs/DISTRIBUTION-AND-PACKAGING.md) |
+| 使用与网络 | [完整 CLI](docs/CLI.md) · [Windows 验证步骤](docs/WINDOWS-CLI-VALIDATION.md) · [Mac 客户端](docs/MACOS-CLIENT.md) · [LAN](docs/LAN.md) |
+| 授权与任务 | [首次连接](docs/CONNECTION-APPROVAL.md) · [自动重连](docs/RECONNECTION.md) · [SSE](docs/TASK-EVENTS.md) |
+| 双向流 | [用法](docs/STREAMING.md) · [协议](docs/INTERACTIVE-SHELL-AND-FORWARDING.md) · [Windows 实测](docs/STREAMING-WINDOWS-VERIFICATION.md) · [Mac 待验收交接](docs/STREAMING-MACOS-HANDOFF.md) |
+| 应用调试 | [Electron 配置与操作](docs/ELECTRON.md) · [Flutter 配置与操作](docs/FLUTTER.md) · [验收记录](docs/ACCEPTANCE.md) |
+| 项目开发 | [AGENTS.md](AGENTS.md) · [贡献指南](CONTRIBUTING.md) · [一期需求](wdb-phase1-requirements.md) · [实施记录](docs/IMPLEMENTATION.md) |
+
+<a id="development"></a>
+
+## 本地开发与构建
+
+开发前阅读 [AGENTS.md](AGENTS.md)。Windows 开发环境需要 Node.js `>=24.15.0 <25`；原生与安装器构建另需 .NET Framework 编译器、Windows PowerShell 和 Inno Setup 6.7.1。
+
+```powershell
+git clone https://github.com/guoxiucai/wdb.git
+cd wdb
+npm ci --omit=optional --ignore-scripts
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/init-data.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-pty.ps1
+npm test
+# 共享客户端测试
+npm run test:client
+```
+
+测试使用独立数据目录；流协议测试还需要 OpenSSL。桌面实机、安装和故障注入有额外环境要求，不能用默认单元测试通过代替。初始化脚本默认写入忽略于 Git 的 `.runtime/server`。
+
+仅构建 CLI 开发包：
+
+```sh
+node scripts/build-cli-npm.js --development true --output dist/npm/local-dev-01
+```
+
+构建包含 CLI 与两个 Windows EXE 的开发分发：
+
+```powershell
+.\scripts\build-release.ps1 -Phase Prepare -SigningMode Development -BuildId local-dev-01
+.\scripts\build-release.ps1 -Phase Package -BuildId local-dev-01
+.\scripts\build-release.ps1 -Phase Finalize -BuildId local-dev-01
+.\scripts\verify-release.ps1 -ReleaseDirectory dist/release-builds/local-dev-01/release/Development
+```
+
+每次修改源码后使用新的 BuildId。三阶段冻结公共 payload 并验证完整性，输出安装器、npm tarball、SHA-256 和构建报告；正式签名流程见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。生成的 `dist/`、`artifacts/` 和本机凭据不提交 Git。
+
+### 目录结构
+
+```text
+bin/           CLI 启动器
+src/           CLI、服务、任务、传输协议与平台适配
+native/        Windows 服务宿主、桌面桥、ConPTY C# 源码
+scripts/       构建、安装、校验与实机验证工具
+packaging/     npm 白名单、安装器模板、依赖锁定清单
+tests/         自动化回归与测试夹具
+skills/wdb/    AI Agent Skill
+docs/          用户指南、协议、验证报告与图形资产
+AGENTS.md      项目开发、验证、提交与交付规范
+```
+
+## 后续计划
+
+- [x] Windows 后台服务、首次连接弹窗与 CLI 基础调试。
+- [x] Electron / Flutter 调试通路与真实应用验证记录。
+- [x] SSE、Windows 交互 shell / TCP 转发、安装矩阵与 30 分钟持续会话验证。
+- [ ] Mac npm 客户端及新增交互 / 转发的真实终端验证。
+- [ ] 扩展干净 Windows 环境、跨主机网络与更长时间稳定性验证。
+- [ ] 确定开源许可证、正式 npm 名称与发布者，完成签名和公开分发。
+
+## 贡献与反馈
+
+欢迎通过 [Issues](https://github.com/guoxiucai/wdb/issues) 报告可复现问题或讨论功能，通过 [Pull Requests](https://github.com/guoxiucai/wdb/pulls) 提交改进。请提供版本、平台、最小复现步骤和脱敏日志；开发规范、测试选择与提交要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。漏洞和凭据不要放入公开 Issue。
+
+## 许可与致谢
+
+**项目当前使用 `UNLICENSED` 开发配置，尚未选择正式开源许可证。** 仓库可见性不代替使用、修改和再分发的许可；正式发布前会补充许可证与发行信息。
+
+感谢 Node.js、ws、FFmpeg、Inno Setup 及 Windows ConPTY / UI Automation 生态提供基础能力。第三方依赖遵循各自许可，发行包保留相应声明。README 的页面组织参考 [ohos-scrcpy-app](https://github.com/guoxiucai/ohos-scrcpy-app/blob/main/README.md)；WDB 图标为新生成的原创图形，原理图为可编辑 SVG，来源与提示词见 [图形资产说明](docs/assets/README.md)。

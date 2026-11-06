@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="750" viewBox="0 0 1200 750" role="img" aria-labelledby="title desc">
+  <title id="title">WDB 工作原理</title>
+  <desc id="desc">用户或 AI Agent 通过 Skill 使用 CLI，经同一端口的 HTTPS、SSE 和 WSS 连接 Windows SYSTEM 服务。首次连接由本机弹窗授权。服务直接处理任务、文件、显式管理员 shell 及 TCP 转发；普通用户 helper 提供默认 shell、UIA、输入、Electron、Flutter 和截图录屏。结果返回 CLI。</desc>
+  <defs>
+    <linearGradient id="blue" x2="1" y2="1"><stop stop-color="#087ff5"/><stop offset="1" stop-color="#0757d7"/></linearGradient>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M1 1L7 4L1 7" fill="none" stroke="#3575b9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="arrow-start" markerWidth="9" markerHeight="9" refX="1" refY="4" orient="auto"><path d="M7 1L1 4L7 7" fill="none" stroke="#3575b9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <style>
+      text{font-family:'Segoe UI','Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#10294b}
+      .title{font-size:30px;font-weight:700}.section{font-size:22px;font-weight:700}.label{font-size:19px;font-weight:600}.body{font-size:17px}.small{font-size:15px;fill:#526985}.white{fill:#fff}.line{fill:none;stroke:#3575b9;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1200" height="750" rx="22" fill="#f7faff"/>
+  <rect x="36" y="36" width="58" height="34" rx="10" fill="#e1eeff"/><text x="65" y="60" text-anchor="middle" class="label" fill="#086ce0">WDB</text>
+  <text x="112" y="63" class="title">从一条 CLI 命令，到 Windows 调试能力</text>
+  <text x="36" y="102" class="body" fill="#526985">显式授权 · 身份隔离 · 可验证结果</text>
+  <rect x="36" y="146" width="250" height="480" rx="20" fill="#fff" stroke="#cbdcf1" stroke-width="1.5"/>
+  <text x="60" y="184" class="section">客户端</text><text x="60" y="213" class="small">Windows / macOS</text>
+  <rect x="60" y="243" width="202" height="76" rx="13" fill="#f0f6ff" stroke="#d6e4f7"/>
+  <text x="161" y="274" text-anchor="middle" class="label">开发者 / AI Agent</text><text x="161" y="300" text-anchor="middle" class="small">Skill 指导命令与验证</text>
+  <path d="M161 324V352" class="line"/>
+  <rect x="60" y="369" width="202" height="102" rx="15" fill="url(#blue)"/>
+  <text x="161" y="408" text-anchor="middle" class="section white">&gt;_ wdb CLI</text><text x="161" y="439" text-anchor="middle" class="body white">命令 · JSON · 终端</text>
+  <text x="60" y="514" class="body">返回结果与文件</text><text x="60" y="543" class="small">任务状态 / 截图 / 日志</text><text x="60" y="568" class="small">终端字节 / TCP 字节</text>
+  <rect x="562" y="146" width="602" height="480" rx="20" fill="#fff" stroke="#cbdcf1" stroke-width="1.5"/>
+  <text x="588" y="184" class="section">Windows 目标设备</text>
+  <rect x="588" y="215" width="550" height="102" rx="13" fill="#eefbf9" stroke="#bee8e2"/>
+  <text x="608" y="246" class="label">首次连接 → 本机确认</text><text x="608" y="275" class="body">同意 / 拒绝，可选记住客户端</text><text x="608" y="300" class="small">后续使用保存的凭据，证书变化时拒绝连接</text>
+  <path d="M862 322V352" class="line"/>
+  <rect x="588" y="369" width="550" height="102" rx="15" fill="#09295c"/>
+  <text x="862" y="407" text-anchor="middle" class="section white">WdbService · SYSTEM</text><text x="862" y="440" text-anchor="middle" class="body white">认证 / 任务 / 文件 / 流通道管理</text>
+  <path d="M267 420H315" class="line" marker-start="url(#arrow-start)"/>
+  <rect x="327" y="369" width="190" height="102" rx="14" fill="#e8f3ff" stroke="#b6d6f7"/>
+  <text x="422" y="399" text-anchor="middle" class="label">HTTPS / SSE</text><text x="422" y="427" text-anchor="middle" class="label">WSS 双向流</text><text x="422" y="453" text-anchor="middle" class="small">同一 TCP/TLS 端口 18766</text>
+  <path d="M523 420H579" class="line" marker-start="url(#arrow-start)"/>
+  <path d="M717 476V500" class="line"/><path d="M1002 476V500" class="line"/>
+  <rect x="588" y="516" width="258" height="88" rx="12" fill="#f1f6fd" stroke="#cedef1"/>
+  <text x="608" y="546" class="label">服务直接执行</text><text x="608" y="572" class="small">--admin · ConPTY</text><text x="608" y="594" class="small">TCP forward / reverse</text>
+  <rect x="864" y="516" width="274" height="88" rx="12" fill="#effbf8" stroke="#c6e8df"/>
+  <text x="881" y="546" class="label">普通用户 Helper</text><text x="881" y="572" class="small">默认 shell · UIA · 输入 · 录屏</text><text x="881" y="594" class="small">Electron CDP · Flutter Inspector</text>
+  <text x="589" y="655" class="small">helper 仅监听 loopback；桌面操作需要用户已登录且解锁。</text>
+  <path d="M37 674H1163" stroke="#dce6f3"/>
+  <text x="36" y="707" class="small">协议：批处理任务可按 ID 恢复；交互 shell / TCP 流断线后结束，不自动重连或重放。</text>
+</svg>

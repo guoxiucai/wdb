@@ -27,4 +27,4 @@ wdb reverse tcp:127.0.0.1:9000 tcp:127.0.0.1:3000 --json
 
 每客户端最多 4 shell、4 转发规则、16 TCP 连接；全局分别 16、16、64。二进制消息 64 KiB、JSON 16 KiB、每方向窗口 256 KiB、单队列 512 KiB；应用队列总预算 64 MiB。租约每 5 秒更新，30 秒到期；Ping 不续租。目标连接超时 5 秒，reverse 待认领连接超时 10 秒。终止 shell 会回收其 Job 中的子进程。
 
-Windows 的实现及实机结果见后续验收记录。Mac 共用 npm 代码与协议，但本轮没有 Mac 实机验收；需在 Mac 验证 raw mode、resize、Ctrl+C、Ctrl+] 和终端恢复后再声明支持。
+Windows 的实现与实机结果见 [验证报告](STREAMING-WINDOWS-VERIFICATION.md)，包含安装矩阵、终端交互、故障回收与 30 分钟持续会话。Mac 共用 npm 代码与协议，但新增交互/转发本轮没有 Mac 实机验收；需在 Mac 验证 raw mode、resize、Ctrl+C、Ctrl+] 和终端恢复后再声明支持，具体步骤见 [Mac 交接](STREAMING-MACOS-HANDOFF.md)。

@@ -2,7 +2,7 @@
 
 当前交付是未签名的 **Development** 测试包，不发布 npm。正式 npm 名称、项目许可、发布者证书尚未配置。CLI 使用同一个纯 JS tarball，见 [NPM-CLIENT.md](NPM-CLIENT.md)。
 
-本机最终候选、下载大小、SHA-256、安装/SSE 验收结果及未验证范围见 [WINDOWS-DISTRIBUTION-VERIFICATION.md](WINDOWS-DISTRIBUTION-VERIFICATION.md)。
+首轮安装/SSE 验收见 [WINDOWS-DISTRIBUTION-VERIFICATION.md](WINDOWS-DISTRIBUTION-VERIFICATION.md)；加入交互 shell / 转发后的最终包、SHA-256、安装矩阵与 30 分钟验证见 [STREAMING-WINDOWS-VERIFICATION.md](STREAMING-WINDOWS-VERIFICATION.md)。
 
 ## 构建
 
@@ -15,7 +15,7 @@
 .\scripts\verify-release.ps1 -ReleaseDirectory dist/release-builds/my-build/release/Development
 ```
 
-Prepare 只编译一次服务宿主和桌面桥，冻结公共 payload、构建模板、npm tarball 和签名前基线。Package 只消费该 BuildId，生成两个独立的单文件 EXE；每个都包含 FFmpeg/ffprobe、许可、服务与助手。with-node 包含已校验官方 Node；external-node 不含 Node，也不在安装时下载 Node。两者共用 AppId `{CB6CE060-4707-4E8F-880A-64CBB085D781}`、服务名和升级通道，不能并存为两套服务。
+Prepare 只编译一次服务宿主、桌面桥和 PtyHost，冻结公共 payload、构建模板、npm tarball 和签名前基线。Package 只消费该 BuildId，生成两个独立的单文件 EXE；每个都包含 FFmpeg/ffprobe、许可、服务与助手。with-node 包含已校验官方 Node；external-node 不含 Node，也不在安装时下载 Node。两者共用 AppId `{CB6CE060-4707-4E8F-880A-64CBB085D781}`、服务名和升级通道，不能并存为两套服务。
 
 Release 目录包含两个 Setup.exe、同一个 npm tarball、SHA256SUMS、release-manifest、signing-report、verification-report。报告分开记录下载大小、解压 payload 大小和实机安装大小。`releaseReady:false` 表示本地开发/等待发行验收，不可当作正式签名版本。
 
