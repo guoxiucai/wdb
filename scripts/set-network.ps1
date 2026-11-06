@@ -10,7 +10,9 @@ $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.
 if (!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Network configuration requires administrator PowerShell.' }
 $installationPath = Join-Path $DataDirectory 'installation.json'
 $installation = Get-Content -LiteralPath $installationPath -Raw | ConvertFrom-Json
-$node = Join-Path $installation.installDirectory 'runtime\node.exe'
+. (Join-Path $PSScriptRoot 'resolve-node.ps1')
+if ($installation.installDirectory -ine "$env:ProgramFiles\wdb") { throw 'Unexpected installation directory.' }
+$node = (Get-WdbRuntimeBinding -InstallDirectory "$env:ProgramFiles\wdb").path
 $service = Get-CimInstance Win32_Service -Filter "Name='WdbService'"
 if (!$service -or !(Test-Path -LiteralPath $node)) { throw 'Install WdbService before configuring its network.' }
 $ruleName = 'WdbService-LAN'

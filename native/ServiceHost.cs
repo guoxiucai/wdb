@@ -67,7 +67,7 @@ internal sealed class WdbServiceHost : ServiceBase
     }
     private void RunLoop()
     {
-        string node = Option("--node", "node.exe");
+        string node = Option("--node", "");
         string script = Option("--script", "");
         string data = Option("--data-dir", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "wdb"));
         string port = Option("--port", helper ? "18767" : "18766");
@@ -76,8 +76,10 @@ internal sealed class WdbServiceHost : ServiceBase
         if (!System.Net.IPAddress.TryParse(address, out parsedAddress)) throw new ArgumentException("--host must be an IP address");
         Log("Supervisor started; identity=" + System.Security.Principal.WindowsIdentity.GetCurrent().Name + "; session=" + Process.GetCurrentProcess().SessionId);
         while (!stopped.WaitOne(0)) {
+            int retryDelay = 2000;
             try {
-                if (!File.Exists(script)) { stopped.WaitOne(2000); continue; }
+                if (!Path.IsPathRooted(node) || !File.Exists(node)) { Log("WDB_RUNTIME_MISSING: bound Node path unavailable: " + node + "; repair installation; PATH fallback disabled."); stopped.WaitOne(30000); continue; }
+                if (!File.Exists(script)) { Log("WDB_SCRIPT_MISSING: " + script + "; repair installation."); stopped.WaitOne(30000); continue; }
                 ProcessStartInfo start = new ProcessStartInfo(node,
                     Quote(script) + " --data-dir " + Quote(data) + " --host " + Quote(address) + " --port " + port);
                 start.WorkingDirectory = Path.GetDirectoryName(script);
@@ -98,11 +100,11 @@ internal sealed class WdbServiceHost : ServiceBase
                 p.BeginOutputReadLine(); p.BeginErrorReadLine();
                 Log("Child started pid=" + p.Id);
                 while (!p.WaitForExit(500) && !stopped.WaitOne(0)) { }
-                if (p.HasExited) { p.WaitForExit(); Log("Child exited code=" + p.ExitCode); }
+                if (p.HasExited) { p.WaitForExit(); Log("Child exited code=" + p.ExitCode); if (p.ExitCode == 78) retryDelay = 30000; }
                 lock (gate) { if (child == p) child = null; }
                 p.Dispose();
             } catch (Exception ex) { Log(ex.GetType().Name + ": " + ex.Message); }
-            stopped.WaitOne(2000);
+            stopped.WaitOne(retryDelay);
         }
     }
     protected override void OnStop()

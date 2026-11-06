@@ -1,0 +1,117 @@
+{
+  "node": {
+    "version": "24.15.0",
+    "source": "https://nodejs.org/dist/v24.15.0/win-x64/node.exe",
+    "sha256": "3331e1ffe19874215472217c5e94f5a0c6d8e18c4ac7111d3937aa0ad5e9b4a5",
+    "licenseSha256": "4573185d56580da2b890ba34a85a409257640f1c5632eade4300137266194d18"
+  },
+  "ffmpeg": {
+    "version": "9.0.2-essentials_build",
+    "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.7z",
+    "archiveSha256": "4705843ccaaf54257c16ad90f3e952ece33c17df964ecf7bfdbb0f49c7171077",
+    "files": [
+      {
+        "name": "FFMPEG-LICENSE",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      },
+      {
+        "name": "FFMPEG-PROVENANCE.json",
+        "sha256": "c444591077044579e4e4c86fb5c3da070a748bed56e5759f345c3454bc0f50bf"
+      },
+      {
+        "name": "FFMPEG-README.txt",
+        "sha256": "0342de6bb39dd421cbec2c00d89ad274b640d75ad3f2cab09ffd647ce2d8f949"
+      },
+      {
+        "name": "ffmpeg.exe",
+        "sha256": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec"
+      },
+      {
+        "name": "ffprobe.exe",
+        "sha256": "f0d36ecbbdd3bcfac3efa078c96c7271c2e68b3810595552ac3b7f17e9a65c52"
+      }
+    ]
+  },
+  "inno": {
+    "version": "6.7.1",
+    "source": "https://jrsoftware.org/isdl.php",
+    "files": [
+      {
+        "name": "Default.isl",
+        "sha256": "42a5f6f7dbbddf26cc278f67db5d894235ce1d126a6856702e31bd02023a1316"
+      },
+      {
+        "name": "is7z.dll",
+        "sha256": "f97cda058bfe97a7e9ced5cde7018bbc26e35155c3c7405c6146808f8d06806d"
+      },
+      {
+        "name": "is7zxa.dll",
+        "sha256": "e3cef67858843c554100126f04932be327097777865e4eb82951dd97cdb28942"
+      },
+      {
+        "name": "is7zxr.dll",
+        "sha256": "728b368dc4f2831cc4d13291f46eeaf9f89b7e3a91356cf793c330e953b8e17b"
+      },
+      {
+        "name": "isbunzip.dll",
+        "sha256": "31d04c1e4bfdfa34704c142fa98f80c0a3076e4b312d6ada57c4be9d9c7dcf26"
+      },
+      {
+        "name": "isbzip.dll",
+        "sha256": "8072e83385afc4a84006271a87a11fc0a22b149cbd77322669ca56c470d28ced"
+      },
+      {
+        "name": "ISCC.exe",
+        "sha256": "eb6f4410c8db367a5f74127e8025ad2ccacc0afabbe783959d237df3050f97fb"
+      },
+      {
+        "name": "ISCmplr.dll",
+        "sha256": "1a6ff68241e7f3b18543bb875283788913abbdd7b9d7403ac094598d044def7a"
+      },
+      {
+        "name": "islzma.dll",
+        "sha256": "8af307ce3738ab1d37cc7e76b2f76615e2045597d4367c3e40d52b5f2fbd353d"
+      },
+      {
+        "name": "ISPP.dll",
+        "sha256": "903729fce54ece07623c8eb795320614929ad2693d3b814e3da0ab23f9d494d2"
+      },
+      {
+        "name": "ISPPBuiltins.iss",
+        "sha256": "bc765e1121a95dc602ca1248b484418cecc6db9d4b6f4dae58e9a2c35262527c"
+      },
+      {
+        "name": "isscint.dll",
+        "sha256": "ddd2748bc79122a67eed77f6039f6508245e0aa7f0fdbbfca99d1e922a1e8ce4"
+      },
+      {
+        "name": "isunzlib.dll",
+        "sha256": "8287d0e287a66ee78537c8d1d98e426562b95c50f569b92cea9ce36a9fa57e64"
+      },
+      {
+        "name": "iszlib.dll",
+        "sha256": "14c0d4a2a41572384f8309cdf03de5c6e7ed46bef64cce70d989b2665eff1a47"
+      },
+      {
+        "name": "license.txt",
+        "sha256": "2e5346868c2a18434489824e11d65c3031620f792fefc415d05f19cd441abf5c"
+      },
+      {
+        "name": "Setup.e32",
+        "sha256": "34105d458e138b5af63a1bea82b6519856f309904e1e2b0ed7cebed52c7a374b"
+      },
+      {
+        "name": "SetupCustomStyle.e32",
+        "sha256": "681ebdcf6864bd647b28b3abcedd31730b4471e69224f0eeb0cdf738ce6c0bbd"
+      },
+      {
+        "name": "SetupLdr.e32",
+        "sha256": "eb95b6ea1abb86dfb53023c2c8ce3c2e8d51cfc52f7a8efa61cc33e198feff23"
+      },
+      {
+        "name": "SetupLdr.e64",
+        "sha256": "e8502209965f4c93997996dd2c6acedab4d71054a3b20bd34984808ffac0e184"
+      }
+    ]
+  }
+}
