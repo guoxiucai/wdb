@@ -3,7 +3,7 @@ name: wdb
 description: Use the Windows Debug Bridge CLI to deploy and validate Windows applications, debug Electron or Flutter UI, operate the interactive desktop through UIA and input, and retrieve screenshots, recordings, and logs. Applies when wdb is available; does not provide Android adb control.
 ---
 
-Use `wdb` (or the project/package `bin\wdb.cmd`) as the Windows device entry point. This build first validates Windows localhost; do not claim macOS, LAN, physical touch hardware, or real application acceptance from local fixture results.
+Use `wdb` (or the project/package `bin\wdb.cmd`) as the Windows device entry point. For LAN setup or remote client validation, read [references/connection.md](references/connection.md). Distinguish same-host LAN-IP checks from cross-machine network acceptance; do not claim macOS, physical touch hardware, or real application acceptance from local fixture results.
 
 1. Read `wdb --help`, `wdb devices --json`, and `wdb info --json` for the installed version, target, capabilities, and desktop status. With multiple devices, pass `--device <address|deviceId>`. First pairing needs the locally obtained server certificate SHA-256 fingerprint and pairing code. Do not accept a changed fingerprint automatically. Reuse saved credentials with `wdb connect <address>`.
 2. Obtain `windows list`, then `ui tree` / `ui find` on the intended full window identifier. Use accessible controls when exposed. If multiple windows or controls match, inspect candidates and refine the target. GUI requires a logged-in, unlocked interactive desktop; report `DESKTOP_UNAVAILABLE` instead of trying to unlock or operate the secure desktop.

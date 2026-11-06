@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$PackageDirectory)
+param([string]$PackageDirectory, [ValidateSet('Server','Client')][string]$Kind = 'Server')
 $ErrorActionPreference = 'Stop'
 if (!$PackageDirectory) { $PackageDirectory = Join-Path $PSScriptRoot '..\dist\wdb-windows-x64' }
 $packageRoot = [IO.Path]::GetFullPath($PackageDirectory).TrimEnd('\')
@@ -21,7 +21,9 @@ foreach ($line in (Get-Content -LiteralPath $manifest)) {
 foreach ($file in (Get-ChildItem -LiteralPath $packageRoot -Recurse -File)) {
     if ($file.Name -ne 'SHA256SUMS.txt' -and !$verified.ContainsKey($file.FullName)) { throw "Unlisted package file: $($file.FullName)" }
 }
-foreach ($required in @('runtime\node.exe','runtime\NODE-LICENSE.txt','runtime\ffmpeg.exe','runtime\ffprobe.exe','runtime\FFMPEG-LICENSE','native\WdbServiceHost.exe','native\bin\DesktopBridge.exe','bin\wdb.cmd','src\server.js','src\helper.js','scripts\install-service.ps1','scripts\service-config.ps1')) {
+$requiredFiles = @('runtime\node.exe','runtime\NODE-LICENSE.txt','bin\wdb.cmd','src\cli.js','src\client-transport.js','src\device-id.js','skills\wdb\SKILL.md')
+if ($Kind -eq 'Server') { $requiredFiles += @('runtime\ffmpeg.exe','runtime\ffprobe.exe','runtime\FFMPEG-LICENSE','native\WdbServiceHost.exe','native\bin\DesktopBridge.exe','src\server.js','src\helper.js','scripts\install-service.ps1','scripts\service-config.ps1','scripts\set-network.ps1') }
+foreach ($required in $requiredFiles) {
     if (!(Test-Path -LiteralPath (Join-Path $packageRoot $required))) { throw "Required offline component missing: $required" }
 }
 $node = Join-Path $packageRoot 'runtime\node.exe'

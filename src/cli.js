@@ -329,9 +329,9 @@ function desktopCommand(command, words, options) {
     default: throw new CliError('UNKNOWN_COMMAND', `Unknown command: ${command}. Run wdb --help.`);
   }
 }
-const HELP = `wdb — Windows Debug Bridge (localhost-first)
+const HELP = `wdb — Windows Debug Bridge
 
-  wdb connect localhost[:18766] --fingerprint <SHA256> --pairing-code <code>
+  wdb connect <server-IP-or-hostname>[:18766] --fingerprint <SHA256> --pairing-code <code>
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
   wdb clients list | clients revoke <clientId>
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]

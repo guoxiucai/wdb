@@ -1,0 +1,13 @@
+# Remote Windows connections
+
+The Windows client is portable: extract the whole CLI package, use its `bin\wdb.cmd` (bundled Node), and retain the package's docs. The Skill alone is not a CLI installation. On a future macOS client, use its `bin/wdb`; remote operations still run on Windows.
+
+First pairing requires a trusted fingerprint and pairing code from the Windows server's local `scripts\show-pairing.ps1 -RevealCode`. Ask for those values only when unavailable through an authorized local source; don't guess, scan neighboring hosts, or copy another client's credential store. Reconnect an existing profile with `wdb connect <server-IP>` without a pairing code. Do not put credentials in shared output. Use `--config <local-directory>` consistently for an isolated test profile.
+
+Run `wdb devices --json`, then `wdb info --device <address> --json`. The displayed hostname is a label, the URL is the network address, the 16-character device ID is the persistent identifier, and the certificate fingerprint establishes trusted identity. Same device at multiple saved addresses can be ambiguous: use the exact address. A changed IP does not authorize trusting a changed certificate.
+
+For the standard delivery smoke check, run the client package's `runtime\node.exe scripts\validate-lan.js --device <address> --output <local-result-dir>`; append `--config` if applicable. It creates and cleans a unique remote temp directory, verifies file bytes, queries screens/windows, pulls a screenshot and disconnects/reconnects. It does not perform application clicks or measure LAN throughput. Inspect the resulting screenshot and report, preserving the distinction between transport and business validation. Use package `docs/LAN.md` for separate interruption, restart and performance steps.
+
+Only the Windows server's HTTPS port (default 18766) is exposed to the LAN. Desktop helper, CDP and Dart VM Service remain server-local; `--endpoint http://127.0.0.1:...` is interpreted on the server. Don't open those debug ports for a remote client. Windows remote file paths remain Windows paths; local artifacts use the client's filesystem. `--args-file` and `--script-file` are read locally and their contents sent to the server.
+
+Server network/installation management scripts restart services and must execute outside a WDB shell child process. Use an authorized local administrator terminal, or an independently managed deployment process. Don't disable the firewall or change network category as a generic connection fix. Server GUI requires its logged-in, unlocked desktop; Mac client permissions cannot fix an unavailable Windows desktop.
