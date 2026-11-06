@@ -90,27 +90,26 @@ public static class DesktopBridge {
             form.Font=new Font("Microsoft YaHei UI",10F);form.AutoScaleMode=AutoScaleMode.Dpi;
             form.FormBorderStyle=FormBorderStyle.FixedDialog;form.MaximizeBox=false;form.MinimizeBox=false;
             form.StartPosition=FormStartPosition.CenterScreen;form.TopMost=true;form.ShowInTaskbar=true;
-            var flow=new FlowLayoutPanel{FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(24)};
-            var heading=new Label{Text="是否允许此客户端连接？",AutoSize=true,MaximumSize=new Size(550,0),Font=new Font("Microsoft YaHei UI",14F,FontStyle.Bold)};
-            var identity=new TextBox{ReadOnly=true,Multiline=true,ScrollBars=ScrollBars.Vertical,TabStop=false,AccessibleName="连接客户端信息",BorderStyle=BorderStyle.FixedSingle,Size=new Size(550,130),Text="客户端名称（客户端提供）："+S(a,"name")+Environment.NewLine+"来源地址："+S(a,"remoteAddress")+Environment.NewLine+"请求编号："+S(a,"requestId")};
-            var permission=new Label{AutoSize=true,MaximumSize=new Size(550,0),Text="允许后，客户端可以执行命令、传输文件、安装应用并操作本机桌面。显式请求管理员执行时，可使用 WDB 后台管理员能力。"};
-            var remember=new CheckBox{Text="记住此客户端，下次连接不再询问",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
-            var temporary=new Label{AutoSize=true,MaximumSize=new Size(550,0),Text="未记住：主动断开、服务重启或闲置 30 分钟后，需要重新确认。"};
-            var buttons=new Panel{Size=new Size(550,48)};
-            var countdown=new Label{Location=new Point(0,10),Size=new Size(270,30)};
-            var allow=new Button{Text="同意",Location=new Point(336,0),Size=new Size(100,38),AccessibleName="同意连接"};
-            var deny=new Button{Text="拒绝",Location=new Point(450,0),Size=new Size(100,38),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+            var flow=new FlowLayoutPanel{FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(20)};
+            var heading=new Label{Text="允许此客户端连接？",AutoSize=true,MaximumSize=new Size(360,0),Font=new Font("Microsoft YaHei UI",11F,FontStyle.Bold)};
+            var identity=new Label{Text="客户端："+S(a,"name"),AutoEllipsis=true,Size=new Size(360,26),AccessibleName="客户端："+S(a,"name")};
+            var address=new Label{Text="来源："+S(a,"remoteAddress"),AutoEllipsis=true,Size=new Size(360,26),ForeColor=SystemColors.GrayText};
+            var remember=new CheckBox{Text="记住此客户端",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
+            var buttons=new Panel{Size=new Size(360,38)};
+            var countdown=new Label{Location=new Point(0,10),Size=new Size(120,26),ForeColor=SystemColors.GrayText};
+            var allow=new Button{Text="同意",Location=new Point(160,0),Size=new Size(96,36),AccessibleName="同意连接"};
+            var deny=new Button{Text="拒绝",Location=new Point(264,0),Size=new Size(96,36),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
             Action check=delegate(){
                 if(File.Exists(S(a,"cancelFile"))){decision="cancelled";form.Close();}
                 else if(!Available()){decision="desktop_unavailable";form.Close();}
                 else if(DateTime.UtcNow>=deadline){decision="timed_out";form.Close();}
-                else countdown.Text="等待确认："+Math.Ceiling((deadline-DateTime.UtcNow).TotalSeconds)+" 秒";
+                else countdown.Text=Math.Ceiling((deadline-DateTime.UtcNow).TotalSeconds)+" 秒后关闭";
             };
             allow.Click+=delegate {check();if(!form.IsDisposed&&form.Visible){decision="approved";remembered=remember.Checked;form.Close();}};
             deny.Click+=delegate {decision="denied";form.Close();};
             form.AcceptButton=deny;form.CancelButton=deny;
             buttons.Controls.AddRange(new Control[]{countdown,allow,deny});
-            foreach(Control control in new Control[]{heading,identity,permission,remember,temporary,buttons}){control.Margin=new Padding(0,0,0,12);flow.Controls.Add(control);}
+            foreach(Control control in new Control[]{heading,identity,address,remember,buttons}){control.Margin=new Padding(0,0,0,8);flow.Controls.Add(control);}
             form.Controls.Add(flow);
             timer.Interval=250;timer.Tick+=delegate {check();};form.Shown+=delegate {deny.Focus();check();timer.Start();};
             form.ShowDialog();timer.Stop();
