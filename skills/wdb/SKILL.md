@@ -19,6 +19,8 @@ Long shell and deployment tasks continue across disconnects and can be queried a
 
 Use `shell` with the default logged-in identity; specify `--admin` only for an operation needing administrative execution within the user's authorized task. Use `app launch` for GUI programs. Provide user-supplied installer identifiers and silent parameters; do not guess EXE silent flags or reboot automatically. Report manual intervention when a secure desktop or additional credentials are required.
 
+Inspect `app list` scope before deployment. Use `--scope user` without `--admin` for per-user installers/uninstallers; use explicit `--admin` for machine deployment. Keep the exact application ID and observe registry/version/file state after execution; installer exit code alone does not prove replacement or removal.
+
 File operations default to no overwrite; use `--overwrite` only when replacement is intended. Checksums and transport success do not prove an installer or application behaved correctly. Touch trajectories use true Windows touch injection, up to 10 active contacts; assess delivered input statistics separately from application rendering and stroke completeness.
 
 For command examples, schemas, credential locations, and file/coordinate semantics read the package's `docs/CLI.md` if available. Use `call <operation> --args-file <path>` for capabilities without a convenient command alias. Keep pairing codes and client tokens out of logs, generated scripts, commits, and shared reports.

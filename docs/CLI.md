@@ -112,6 +112,8 @@ UI 操作用 `ui.find` / `ui.tree` 返回的完整 `reference` 对象。保存 J
 .\bin\wdb.cmd logs events --log System --startTime '2026-11-05T00:00:00' --follow --duration 60000 --json
 ```
 
+`app list` 合并机器与当前登录用户的卸载注册表，结果标明 `scope`。机器范围部署显式使用 `--admin`；按用户安装/卸载使用 `--scope user`，由桌面助手以登录用户身份执行，不同时指定 `--admin`。卸载仍须提供查询所得完整 `id`、明确的卸载程序路径与参数。不能因SYSTEM账户看不到用户注册表就认为应用未安装。
+
 日志订阅由 CLI 每秒查询，Ctrl+C、客户端断开或网络失败后结束；重连后重新订阅，可用时间范围补查。文件订阅返回 `content`、`truncated`、`rotated` 事件；增长超过单次读取窗口会显式报告 `gap`，用 `--limitBytes` 扩大窗口或拉取原始日志补查。事件订阅按 RecordId 和时间去重，有下一页时返回 `page_available`，用 `--offset` 查询或缩小时间范围。轮询不等于无损事件流；高写入速率下应拉取文件或按时间分页补查。
 
 所有服务端操作都可通过 `wdb call <op> --args-file <文件> --json` 调用，不需要绕过 CLI。安装器的静默参数必须来自用户或应用配置，不推测通用 EXE 参数。应用部署、日志、录屏具体参数以服务端能力输出和项目实现文档为准。

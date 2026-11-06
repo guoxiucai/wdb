@@ -320,7 +320,7 @@ function desktopCommand(command, words, options) {
   const args = jsonOption(options.args);
   if (!args || typeof args !== 'object' || Array.isArray(args)) throw new CliError('INVALID_ARGUMENT', '--args must be a JSON object.');
   // JSON argument files avoid shell quoting and command-line length limitations.
-  const mapped = { window: 'window', path: 'path', name: 'name', title: 'title', process: 'process', method: 'method', action: 'action', text: 'text', cwd: 'cwd', state: 'state', value: 'value', 'layout-id': 'layoutId', automationId: 'automationId', controlType: 'controlType', id: 'id', encoding: 'encoding', log: 'log', source: 'source', startTime: 'startTime', endTime: 'endTime', keyword: 'keyword' };
+  const mapped = { window: 'window', path: 'path', name: 'name', title: 'title', process: 'process', method: 'method', action: 'action', text: 'text', cwd: 'cwd', scope: 'scope', state: 'state', value: 'value', 'layout-id': 'layoutId', automationId: 'automationId', controlType: 'controlType', id: 'id', encoding: 'encoding', log: 'log', source: 'source', startTime: 'startTime', endTime: 'endTime', keyword: 'keyword' };
   for (const [flag, property] of Object.entries(mapped)) if (options[flag] !== undefined) args[property] = options[flag];
   for (const key of ['x', 'y', 'width', 'height', 'toX', 'toY', 'delta', 'durationMs', 'timeoutMs', 'holdMs', 'depth', 'limit', 'fps', 'durationSeconds', 'monitor', 'pid', 'lines', 'limitBytes', 'offset', 'level', 'eventId']) if (options[key] !== undefined) args[key] = numberOption(options[key], undefined, `--${key}`, -1000000);
   if (options.ref || options.reference) args.reference = jsonOption(options.reference || options.ref);

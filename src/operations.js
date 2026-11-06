@@ -35,11 +35,11 @@ async function shell(args,ctx){
 }
 async function executionIdentity(){const r=await powershell('$i=[Security.Principal.WindowsIdentity]::GetCurrent(); $p=New-Object Security.Principal.WindowsPrincipal($i); @{identity=$i.Name;isElevated=$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)} | ConvertTo-Json -Compress',{timeoutMs:10000});if(r.exitCode!==0)throw fail('IDENTITY_QUERY_FAILED',r.stderr);return JSON.parse(r.stdout);}
 async function installedApps(){
- const r=await powershell("$keys=@('HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'); @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object DisplayName | ForEach-Object { [ordered]@{id=$_.PSPath;name=$_.DisplayName;version=$_.DisplayVersion;publisher=$_.Publisher;installLocation=$_.InstallLocation;uninstallString=$_.UninstallString;quietUninstallString=$_.QuietUninstallString} }) | ConvertTo-Json -Depth 5 -Compress");
+ const r=await powershell("$keys=@('HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'); @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object DisplayName | ForEach-Object { [ordered]@{id=$_.PSPath;scope=$(if($_.PSPath -like '*HKEY_CURRENT_USER*'){'user'}else{'machine'});name=$_.DisplayName;version=$_.DisplayVersion;publisher=$_.Publisher;installLocation=$_.InstallLocation;uninstallString=$_.UninstallString;quietUninstallString=$_.QuietUninstallString} }) | ConvertTo-Json -Depth 5 -Compress");
  if(r.exitCode!==0)throw fail('APPS_QUERY_FAILED',r.stderr);const value=JSON.parse(r.stdout||'[]');return {apps:Array.isArray(value)?value:value?[value]:[]};
 }
 async function install(op,args,ctx){
- const identity=await executionIdentity();if(!identity.isElevated)throw fail('ADMIN_NOT_AVAILABLE','App deployment requires the installed elevated Windows service');
+ const identity=await executionIdentity();if(args.admin&&!identity.isElevated)throw fail('ADMIN_NOT_AVAILABLE','Machine deployment requires the installed elevated Windows service');
  let file=args.path,params=args.arguments;
  if(op==='apps.uninstall'){
    if(!args.id)throw fail('APPLICATION_ID_REQUIRED','Exact installed application registry id is required');
@@ -51,7 +51,7 @@ async function install(op,args,ctx){
  let exe=file,argv=params;
  if(path.extname(file).toLowerCase()==='.msi'){exe='msiexec.exe';argv=[op==='apps.uninstall'?'/x':'/i',file,'/qn','/norestart',...params];}
  const result=await execute(exe,argv,{cwd:args.cwd,timeoutMs:ctx.timeoutMs,signal:ctx.signal});
- return {...result,...identity,installerStatus:result.timedOut?'needs_manual_intervention':result.exitCode===0?'succeeded':[1641,3010].includes(result.exitCode)?'reboot_required':'failed',rebootRequested:false};
+ return {...result,...identity,scope:args.scope||'machine',installerStatus:result.timedOut?'needs_manual_intervention':result.exitCode===0?'succeeded':[1641,3010].includes(result.exitCode)?'reboot_required':'failed',rebootRequested:false};
 }
 async function logFile(args){
  if(!args.path)throw fail('INVALID_ARGUMENT','log path required');
@@ -96,8 +96,18 @@ async function runOperation(op,args,ctx,config={}){
  const userShell=op==='shell'&&!args.admin;
  if(!config.isHelper&&(desktop||userShell))return helperRequest(op,args,ctx,config);
  if(op==='shell')return shell(args,ctx);
- if(op==='apps.list')return installedApps();
- if(['apps.install','apps.update','apps.uninstall'].includes(op)){if(!args.admin)throw fail('ADMIN_REQUIRED','App deployment requires explicit admin:true');return install(op,args,ctx);}
+ if(op==='apps.list'){
+   if(config.isHelper)return {...await installedApps(),userScopeAvailable:true};
+   try{return await helperRequest(op,args,ctx,config);}catch(e){if(e.code!=='DESKTOP_HELPER_UNAVAILABLE')throw e;return {...await installedApps(),userScopeAvailable:false,warning:e.message};}
+ }
+ if(['apps.install','apps.update','apps.uninstall'].includes(op)){
+   if(args.scope&& !['user','machine'].includes(args.scope))throw fail('INVALID_SCOPE','App scope must be user or machine');
+   if(args.scope==='user'){
+     if(args.admin)throw fail('APP_SCOPE_CONFLICT','User deployment must run as the logged-in user; omit admin:true');
+     if(!config.isHelper)return helperRequest(op,args,ctx,config);
+   }else if(!args.admin)throw fail('ADMIN_REQUIRED','Select scope:user explicitly or request admin:true for machine deployment');
+   return install(op,args,ctx);
+ }
  if(op==='logs.file')return logFile(args);
  if(op==='logs.events')return eventLogs(args);
  if(op.startsWith('record.'))return record(op,args,ctx);
