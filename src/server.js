@@ -1,18 +1,22 @@
 'use strict';
 const https=require('node:https');const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');const os=require('node:os');const {Transform}=require('node:stream');const {pipeline}=require('node:stream/promises');
 const {ROOT,argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require('./common');const {runOperation,executionIdentity}=require('./operations');
+const {newDeviceId,normalizeDeviceId}=require('./device-id');
 const VERSION='0.1.0';
 class Bridge {
  constructor(options={}){
   this.dir=path.resolve(options.dataDir||path.join(__dirname,'../.runtime/server'));fs.mkdirSync(path.join(this.dir,'tasks'),{recursive:true});
-  this.options=options;this.config=read(path.join(this.dir,'config.json'),{deviceId:crypto.randomUUID(),retentionHours:24,maxArtifactBytes:10*1024**3,maxOutputBytes:1024**2,helperPort:18767});atomic(path.join(this.dir,'config.json'),this.config);
+  this.options=options;this.config=read(path.join(this.dir,'config.json'),{deviceId:newDeviceId(),retentionHours:24,maxArtifactBytes:10*1024**3,maxOutputBytes:1024**2,helperPort:18767});
+  const deviceId=normalizeDeviceId(this.config.deviceId);if(deviceId!==this.config.deviceId){this.config.legacyDeviceId=this.config.deviceId;this.config.deviceId=deviceId;}
+  if(!/^[a-f0-9]{16}$/.test(this.config.deviceId))throw fail('INVALID_DEVICE_ID','Stored device ID must be a 16-character hexadecimal ID or a legacy UUID');
+  atomic(path.join(this.dir,'config.json'),this.config);
   const installation=read(path.join(this.dir,'installation.json'),{});this.config.helperPort=options.helperPort||installation.helperPort||this.config.helperPort;
   this.helperSecret=fs.readFileSync(path.join(this.dir,'helper-secret'),'utf8').trim();this.pairingCode=fs.readFileSync(path.join(this.dir,'pairing-code'),'utf8').trim();
   this.clients=read(path.join(this.dir,'clients.json'),[]);this.tasks=new Map();this.active=new Map();this.leases=new Map();this.pairAttempts=new Map();this.uploads=new Set();this.clientSockets=new Map();
   for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
   this.timer=setInterval(()=>{for(const [id,a] of this.active){const t=this.tasks.get(id);if(t.op.startsWith('input.')&&Date.now()-(this.leases.get(t.clientId)||0)>10000)this.cancel(t,'CONTROL_CONNECTION_LOST');}this.cleanup();},1000);this.timer.unref();
  }
- save(t){atomic(path.join(this.dir,'tasks',t.id,'task.json'),t);}
+ save(t){t.deviceId=normalizeDeviceId(t.deviceId);atomic(path.join(this.dir,'tasks',t.id,'task.json'),t);}
  audit(event){fs.appendFileSync(path.join(this.dir,'audit.jsonl'),JSON.stringify({...event,deviceId:this.config.deviceId,time:new Date().toISOString()})+'\n');}
  persistClients(){atomic(path.join(this.dir,'clients.json'),this.clients);}
  auth(req,refreshLease=true){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const c=this.clients.find(c=>!c.revokedAt&&equal(c.tokenHash,sha(token)));if(!c)throw fail('UNAUTHORIZED','Valid paired client token required',401);if(refreshLease)this.leases.set(c.id,Date.now());let sockets=this.clientSockets.get(c.id);if(!sockets){sockets=new Set();this.clientSockets.set(c.id,sockets);}if(!sockets.has(req.socket)){sockets.add(req.socket);req.socket.once('close',()=>{sockets.delete(req.socket);if(sockets.size===0)this.clientSockets.delete(c.id);});}return c;}

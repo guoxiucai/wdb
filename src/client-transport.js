@@ -3,6 +3,7 @@ const https=require('node:https');
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const crypto=require('node:crypto');
+const {normalizeDeviceId}=require('./device-id');
 const sessions=new WeakMap();
 const transient=new Set(['ECONNRESET','ECONNREFUSED','ETIMEDOUT','EHOSTUNREACH','ENETUNREACH','EPIPE','EAI_AGAIN','ENOTFOUND','ECONNABORTED','TRANSPORT_TIMEOUT','ERR_STREAM_PREMATURE_CLOSE']);
 class CliError extends Error {constructor(code,message,extra){super(message);this.code=code;this.extra=extra;}}
@@ -37,7 +38,13 @@ async function apiOnce(device,method,endpoint,body,timeoutMs){
   req=await openRequest(device,method,endpoint,data?{'content-type':'application/json','content-length':data.length}:{},timeoutMs);
   timer=setTimeout(()=>req.destroy(new CliError('TRANSPORT_TIMEOUT','Response deadline exceeded.')),timeoutMs);
   const response=receiveResponse(req);sent=true;req.end(data);const result=await responseJson(await response);
-  if(device.deviceId&&result.deviceId!==device.deviceId)throw new CliError('DEVICE_ID_MISMATCH','Server device ID differs from the paired device. Reconnect was stopped.');
+  if(device.deviceId&&normalizeDeviceId(result.deviceId)!==normalizeDeviceId(device.deviceId))throw new CliError('DEVICE_ID_MISMATCH','Server device ID differs from the paired device. Reconnect was stopped.');
+  result.deviceId=normalizeDeviceId(result.deviceId);
+  if(['/v1/pair','/v1/info','/v1/health'].includes(endpoint)&&result.data)result.data.deviceId=normalizeDeviceId(result.data.deviceId);
+  if(endpoint.startsWith('/v1/tasks')&&result.data){
+   if(result.data.deviceId)result.data.deviceId=normalizeDeviceId(result.data.deviceId);
+   if(Array.isArray(result.data.tasks))for(const task of result.data.tasks)task.deviceId=normalizeDeviceId(task.deviceId);
+  }
   if(['/v1/info','/v1/health'].includes(endpoint)&&result.data?.protocolVersion!==undefined&&result.data.protocolVersion!==1)throw new CliError('INCOMPATIBLE_PROTOCOL',`Server protocol ${result.data.protocolVersion} is incompatible with client protocol 1.`);
   return result;
  }catch(e){e.requestSent=sent;throw e;}finally{clearTimeout(timer);req?.destroy();}

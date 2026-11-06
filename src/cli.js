@@ -14,6 +14,7 @@ const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
 const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version']);
 const {CliError,normalizeFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer}=require('./client-transport');
+const {normalizeDeviceId}=require('./device-id');
 function parseArgv(argv) {
   const positional = [], options = {};
   for (let i = 0; i < argv.length; i++) {
@@ -59,6 +60,8 @@ async function readConfig(dir) {
   try {
     const data = JSON.parse(await fsp.readFile(path.join(dir, 'devices.json'), 'utf8'));
     if (!data.devices || !Array.isArray(data.devices)) throw new Error('missing devices');
+    let migrated=false;for(const device of data.devices){const id=normalizeDeviceId(device.deviceId);if(id!==device.deviceId){device.deviceId=id;migrated=true;}}
+    if(migrated)await saveConfig(dir,data);
     return data;
   } catch (error) {
     if (error.code === 'ENOENT') return { version: 1, devices: [] };
@@ -77,7 +80,7 @@ function selectDevice(config, selector, allowDisconnected = false) {
   if (selector) {
     let normalized;
     try { normalized = normalizeTarget(selector); } catch { /* selector can be device ID */ }
-    matches = matches.filter(device => device.deviceId === selector || device.url === normalized || device.name === selector || device.hostname?.toLowerCase() === selector.toLowerCase());
+    matches = matches.filter(device => normalizeDeviceId(device.deviceId) === normalizeDeviceId(selector) || device.url === normalized || device.name === selector || device.hostname?.toLowerCase() === selector.toLowerCase());
   }
   if (!matches.length) throw new CliError('NO_DEVICE', 'No matching connected device. Use wdb connect first.');
   if (matches.length > 1) throw new CliError('AMBIGUOUS_DEVICE', 'More than one device matches. Supply --device <address|deviceId>.', { candidates: matches.map(({ url, deviceId, hostname }) => ({ url, deviceId, hostname })) });
