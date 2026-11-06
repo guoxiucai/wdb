@@ -301,9 +301,12 @@ function desktopCommand(command, words, options) {
   // JSON argument files avoid shell quoting and command-line length limitations.
   const mapped = { window: 'window', path: 'path', name: 'name', title: 'title', process: 'process', method: 'method', action: 'action', text: 'text', cwd: 'cwd', scope: 'scope', state: 'state', value: 'value', 'layout-id': 'layoutId', automationId: 'automationId', controlType: 'controlType', id: 'id', encoding: 'encoding', log: 'log', source: 'source', startTime: 'startTime', endTime: 'endTime', keyword: 'keyword' };
   for (const [flag, property] of Object.entries(mapped)) if (options[flag] !== undefined) args[property] = options[flag];
+  for (const key of ['endpoint','target','selector','backend','expression']) if (options[key] !== undefined) args[key] = options[key];
+  for (const key of ['port','connectTimeoutMs','commandTimeoutMs']) if (options[key] !== undefined) args[key] = numberOption(options[key],undefined,`--${key}`,1);
+  if (options['expression-file']) args.expression = fs.readFileSync(options['expression-file'],'utf8').replace(/^\uFEFF/,'');
   for (const key of ['x', 'y', 'width', 'height', 'toX', 'toY', 'delta', 'durationMs', 'timeoutMs', 'holdMs', 'depth', 'limit', 'fps', 'durationSeconds', 'monitor', 'pid', 'lines', 'limitBytes', 'offset', 'level', 'eventId']) if (options[key] !== undefined) args[key] = numberOption(options[key], undefined, `--${key}`, -1000000);
   if (options.ref || options.reference) args.reference = jsonOption(options.reference || options.ref);
-  if (options.arguments !== undefined) args.arguments = command === 'app' && words[0] !== 'launch' ? jsonOption(options.arguments) : options.arguments;
+  if (options.arguments !== undefined) args.arguments = command === 'electron' || command === 'app' && words[0] !== 'launch' ? jsonOption(options.arguments) : options.arguments;
   switch (command) {
     case 'call': if (!words[0]) throw new CliError('INVALID_ARGUMENT', 'call requires an operation.'); return { op: words[0], args };
     case 'screens': return { op: 'screens', args };
@@ -311,6 +314,7 @@ function desktopCommand(command, words, options) {
     case 'desktop': return { op: `desktop.${words[0] || 'status'}`, args };
     case 'windows': if (!words[0] || words[0] === 'list') return { op: 'windows.list', args }; args.action = words[0]; if (words[1]) args.window = words[1]; return { op: 'windows.action', args };
     case 'ui': return { op: `ui.${words[0] || 'tree'}`, args };
+    case 'electron': if(words[0]==='launch'&&words[1])args.path=words[1];return {op:`electron.${words[0]||'targets'}`,args};
     case 'mouse': if (words[0]) args.action = words[0] === 'doubleclick' ? 'doubleClick' : words[0]; return { op: 'input.mouse', args };
     case 'key': if (words[0]) args.keys = words[0].split('+'); if (words[1]) args.action = words[1]; return { op: 'input.key', args };
     case 'text': if (words[0] !== undefined) args.text = words.join(' '); return { op: 'input.text', args };
@@ -336,6 +340,9 @@ const HELP = `wdb — Windows Debug Bridge (localhost-first)
   wdb screenshot [remote-output.png] [--window <id>] [--monitor <id>]
   wdb windows focus|maximize|minimize|restore|move|resize|close <id> --args <JSON>
   wdb ui tree|find|action|wait --args <JSON>
+  wdb electron launch <exe> --port <port> [--arguments <JSON-array>]
+  wdb electron targets|observe|tree|find|action|wait|eval|screenshot|logs --args <JSON>
+    --endpoint http://127.0.0.1:9222 --target <id> --selector <CSS> --backend auto|cdp|uia|visual
   wdb mouse click|doubleclick|drag|scroll --args <JSON>
   wdb key Ctrl+A | text <text> | touch --args-file <trajectory.json>
   wdb app launch|list|install|update|uninstall --args <JSON>

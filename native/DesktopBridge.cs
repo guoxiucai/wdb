@@ -37,7 +37,12 @@ public static class DesktopBridge {
             Require(args.Length==1,"INVALID_ARGUMENT","Expected request JSON file.");
             var req=D(Json.DeserializeObject(File.ReadAllText(args[0],Encoding.UTF8)));
             var a=V(req,"args")==null ? new Dictionary<string,object>() : D(req["args"]);
-            var result=Run(S(req,"op"),a);
+            string op=S(req,"op");object result;
+            if(op.StartsWith("ui.")) {
+                object value=null;Exception failure=null;
+                var worker=new Thread(delegate(){try{Trace(a,"uia.begin");value=Run(op,a);Trace(a,"uia.completed");}catch(Exception error){failure=error;Trace(a,"uia.failed: "+error.GetType().Name);}});
+                worker.SetApartmentState(ApartmentState.MTA);worker.Start();worker.Join();if(failure!=null)throw failure;result=value;
+            } else result=Run(op,a);
             Console.WriteLine(Json.Serialize(new {ok=true,data=result})); return 0;
         } catch(Exception ex) {
             var e=ex as Failure;
@@ -67,6 +72,7 @@ public static class DesktopBridge {
             default: throw new Failure("UNKNOWN_OPERATION",op);
         }
     }
+    static void Trace(Dictionary<string,object>a,string stage) {string file=S(a,"traceFile");if(file!="")File.AppendAllText(file,Json.Serialize(new {at=DateTime.UtcNow.ToString("o"),stage=stage,apartment=Thread.CurrentThread.GetApartmentState().ToString()})+Environment.NewLine,Encoding.UTF8);}
     static bool Available() {
         if(Process.GetCurrentProcess().SessionId==0) return false;
         IntPtr desktop=OpenInputDesktop(0,false,0x0100);
@@ -155,11 +161,11 @@ public static class DesktopBridge {
         throw new Failure("STALE_CONTROL","Control reference is stale; query the window again.");
     }
     static object UiAction(Dictionary<string,object>a) {
-        var e=Resolve(a);string action=S(a,"action");string method=S(a,"method","uia");
+        Trace(a,"resolve.begin");var e=Resolve(a);Trace(a,"resolve.completed");string action=S(a,"action");string method=S(a,"method","uia");
         if(method=="input") {Require(action=="click","INVALID_ARGUMENT","Input method supports click; use input.key/text for keyboard events.");var r=e.Current.BoundingRectangle;Require(!r.IsEmpty && !e.Current.IsOffscreen,"CONTROL_UNAVAILABLE","Control is offscreen.");WindowAction(new Dictionary<string,object>{{"window",S(D(a["reference"]),"window")},{"action","focus"}});Mouse(new Dictionary<string,object>{{"x",(int)(r.X+r.Width/2)},{"y",(int)(r.Y+r.Height/2)},{"action","click"}});return new {method="SendInput",action=action};}
         Require(method=="uia","INVALID_ARGUMENT","method must be uia or input.");object pattern;
         switch(action) {
-            case "invoke": Require(e.TryGetCurrentPattern(InvokePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","InvokePattern unavailable.");((InvokePattern)pattern).Invoke();break;
+            case "invoke": Trace(a,"pattern.begin");Require(e.TryGetCurrentPattern(InvokePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","InvokePattern unavailable.");Trace(a,"invoke.begin");((InvokePattern)pattern).Invoke();Trace(a,"invoke.completed");break;
             case "value":Require(e.TryGetCurrentPattern(ValuePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","ValuePattern unavailable.");((ValuePattern)pattern).SetValue(S(a,"value"));break;
             case "toggle":Require(e.TryGetCurrentPattern(TogglePattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","TogglePattern unavailable.");((TogglePattern)pattern).Toggle();break;
             case "select":Require(e.TryGetCurrentPattern(SelectionItemPattern.Pattern,out pattern),"PATTERN_UNAVAILABLE","SelectionItemPattern unavailable.");((SelectionItemPattern)pattern).Select();break;
@@ -167,7 +173,7 @@ public static class DesktopBridge {
             case "focus":e.SetFocus();break;
             default:throw new Failure("INVALID_ARGUMENT","Unknown UIA action.");
         }
-        object observed=null;try{observed=Control(e,S(D(a["reference"]),"window"),-1);}catch(ElementNotAvailableException){}
+        Trace(a,"observe.begin");object observed=null;try{observed=Control(e,S(D(a["reference"]),"window"),-1);}catch(ElementNotAvailableException){}Trace(a,"observe.completed");
         return new {method="uia",action=action,observed=observed};
     }
     static object Wait(Dictionary<string,object>a) {int timeout=Math.Max(0,Math.Min(I(a,"timeoutMs",10000),300000));string state=S(a,"state","appeared");Require(state=="appeared"||state=="disappeared"||state=="enabled"||state=="disabled","INVALID_ARGUMENT","Invalid wait state.");var timer=Stopwatch.StartNew();while(true){Cancelled(a);var found=Root(a).FindAll(TreeScope.Subtree,Query(a));bool ok=state=="disappeared"?found.Count==0:found.Count>0;if(ok&&(state=="enabled"||state=="disabled"))ok=found.Cast<AutomationElement>().All(e=>e.Current.IsEnabled==(state=="enabled"));if(ok)return new {state=state,elapsedMs=timer.ElapsedMilliseconds,count=found.Count};if(timer.ElapsedMilliseconds>=timeout)throw new Failure("TIMEOUT","Control wait timed out; operation was not retried.");Thread.Sleep(100);}}

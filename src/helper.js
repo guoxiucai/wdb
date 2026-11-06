@@ -13,6 +13,6 @@ const server=http.createServer(async(req,res)=>{
   res.once('close',()=>{if(b.op?.startsWith('input.')&&!res.writableEnded){fs.writeFileSync(path.join(dir,'cancel'),'CONTROL_CONNECTION_LOST');controller.abort();}});
   let outputBytes=0;const maxOutput=1024*1024;
   try {const data=await runOperation(b.op,b.args||{},{id:b.taskId,dir,timeoutMs:b.timeoutMs||120000,signal:controller.signal,onOutput:(stream,text)=>{const available=maxOutput-outputBytes;if(available>0){const bytes=Buffer.from(text).subarray(0,available);fs.appendFileSync(path.join(dir,stream+'.live'),bytes);outputBytes+=bytes.length;}}},{isHelper:true});send(res,200,{ok:true,data});}finally{clearInterval(timer);}
- }catch(e){send(res,e.statusCode||500,{ok:false,error:{code:e.code||'INTERNAL_ERROR',message:e.message}});}
+ }catch(e){send(res,e.statusCode||500,{ok:false,error:{code:e.code||'INTERNAL_ERROR',message:e.message,details:e.details,artifacts:e.artifacts}});}
 });
 server.listen(Number(args.port||18767),'127.0.0.1',()=>console.log(JSON.stringify({event:'helper-ready',port:Number(args.port||18767),pid:process.pid})));

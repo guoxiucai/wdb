@@ -2,20 +2,22 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const http=require('node:http');
+const crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
 const {ROOT,fail,powershell,execute,read}=require('./common');
 function psQuote(s){return "'"+String(s).replaceAll("'","''")+"'";}
 async function native(op,args,ctx){
   if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
-  const request=path.join(ctx.dir,'native-request.json');fs.writeFileSync(request,JSON.stringify({op,args:{...args,cancelFile:path.join(ctx.dir,'cancel')}}));
-  const abort=()=>fs.writeFileSync(path.join(ctx.dir,'cancel'),'cancel');ctx.signal?.addEventListener('abort',abort,{once:true});
+  const prefix=path.join(ctx.dir,'native-'+crypto.randomUUID()),request=prefix+'.json',cancelFile=prefix+'.cancel',traceFile=prefix+'.trace.jsonl';fs.writeFileSync(request,JSON.stringify({op,args:{...args,cancelFile,traceFile}}));
+  const abort=()=>fs.writeFileSync(cancelFile,'cancel');ctx.signal?.addEventListener('abort',abort,{once:true});
   let timedOut=false;const deadline=setTimeout(()=>{timedOut=true;abort();},ctx.timeoutMs);
   try {
     const r=await execute(process.env.SystemRoot+'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(ROOT,'native','desktop.ps1'),'-RequestFile',request],{timeoutMs:ctx.timeoutMs+5000});
     if(r.timedOut||timedOut)throw fail('TIMEOUT','Native operation timed out; observe before retrying');
     let result;try{result=JSON.parse(r.stdout.replace(/^\uFEFF/,''));}catch{throw fail('NATIVE_ERROR',r.stderr||r.stdout||'Native bridge produced no JSON');}
     if(!result.ok)throw fail(result.error?.code||'NATIVE_ERROR',result.error?.message||'Native operation failed');return result.data;
-  } finally {clearTimeout(deadline);ctx.signal?.removeEventListener('abort',abort);}
+  } catch(e){if(fs.existsSync(traceFile))e.artifacts=[{path:traceFile,type:'application/x-ndjson',size:fs.statSync(traceFile).size}];throw e;}
+  finally {clearTimeout(deadline);ctx.signal?.removeEventListener('abort',abort);}
 }
 async function helperRequest(op,args,ctx,config){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
@@ -24,7 +26,7 @@ async function helperRequest(op,args,ctx,config){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled while waiting for the desktop helper');
  try{return await new Promise((resolve,reject)=>{
    const req=http.request({host:'127.0.0.1',port:config.helperPort||18767,path:'/execute',method:'POST',headers:{authorization:'Bearer '+config.helperSecret,'content-type':'application/json'}},res=>{
-     res.setEncoding('utf8');let raw='',bytes=0;res.on('data',c=>{raw+=c;bytes+=Buffer.byteLength(c);if(bytes>16*1024*1024)res.destroy(fail('HELPER_RESPONSE_TOO_LARGE','Desktop helper JSON exceeds 16 MiB'));});res.on('error',reject);res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw fail(r.error.code,r.error.message);resolve(r.data);}catch(e){reject(e);}});
+     res.setEncoding('utf8');let raw='',bytes=0;res.on('data',c=>{raw+=c;bytes+=Buffer.byteLength(c);if(bytes>16*1024*1024)res.destroy(fail('HELPER_RESPONSE_TOO_LARGE','Desktop helper JSON exceeds 16 MiB'));});res.on('error',reject);res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw Object.assign(fail(r.error.code,r.error.message),{details:r.error.details,artifacts:r.error.artifacts});resolve(r.data);}catch(e){reject(e);}});
    });
    req.on('error',e=>reject(Object.assign(fail('DESKTOP_HELPER_UNAVAILABLE',e.message),{causeCode:e.code})));req.setTimeout(ctx.timeoutMs+15000,()=>req.destroy(new Error('Desktop helper timeout')));
    req.end(JSON.stringify({op,args,taskId:ctx.id,dir:ctx.dir,timeoutMs:Math.max(1,ctx.timeoutMs-(Date.now()-started))}));
@@ -101,10 +103,11 @@ async function record(op,args,ctx){
 }
 async function runOperation(op,args,ctx,config={}){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
- const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.'].some(p=>op.startsWith(p));
+ const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.','electron.'].some(p=>op.startsWith(p));
  const userShell=op==='shell'&&!args.admin;
  if(!config.isHelper&&(desktop||userShell))return helperRequest(op,args,ctx,config);
  if(op==='shell')return shell(args,ctx);
+ if(op.startsWith('electron.'))return require('./electron').runElectron(op.slice(9),args,ctx,{native});
  if(op==='apps.list'){
    if(config.isHelper)return {...await installedApps(),userScopeAvailable:true};
    try{return await helperRequest(op,args,ctx,config);}catch(e){if(e.code!=='DESKTOP_HELPER_UNAVAILABLE')throw e;return {...await installedApps(),userScopeAvailable:false,warning:e.message};}
