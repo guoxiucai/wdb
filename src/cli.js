@@ -411,6 +411,7 @@ async function execute(argv, io) {
     result = await runTask(device, 'shell', { command: script, cwd: options.cwd, env: jsonOption(options.env), admin: boolOption(options.admin) }, options, io);
   } else if (command === 'push' || command === 'pull') {
     if (words.length !== 2) throw new CliError('INVALID_ARGUMENT', `${command} requires source and destination paths.`);
+    await discoverServer(device);
     const start = Date.now();
     const transfer = command === 'push' ? await pushOne(device, words[0], words[1], options, io)
       : boolOption(options.recursive) ? await pullDirectory(device, words[0], words[1], options, io)

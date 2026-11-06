@@ -14,11 +14,13 @@
 
 客户端在发送令牌、配对码或操作请求前验证证书 SHA-256 指纹。指纹错误则连接失败，不自动接受新证书。首次配对授予完整调试权限；后续 `connect localhost:18766` 复用已保存的凭据。凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`，可用 `WDB_CONFIG` 或 `--config <目录>` 选择独立客户端身份。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
 
-`disconnect` 通知服务端断开控制连接并保留本地配对凭据，不撤销授权。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址或deviceId>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
+`disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
+
+`devices` 同时展示实时状态、Windows 设备名、URL、持久化 UUID；JSON 的 `enabled` 为本地启用，`connected` 为本次在线探测结果。`devices --watch` 持续观察离线/恢复变化。已配对命令和任务等待默认自动重连最多 60 秒；`--reconnect-timeout` 可调整。证书、设备 ID 或授权错误不自动重试；服务重启不重跑结果未知的任务。详见[自动重连与设备标识](RECONNECTION.md)。
 
 ## 结果和任务
 
-所有命令支持 `--json`；常规命令 stdout 只有最终 JSON，文件进度输出到 stderr。JSON 信封包含 `requestId`、`deviceId`、`status`、`error`、`durationMs`、`artifacts` 和 `data`。任务对象在 `data` 内，任务结果在其中的 `data`。失败退出码为 1，成功/接受退出码为 0。`reboot_required` 表示需重启，不自动重启设备。日志持续订阅是例外：`logs ... --follow --json` 按行输出 JSON 事件及最终结束结果。
+所有命令支持 `--json`；常规命令 stdout 只有最终 JSON，文件进度及重连提示输出到 stderr。JSON 信封包含 `requestId`、`deviceId`、`status`、`error`、`durationMs`、`artifacts` 和 `data`。任务对象在 `data` 内，任务结果在其中的 `data`。失败退出码为 1，成功/接受退出码为 0。`reboot_required` 表示需重启，不自动重启设备。`logs ... --follow --json` 和 `devices --watch --json` 按行输出事件/快照及最终结束结果。
 
 默认提交任务后轮询至结束，`--detach` 在接受任务后返回任务 ID。`--timeout <毫秒>` 设置服务端执行超时；`--wait-timeout <毫秒>` 只限制客户端等待。超时或连接错误不能证明操作没有发生，应查询任务或重新观察界面，禁止盲目重复点击、安装、触摸回放。
 

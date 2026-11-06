@@ -28,6 +28,8 @@ Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost�
 
 桌面操作要求登录且解锁。窗口/控件引用来自最新查询；多设备连接必须明确 `--device`。默认不会覆盖文件，不会重试点击、书写或安装。具体命令和 JSON 契约见 [CLI 文档](docs/CLI.md)。
 
+连接中断时，CLI 默认自动恢复最多 60 秒，已接受的任务按 ID 去重恢复，不重复执行。`wdb devices --watch` 同时显示设备名、地址、唯一 ID 和实时在线状态，服务自动重启后自动恢复观察。边界与故障注入方法见[重连文档](docs/RECONNECTION.md)。
+
 ## 构建和离线交付
 
 ```powershell
