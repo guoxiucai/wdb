@@ -62,7 +62,11 @@ function Preflight {
  if($Port -lt 1024 -or $Port -gt 65535 -or $HelperPort -lt 1024 -or $HelperPort -gt 65535 -or $Port -eq $HelperPort){throw 'Invalid or conflicting service/helper ports'}
  $existing=Get-CimInstance Win32_Service -Filter "Name='WdbService'"
  if($existing -and !$existing.PathName.StartsWith('"'+(Join-Path $InstallDirectory 'native\WdbServiceHost.exe')+'"',[StringComparison]::OrdinalIgnoreCase)){throw 'Existing WdbService belongs to a different installation; refusing to overwrite it.'}
- foreach($listener in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -in @($Port,$HelperPort)})){
+ # Some Windows 11 builds report listener State=0 and transient PID-0 rows
+ # through the State=Listen filter after heavy loopback traffic. Query the two
+ # ports directly and identify unconnected local endpoints by their wildcard
+ # remote endpoint. Include bound sockets; still verify every real owner below.
+ foreach($listener in @(Get-NetTCPConnection -LocalPort @($Port,$HelperPort) -ErrorAction SilentlyContinue | Where-Object {$_.RemotePort -eq 0 -and $_.RemoteAddress -in @('0.0.0.0','::')})){
   $process=Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)"
   if(!$process -or $process.CommandLine -notlike "*$InstallDirectory\src\*" -or $process.CommandLine -notlike "*$DataDirectory*"){throw "Port $($listener.LocalPort) is already in use by another process"}
  }

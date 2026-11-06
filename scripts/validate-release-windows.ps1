@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][string]$BuildDirectory,[Parameter(Mandatory=$true)][string]$ClientCli,[Parameter(Mandatory=$true)][string]$ClientConfig,[Parameter(Mandatory=$true)][string]$DesktopUser,[string]$Device='172.20.115.75',[string]$OutputDirectory,[string]$ExternalNode="$env:ProgramFiles\WdbTestRuntime\node.exe")
+param([Parameter(Mandatory=$true)][string]$BuildDirectory,[Parameter(Mandatory=$true)][string]$ClientCli,[Parameter(Mandatory=$true)][string]$ClientConfig,[Parameter(Mandatory=$true)][string]$DesktopUser,[string]$Device='172.20.115.75',[string]$OutputDirectory,[string]$ExternalNode="$env:ProgramFiles\WdbTestRuntime\node.exe",[switch]$Streaming)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $root=Split-Path $PSScriptRoot -Parent
 $BuildDirectory=[IO.Path]::GetFullPath($BuildDirectory);$ClientCli=[IO.Path]::GetFullPath($ClientCli);$ClientConfig=[IO.Path]::GetFullPath($ClientConfig)
@@ -50,6 +50,10 @@ function Verify-Mode([string]$Mode,[string]$Label,[switch]$Operations){
  if($rule -and ($rule | Get-NetFirewallApplicationFilter).Program -ine $expected){throw 'Firewall runtime binding differs'}
  Assert-Preserved $before
  if($Operations){
+  if($Streaming){
+   & $ExternalNode (Join-Path $root 'scripts\validate-streams-windows.js') --cli $ClientCli --config $ClientConfig --device $Device --output (Join-Path $OutputDirectory ($Label+'-streams')) *> (Join-Path $OutputDirectory ($Label+'-streams.log'))
+   if($LASTEXITCODE -ne 0){throw "$Label streaming validation failed"}
+  }
   & $ExternalNode (Join-Path $root 'scripts\validate-lan.js') --cli $ClientCli --config $ClientConfig --device $Device --output (Join-Path $OutputDirectory ($Label+'-lan')) *> (Join-Path $OutputDirectory ($Label+'-lan.log'))
   if($LASTEXITCODE -ne 0){throw "$Label LAN smoke failed"}
   & $ExternalNode (Join-Path $root 'scripts\validate-recording.js') --cli $ClientCli --config $ClientConfig --device $Device --output (Join-Path $OutputDirectory ($Label+'-recording')) *> (Join-Path $OutputDirectory ($Label+'-recording.log'))
