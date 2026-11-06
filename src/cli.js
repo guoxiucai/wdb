@@ -5,7 +5,6 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const https = require('node:https');
 const crypto = require('node:crypto');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
@@ -14,9 +13,7 @@ const DEFAULT_PORT = 18766;
 const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
 const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'help', 'version']);
-class CliError extends Error {
-  constructor(code, message, extra) { super(message); this.code = code; this.extra = extra; }
-}
+const {CliError,normalizeFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer}=require('./client-transport');
 function parseArgv(argv) {
   const positional = [], options = {};
   for (let i = 0; i < argv.length; i++) {
@@ -43,11 +40,6 @@ function normalizeTarget(value) {
   }
   if (!target.port && !/:\d+\/?$/.test(value)) target.port = String(DEFAULT_PORT);
   return target.origin;
-}
-function normalizeFingerprint(value) {
-  const fingerprint = String(value || '').replace(/:/g, '').toLowerCase();
-  if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new CliError('FINGERPRINT_REQUIRED', 'Provide the 64-digit SHA-256 certificate fingerprint displayed by the server.');
-  return fingerprint;
 }
 function numberOption(value, fallback, name, min = 0) {
   if (value === undefined) return fallback;
@@ -92,59 +84,6 @@ function selectDevice(config, selector, allowDisconnected = false) {
   return matches[0];
 }
 
-// Send no credentials or request body until the TLS certificate is pinned. A
-// checkServerIdentity callback alone is insufficient with self-signed TLS.
-function openRequest(device, method, pathname, headers = {}, timeoutMs = 30000) {
-  return new Promise((resolve, reject) => {
-    const expected = normalizeFingerprint(device.fingerprint);
-    const req = https.request(new URL(pathname, device.url), {
-      method, rejectUnauthorized: false, agent: false,
-      headers: { ...(device.token ? { authorization: `Bearer ${device.token}` } : {}), ...headers },
-    });
-    req.setTimeout(timeoutMs, () => req.destroy(new CliError('TRANSPORT_TIMEOUT', 'Connection timed out; the remote operation may still have occurred. Query its task before retrying.')));
-    req.on('error', reject);
-    req.once('socket', socket => socket.once('secureConnect', () => {
-      const certificate = socket.getPeerCertificate();
-      const actual = certificate.raw && crypto.createHash('sha256').update(certificate.raw).digest('hex');
-      if (actual !== expected) {
-        req.destroy(new CliError('CERTIFICATE_MISMATCH', 'Server certificate does not match the trusted fingerprint. No request was sent.'));
-        return;
-      }
-      resolve(req);
-    }));
-  });
-}
-function receiveResponse(req) {
-  return new Promise((resolve, reject) => { req.once('response', resolve); req.once('error', reject); });
-}
-async function responseJson(response) {
-  const chunks = []; let size = 0;
-  for await (const chunk of response) {
-    size += chunk.length;
-    if (size > 32 * 1024 * 1024) throw new CliError('RESPONSE_TOO_LARGE', 'JSON response exceeds 32 MB; use file artifacts.');
-    chunks.push(chunk);
-  }
-  let result;
-  try { result = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-  catch { throw new CliError('INVALID_RESPONSE', `Server returned invalid JSON (HTTP ${response.statusCode}).`); }
-  if (response.statusCode >= 400 || result.error) {
-    const error = new CliError(result.error?.code || 'HTTP_ERROR', result.error?.message || `HTTP ${response.statusCode}`);
-    error.envelope = result;
-    throw error;
-  }
-  return result;
-}
-async function api(device, method, endpoint, body, timeoutMs) {
-  const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
-  const req = await openRequest(device, method, endpoint, data ? { 'content-type': 'application/json', 'content-length': data.length } : {}, timeoutMs);
-  const response = receiveResponse(req);
-  req.end(data);
-  const result = await responseJson(await response);
-  if (endpoint === '/v1/info' && result.data?.protocolVersion !== undefined && result.data.protocolVersion !== 1) {
-    throw new CliError('INCOMPATIBLE_PROTOCOL', `Server protocol ${result.data.protocolVersion} is incompatible with client protocol 1.`);
-  }
-  return result;
-}
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function taskFrom(envelope) { return envelope.data?.task || envelope.data; }
 function taskId(task) { return task?.id || task?.taskId; }
@@ -153,11 +92,19 @@ async function waitTask(device, id, options = {}, initial, io = process) {
   const waitMs = numberOption(options['wait-timeout'], 24 * 60 * 60 * 1000, '--wait-timeout', 1);
   const start = Date.now(); let lastHeartbeat = 0, result = initial;
   let lastOutputLength = 0;
+  const query=async(method,endpoint,body)=>{
+    const remaining=waitMs-(Date.now()-start);
+    const timeout=()=>new CliError('CLIENT_WAIT_TIMEOUT',`Stopped waiting for task ${id}; it may still be running.`,{taskId:id});
+    if(remaining<=0)throw timeout();
+    try{return await api(device,method,endpoint,body,Math.min(numberOption(options['request-timeout'],10000,'--request-timeout',1),remaining),{reconnectMs:Math.min(numberOption(options['reconnect-timeout'],60000,'--reconnect-timeout'),remaining)});}
+    catch(e){if(e.code==='RECONNECT_TIMEOUT'&&Date.now()-start>=waitMs)throw timeout();throw e;}
+  };
   while (true) {
-    if (!result) result = await api(device, 'GET', `/v1/tasks/${encodeURIComponent(id)}`);
+    await ensureEnabled(device);
+    if (!result) result = await query('GET', `/v1/tasks/${encodeURIComponent(id)}`);
     const task = taskFrom(result);
     if (options.follow && !options.json) {
-      const live = ACTIVE.has(task?.status || result.status) ? await api(device, 'GET', `/v1/tasks/${encodeURIComponent(id)}/output`) : null;
+      const live = ACTIVE.has(task?.status || result.status) ? await query('GET', `/v1/tasks/${encodeURIComponent(id)}/output`) : null;
       const output = live?.data?.stdout ?? task?.data?.stdout ?? task?.result?.stdout ?? task?.output?.stdout ?? task?.stdout ?? '';
       if (output.length > lastOutputLength) io.stderr.write(output.slice(lastOutputLength));
       lastOutputLength = output.length;
@@ -165,14 +112,15 @@ async function waitTask(device, id, options = {}, initial, io = process) {
     if (!ACTIVE.has(task?.status || result.status)) return result;
     if (Date.now() - start > waitMs) throw new CliError('CLIENT_WAIT_TIMEOUT', `Stopped waiting for task ${id}; it may still be running.`, { taskId: id });
     if (Date.now() - lastHeartbeat > 1500) {
-      await api(device, 'POST', '/v1/heartbeat', {});
+      await query('POST', '/v1/heartbeat', {});
       lastHeartbeat = Date.now();
     }
     await sleep(poll); result = null;
   }
 }
 async function runTask(device, op, args, options, io) {
-  const result = await api(device, 'POST', '/v1/tasks', { op, args, timeoutMs: numberOption(options.timeout, undefined, '--timeout', 1) });
+  await discoverServer(device);
+  const result = await api(device, 'POST', '/v1/tasks', { op, args, submissionId: crypto.randomUUID(), timeoutMs: numberOption(options.timeout, undefined, '--timeout', 1) });
   const task = taskFrom(result);
   if (boolOption(options.detach) || !taskId(task) || !ACTIVE.has(task.status || result.status)) return result;
   return waitTask(device, taskId(task), options, result, io);
@@ -385,6 +333,7 @@ async function execute(argv, io) {
     const url = normalizeTarget(words[0]);
     let device = config.devices.find(entry => entry.url === url);
     if (device && !options['pairing-code']) {
+      setSession(device,options,io);
       if (options.fingerprint && normalizeFingerprint(options.fingerprint) !== device.fingerprint) throw new CliError('CERTIFICATE_MISMATCH', 'Supplied fingerprint differs from saved device identity; re-pair explicitly.');
       const info = await api(device, 'GET', '/v1/info');
       device.connected = true; device.lastConnected = new Date().toISOString();
@@ -393,9 +342,11 @@ async function execute(argv, io) {
     }
     if (!options['pairing-code']) throw new CliError('PAIRING_CODE_REQUIRED', 'First connection requires --pairing-code and --fingerprint from the server.');
     const next = { url, fingerprint: normalizeFingerprint(options.fingerprint) };
+    setSession(next,options,io);
     const paired = await api(next, 'POST', '/v1/pair', { name: options.name || os.hostname(), pairingCode: String(options['pairing-code']) });
     if (!paired.data?.token || !paired.data.clientId || !paired.data.deviceId) throw new CliError('INVALID_RESPONSE', 'Pairing response is missing credentials or identity.');
     device = { ...next, ...paired.data, connected: true, lastConnected: new Date().toISOString() };
+    setSession(device,options,io);
     await api(device, 'GET', '/v1/info');
     config.devices = [...config.devices.filter(entry => entry.url !== url), device];
     await saveConfig(dir, config);
@@ -403,10 +354,12 @@ async function execute(argv, io) {
     return { options, result: makeEnvelope(publicDevice, { deviceId: device.deviceId }) };
   }
   const device = selectDevice(config, command === 'disconnect' ? words[0] || options.device : options.device, command === 'disconnect');
+  setSession(device,options,io,dir);
   let result;
   if (command === 'disconnect') {
-    result = await api(device, 'DELETE', '/v1/connection');
     device.connected = false; await saveConfig(dir, config);
+    try{result=await api(device,'DELETE','/v1/connection',undefined,2000,{reconnectMs:0});}
+    catch(e){result=makeEnvelope({disconnected:true,credentialsRetained:true,remoteNotified:false,notificationError:{code:e.code,message:e.message}},{deviceId:device.deviceId});}
   } else if (command === 'info') result = await api(device, 'GET', '/v1/info');
   else if (command === 'clients') {
     if (!words[0] || words[0] === 'list') result = await api(device, 'GET', '/v1/clients');
@@ -437,7 +390,7 @@ async function execute(argv, io) {
     const { op, args } = desktopCommand(command, words, options);
     if (boolOption(options.admin)) args.admin = true;
     result = command === 'logs' && boolOption(options.follow)
-      ? await followLogs(device, op, args, options, io, dir)
+      ? (setSession(device,{...options,'reconnect-timeout':0},io,dir),await followLogs(device, op, args, options, io, dir))
       : await runTask(device, op, args, options, io);
   }
   return { options, result };
