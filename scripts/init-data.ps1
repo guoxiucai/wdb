@@ -1,5 +1,6 @@
-param([string]$DataDir = "$PSScriptRoot\..\.runtime\server")
+param([string]$DataDir)
 $ErrorActionPreference = 'Stop'
+if (!$DataDir) { $DataDir = Join-Path $PSScriptRoot '..\.runtime\server' }
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 if (!(Test-Path (Join-Path $DataDir 'tls.pfx'))) {
   $bytes = New-Object byte[] 32

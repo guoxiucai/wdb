@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([string]$PackageDirectory = (Join-Path $PSScriptRoot '..\dist\wdb-windows-x64'))
+param([string]$PackageDirectory)
 $ErrorActionPreference = 'Stop'
+if (!$PackageDirectory) { $PackageDirectory = Join-Path $PSScriptRoot '..\dist\wdb-windows-x64' }
 $packageRoot = [IO.Path]::GetFullPath($PackageDirectory).TrimEnd('\')
 $prefix = $packageRoot + '\'
 $manifest = Join-Path $packageRoot 'SHA256SUMS.txt'

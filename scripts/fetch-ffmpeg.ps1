@@ -1,11 +1,12 @@
 [CmdletBinding()]
 param(
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\.runtime\ffmpeg'),
+    [string]$OutputDirectory,
     [string]$SourceUri = 'https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip',
     [string]$Sha256 = '60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba'
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot '..\.runtime\ffmpeg' }
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $downloadRoot = Join-Path (Split-Path $PSScriptRoot -Parent) '.runtime\downloads'
 New-Item -ItemType Directory -Force -Path $outputRoot, $downloadRoot | Out-Null

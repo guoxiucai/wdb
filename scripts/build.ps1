@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([string]$OutputDirectory = (Join-Path $PSScriptRoot '..\dist\wdb-windows-x64'), [switch]$HostOnly)
+param([string]$OutputDirectory, [switch]$HostOnly)
 $ErrorActionPreference = 'Stop'
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot '..\dist\wdb-windows-x64' }
 $sourceRoot = Split-Path $PSScriptRoot -Parent
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 function Copy-RuntimeFile([string]$Source, [string]$Destination) {

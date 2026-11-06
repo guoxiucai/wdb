@@ -88,8 +88,8 @@ try {
     $nodeExe = Join-Path $InstallDirectory 'runtime\node.exe'
     $serviceArgs = '"{0}" --node "{1}" --script "{2}" --data-dir "{3}" --port {4}' -f $hostExe, $nodeExe, (Join-Path $serverRoot 'src\server.js'), $DataDirectory, $Port
     if ($oldService) {
-        & sc.exe config WdbService binPath= $serviceArgs start= auto | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Failed to update WdbService.' }
+        . (Join-Path $PSScriptRoot 'service-config.ps1')
+        Set-WdbServiceConfiguration -Name WdbService -BinaryPath $serviceArgs
     } else { New-Service -Name WdbService -DisplayName 'Windows Debug Bridge' -Description 'Authenticated local Windows debugging bridge with isolated desktop helper.' -BinaryPathName $serviceArgs -StartupType Automatic | Out-Null }
     & sc.exe failure WdbService reset= 86400 actions= restart/5000/restart/10000/restart/30000 | Out-Null
     # Allow the paired local desktop account to start/stop/query this service,
@@ -113,4 +113,11 @@ try {
     Start-ScheduledTask -TaskName WdbDesktopHelper
     Write-Output "Installed WdbService and WdbDesktopHelper. Data: $DataDirectory; localhost:$Port."
     Get-Service WdbService | Select-Object Name, Status
+} catch {
+    # Log the terminating error before ending the transcript. The elevated
+    # installer is hidden, so otherwise its only diagnostic disappears.
+    Write-Output "INSTALL FAILED: $($_.Exception.Message)"
+    Write-Output $_.InvocationInfo.PositionMessage
+    Write-Output $_.ScriptStackTrace
+    throw
 } finally { Stop-Transcript | Out-Null }

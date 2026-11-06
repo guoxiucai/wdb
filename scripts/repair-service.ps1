@@ -18,9 +18,14 @@ $hadFallback = Test-Path -LiteralPath (Join-Path $DataDirectory 'local-processes
 & (Join-Path $PSScriptRoot 'stop-local.ps1') -DataDirectory $DataDirectory
 try {
     $process = Start-Process -FilePath "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -Verb RunAs -WindowStyle Hidden -ArgumentList $argsText -PassThru -Wait
+    if ($process.ExitCode -ne 0) { throw "Repair failed with exit code $($process.ExitCode); read $DataDirectory\install.log." }
 } catch {
-    if ($hadFallback) { Write-Warning 'Administrator consent was cancelled or unavailable; restoring the ordinary-user fallback.'; & (Join-Path $PSScriptRoot 'start-local.ps1') -DataDirectory $DataDirectory }
-    throw
+    $repairError = $_
+    if ($hadFallback) {
+        Write-Warning 'Repair did not complete; restoring the ordinary-user fallback when its ports are free.'
+        try { & (Join-Path $PSScriptRoot 'start-local.ps1') -DataDirectory $DataDirectory }
+        catch { Write-Warning "Fallback restore was not possible: $($_.Exception.Message)" }
+    }
+    throw $repairError
 }
-if ($process.ExitCode -ne 0) { throw "Repair failed with exit code $($process.ExitCode); read $DataDirectory\install.log." }
 & (Join-Path $PSScriptRoot 'service.ps1') status -DataDirectory $DataDirectory
