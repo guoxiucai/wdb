@@ -38,3 +38,21 @@ test('task waiter survives a server outage and reports restart uncertainty witho
  f.bridge.route=async(req,res)=>{if(req.method==='POST'&&req.url==='/v1/tasks')posts++;if(req.url==='/v1/tasks/existing'){polls++;if(polls===1){res.end(JSON.stringify({deviceId:f.device.deviceId,data:{id:'existing',status:'running'}}));setTimeout(()=>{f.bridge.server.close();f.bridge.server.closeAllConnections();setTimeout(()=>{restored=true;f.bridge.server.listen(new URL(f.device.url).port,'127.0.0.1');},500);},30);return;}res.end(JSON.stringify({deviceId:f.device.deviceId,data:{id:'existing',status:'unknown',error:{code:'SERVICE_RESTARTED',message:'unknown'}}}));return;}return original(req,res);};
  const result=await f.cli(['task','wait','existing']);assert.equal(restored,true);assert.equal(result.code,1);assert.equal(result.result.data.status,'unknown');assert.equal(posts,0);assert.match(result.stderr,/Connection restored/);
 });
+
+test('devices watches real online/offline recovery and displays hostname, URL and stable ID without credentials',async t=>{
+ const f=await setup(t),original=f.bridge.route.bind(f.bridge);let dropped=false,restored=false,mode='online',stdout='';const events=[];
+ f.bridge.route=(req,res)=>{if(mode==='offline'){req.socket.destroy();return;}return original(req,res);};
+ const code=await main(['devices','--watch','--duration','1200','--poll-ms','50','--probe-timeout','100','--config',f.configDir,'--json'],{stdout:{write:s=>{stdout+=s;const e=JSON.parse(s);if(!Array.isArray(e.data))return;events.push(e.data[0]);if(e.data[0].connectionState==='online'&&!dropped){dropped=true;mode='offline';}else if(e.data[0].connectionState==='offline'&&!restored){restored=true;setTimeout(()=>{mode='online';},200);}}},stderr:{write(){}}});
+ assert.equal(code,0);assert.deepEqual(events.map(d=>d.connectionState),['online','offline','online']);assert.ok(events.every(d=>d.deviceId===f.device.deviceId&&d.url===f.device.url&&d.hostname===os.hostname()));assert.ok(!stdout.includes(f.device.token));assert.equal(events[1].enabled,true);assert.equal(events[1].connected,false);
+ assert.equal((await f.cli(['info','--device',os.hostname()])).code,0);
+ const saved=JSON.parse(fs.readFileSync(path.join(f.configDir,'devices.json')));assert.equal(saved.devices[0].hostname,os.hostname());
+});
+test('devices does not reconnect explicitly disconnected entries or repeatedly probe revoked authorization',async t=>{
+ const f=await setup(t),original=f.bridge.route.bind(f.bridge);let requests=0;f.bridge.route=(req,res)=>{requests++;return original(req,res);};
+ const file=path.join(f.configDir,'devices.json');fs.writeFileSync(file,JSON.stringify({devices:[{...f.device,connected:false}]}));const off=await f.cli(['devices']);assert.equal(off.result.data[0].connectionState,'disconnected');assert.equal(requests,0);
+ fs.writeFileSync(file,JSON.stringify({devices:[f.device]}));f.bridge.clients[0].revokedAt=new Date().toISOString();let output='';
+ await main(['devices','--watch','--duration','350','--poll-ms','50','--config',f.configDir,'--json'],{stdout:{write:s=>output+=s},stderr:{write(){}}});assert.equal(requests,1);assert.equal(JSON.parse(output.trim().split('\n')[0]).data[0].connectionState,'unauthorized');
+});
+test('hostname collisions require an explicit address or device ID',()=>{
+ const {selectDevice}=require('../src/cli');assert.throws(()=>selectDevice({devices:[{hostname:'same',deviceId:'a'},{hostname:'SAME',deviceId:'b'}]},'same'),{code:'AMBIGUOUS_DEVICE'});
+});

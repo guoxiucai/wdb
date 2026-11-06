@@ -12,7 +12,7 @@ const { pipeline } = require('node:stream/promises');
 const DEFAULT_PORT = 18766;
 const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
-const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'help', 'version']);
+const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version']);
 const {CliError,normalizeFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer}=require('./client-transport');
 function parseArgv(argv) {
   const positional = [], options = {};
@@ -77,14 +77,42 @@ function selectDevice(config, selector, allowDisconnected = false) {
   if (selector) {
     let normalized;
     try { normalized = normalizeTarget(selector); } catch { /* selector can be device ID */ }
-    matches = matches.filter(device => device.deviceId === selector || device.url === normalized || device.name === selector);
+    matches = matches.filter(device => device.deviceId === selector || device.url === normalized || device.name === selector || device.hostname?.toLowerCase() === selector.toLowerCase());
   }
   if (!matches.length) throw new CliError('NO_DEVICE', 'No matching connected device. Use wdb connect first.');
-  if (matches.length > 1) throw new CliError('AMBIGUOUS_DEVICE', 'More than one device matches. Supply --device <address|deviceId>.', { candidates: matches.map(({ url, deviceId }) => ({ url, deviceId })) });
+  if (matches.length > 1) throw new CliError('AMBIGUOUS_DEVICE', 'More than one device matches. Supply --device <address|deviceId>.', { candidates: matches.map(({ url, deviceId, hostname }) => ({ url, deviceId, hostname })) });
   return matches[0];
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function deviceSnapshot(dir,options,io,blocked){
+  const config=await readConfig(dir),checkedAt=new Date().toISOString();
+  const entries=await Promise.all(config.devices.map(async device=>{
+    const result={url:device.url,hostname:device.hostname||null,deviceId:device.deviceId,clientId:device.clientId,version:device.version,fingerprint:device.fingerprint,enabled:device.connected!==false,connected:false,connectionState:'disconnected',lastConnected:device.lastConnected,checkedAt};
+    if(!result.enabled){blocked?.delete(device.url);return result;}
+    const identityKey=crypto.createHash('sha256').update(JSON.stringify([device.deviceId,device.token,device.fingerprint,device.lastConnected])).digest('hex');
+    const cached=blocked?.get(device.url);if(cached?.identityKey===identityKey)return {...cached.result,checkedAt};
+    setSession(device,options,io);
+    try{const health=await discoverServer(device,{reconnectMs:0,timeoutMs:numberOption(options['probe-timeout'],2000,'--probe-timeout',1)});Object.assign(result,{connected:true,connectionState:'online',hostname:health.data.hostname||result.hostname,version:health.data.version||result.version,serverProcessId:health.data.serverProcessId});}
+    catch(e){Object.assign(result,{connectionState:e.code==='UNAUTHORIZED'?'unauthorized':['CERTIFICATE_MISMATCH','DEVICE_ID_MISMATCH'].includes(e.code)?'identity_mismatch':e.code==='INCOMPATIBLE_PROTOCOL'?'incompatible':'offline',error:{code:e.code,message:e.message}});}
+    if(['unauthorized','identity_mismatch','incompatible'].includes(result.connectionState))blocked?.set(device.url,{identityKey,result});else blocked?.delete(device.url);
+    return result;
+  }));
+  const latest=await readConfig(dir);let changed=false;
+  for(const entry of entries){const saved=latest.devices.find(d=>d.url===entry.url&&d.deviceId===entry.deviceId);if(!saved)continue;if(saved.connected===false){entry.enabled=false;entry.connected=false;entry.connectionState='disconnected';}
+    if(entry.hostname&&saved.hostname!==entry.hostname){saved.hostname=entry.hostname;changed=true;}
+  }
+  if(changed)await saveConfig(dir,latest);return entries;
+}
+async function watchDevices(dir,options,io){
+  const duration=numberOption(options.duration,Infinity,'--duration',1),interval=numberOption(options['poll-ms'],1000,'--poll-ms',50);let stopped=false,previous='',changes=0;const start=Date.now(),blocked=new Map();
+  const interrupt=()=>{stopped=true;};process.once('SIGINT',interrupt);process.once('SIGTERM',interrupt);
+  try{while(!stopped&&Date.now()-start<duration){const snapshot=await deviceSnapshot(dir,options,io,blocked);const signature=JSON.stringify(snapshot.map(({checkedAt,error,...d})=>({...d,errorCode:error?.code})));
+    if(signature!==previous){printResult(makeEnvelope(snapshot,{status:'running'}),options,io);previous=signature;changes++;}
+    if(!stopped)await sleep(Math.min(interval,Math.max(0,duration-(Date.now()-start))));
+  }return makeEnvelope({stopped:true,changes,reason:stopped?'interrupted':'duration_limit'});}
+  finally{process.removeListener('SIGINT',interrupt);process.removeListener('SIGTERM',interrupt);}
+}
 function taskFrom(envelope) { return envelope.data?.task || envelope.data; }
 function taskId(task) { return task?.id || task?.taskId; }
 async function waitTask(device, id, options = {}, initial, io = process) {
@@ -294,7 +322,7 @@ function desktopCommand(command, words, options) {
 const HELP = `wdb — Windows Debug Bridge (localhost-first)
 
   wdb connect localhost[:18766] --fingerprint <SHA256> --pairing-code <code>
-  wdb devices | disconnect [address] | info
+  wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
   wdb clients list | clients revoke <clientId>
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]
   wdb task list|get <id>|wait <id>|cancel <id>|output <id>|delete <id>
@@ -312,6 +340,8 @@ const HELP = `wdb — Windows Debug Bridge (localhost-first)
   wdb call <operation> --args <JSON> [--args-file <file>]
 
 Global: --json --device <address|id> --config <dir> --timeout <server-ms>
+Recovery: --reconnect-timeout <ms> (default 60000; 0 disables) --request-timeout <ms>
+Devices: --watch --poll-ms <ms> --probe-timeout <ms> (default 2000)
 Tasks: --detach --wait-timeout <client-ms> --follow --poll-ms <ms>
 Credentials: %LOCALAPPDATA%\\wdb\\client (override: WDB_CONFIG).
 Observe task state before retrying side effects after timeouts.
@@ -328,7 +358,7 @@ async function execute(argv, io) {
   }
   const dir = options.config || process.env.WDB_CONFIG || path.join(process.env.LOCALAPPDATA || os.homedir(), 'wdb', 'client');
   const config = await readConfig(dir);
-  if (command === 'devices') return { options, result: makeEnvelope(config.devices.map(({ token, fingerprint, ...device }) => ({ ...device, fingerprint }))) };
+  if (command === 'devices') return { options, result: boolOption(options.watch)?await watchDevices(dir,options,io):makeEnvelope(await deviceSnapshot(dir,options,io)) };
   if (command === 'connect') {
     const url = normalizeTarget(words[0]);
     let device = config.devices.find(entry => entry.url === url);
@@ -336,7 +366,7 @@ async function execute(argv, io) {
       setSession(device,options,io);
       if (options.fingerprint && normalizeFingerprint(options.fingerprint) !== device.fingerprint) throw new CliError('CERTIFICATE_MISMATCH', 'Supplied fingerprint differs from saved device identity; re-pair explicitly.');
       const info = await api(device, 'GET', '/v1/info');
-      device.connected = true; device.lastConnected = new Date().toISOString();
+      device.connected = true; device.lastConnected = new Date().toISOString();device.hostname=info.data.hostname||device.hostname;
       await saveConfig(dir, config);
       return { options, result: makeEnvelope({ url, deviceId: device.deviceId, clientId: device.clientId, reconnected: true, info: info.data }, { deviceId: device.deviceId }) };
     }
@@ -347,7 +377,7 @@ async function execute(argv, io) {
     if (!paired.data?.token || !paired.data.clientId || !paired.data.deviceId) throw new CliError('INVALID_RESPONSE', 'Pairing response is missing credentials or identity.');
     device = { ...next, ...paired.data, connected: true, lastConnected: new Date().toISOString() };
     setSession(device,options,io);
-    await api(device, 'GET', '/v1/info');
+    const info=await api(device, 'GET', '/v1/info');device.hostname=info.data.hostname;
     config.devices = [...config.devices.filter(entry => entry.url !== url), device];
     await saveConfig(dir, config);
     const { token, ...publicDevice } = device;
@@ -401,6 +431,11 @@ function exitCode(result) {
 }
 function printResult(result, options, io) {
   if (options.json) io.stdout.write(`${JSON.stringify(result)}\n`);
+  else if(Array.isArray(result.data)&&result.data.every(d=>d.connectionState)){
+    io.stdout.write('STATE              HOSTNAME             ADDRESS                          DEVICE ID\n');
+    for(const d of result.data)io.stdout.write(`${d.connectionState.padEnd(18)} ${(d.hostname||'(unknown)').padEnd(20)} ${d.url.padEnd(32)} ${d.deviceId}\n`);
+    if(!result.data.length)io.stdout.write('(no paired devices)\n');
+  }
   else {
     io.stdout.write(`${result.status || 'unknown'}${result.deviceId ? ` — ${result.deviceId}` : ''}${taskId(taskFrom(result)) ? ` — task ${taskId(taskFrom(result))}` : ''}\n`);
     if (result.error) io.stderr.write(`${result.error.code}: ${result.error.message}\n`);
