@@ -1,6 +1,21 @@
 # 连接审批验证（2026-11-06）
 
-## 最新修订：仅地址连接，已验证
+## 最新修订：connect简要结果与服务重启，已验证
+
+实现提交`4027e07`：默认connect输出单行connected/already connected/failed/timed out；JSON保留通用信封，data只含address/state。详情通过info返回，连接身份及记住状态位于data.connection。已连接判断先验证在线和授权，连接过程使用health，不重复获取桌面详情或发起审批。
+
+自动回归 **76项：75通过、0失败、1个需人工参与的服务测试默认跳过**（`artifacts/connect-summary-full-tests.log`）。覆盖新连接/重复连接/主动断开后的输出、拒绝与超时、TLS发现超时、已启用但离线时不误报已连接，以及已发送审批请求超时仍保留REQUEST_OUTCOME_UNKNOWN。文档12段PowerShell通过5.1语法检查，Skill校验通过。
+
+2026-11-06 15:30（Asia/Shanghai）完成本机验证：
+
+- 更新安装目录并按用户要求重启WdbService；服务进程PID从32076变为13084，状态Running，设备和已记住的客户端身份保持。
+- 已安装CLI和独立客户端包均返回`already connected to 172.20.115.75:18766`；主动断开后返回`connected to 172.20.115.75:18766`，再次连接恢复already connected。
+- 错误指纹返回单行`failed to connect ... (CERTIFICATE_MISMATCH)`；JSON结果不再包含客户端身份、指纹或嵌套info。
+- info仍提供能力、桌面状态及连接详情；客户端包13步基础闭环通过，重连步骤额外确认`data.state=connected`。
+
+证据：`artifacts/connect-summary-verification.json`、`connect-summary-after-restart.json`、`connect-summary-smoke/report.json`。本轮未重新触发人工首次授权；同意/记住实测见下方历史记录，新增超时输出由自动测试覆盖。
+
+## 仅地址连接修订，已验证
 
 实现提交 `f6b7066` 取消人工 fingerprint/pairingCode 前置条件。最新标准回归 **73项：72通过、0失败、1个需人工参与的服务测试默认跳过**，记录 `artifacts/simple-connect-full-tests.log`。针对性20项通过，包含无配对码审批、无HTTP数据的证书发现、发现超时、拒绝不保存、可选错误指纹、已有证书变化不重新信任、旧参数不绕过弹窗、频率限制和临时/持久授权。
 
