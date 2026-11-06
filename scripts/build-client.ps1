@@ -12,6 +12,7 @@ $license = Join-Path (Split-Path $node -Parent) 'LICENSE'
 if (!(Test-Path -LiteralPath $license)) { $license = Join-Path $sourceRoot '.runtime\NODE-LICENSE.txt' }
 Copy-Item -LiteralPath $license -Destination (Join-Path $outputRoot 'runtime\NODE-LICENSE.txt') -Force
 foreach ($file in @('cli.js','client-transport.js','device-id.js')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "src\$file") -Destination (Join-Path $outputRoot 'src') -Force }
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'package.json') -Destination $outputRoot -Force
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'bin\wdb.cmd') -Destination (Join-Path $outputRoot 'bin') -Force
 foreach ($file in @('verify-package.ps1','validate-lan.js')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "scripts\$file") -Destination (Join-Path $outputRoot 'scripts') -Force }
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'skills\wdb') -Destination (Join-Path $outputRoot 'skills') -Recurse -Force

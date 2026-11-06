@@ -1,10 +1,11 @@
 'use strict';
+require('./runtime-guard').checkRuntime();
 const https=require('node:https');const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');const os=require('node:os');const {Transform}=require('node:stream');const {pipeline}=require('node:stream/promises');
 const {ROOT,argv,fail,atomic,read,sha,hashFile,equal,body,envelope,send}=require('./common');const {runOperation,executionIdentity}=require('./operations');
 const {newDeviceId,normalizeDeviceId}=require('./device-id');
 const {requestApproval,clientName,TEMPORARY_IDLE_MS}=require('./pairing');
 const {TaskEvents}=require('./task-events');
-const VERSION='0.1.0';
+const VERSION=require('../package.json').version;
 class Bridge {
  constructor(options={}){
   this.dir=path.resolve(options.dataDir||path.join(__dirname,'../.runtime/server'));fs.mkdirSync(path.join(this.dir,'tasks'),{recursive:true});

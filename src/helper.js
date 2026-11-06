@@ -1,4 +1,5 @@
 'use strict';
+require('./runtime-guard').checkRuntime();
 const http=require('node:http');const fs=require('node:fs');const path=require('node:path');
 const {argv,equal,body,send,fail}=require('./common');const {runOperation}=require('./operations');
 const args=argv(),dataDir=path.resolve(args['data-dir']||path.join(__dirname,'../.runtime/server'));

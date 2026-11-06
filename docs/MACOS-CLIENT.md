@@ -4,6 +4,8 @@
 
 ## 解压与启动
 
+新版默认分发渠道是 Windows/Mac 共用的 [npm tarball](NPM-CLIENT.md)，需要用户自己的 Node `>=24.15.0 <25`。本节自带 Node 的离线包保留为开发/历史入口。新 npm 包需要在真实 Mac 独立验收，不能沿用旧 portable 包记录。
+
 将整个 `wdb-client-macos-arm64` 目录保存在固定位置，保留执行位。包自带 Node v24.15.0，不需要 Node、npm 或 Homebrew，运行时不下载依赖。
 
 ```sh

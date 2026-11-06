@@ -13,7 +13,7 @@ for(let i=0;i<argv.length;i+=2){if(!argv[i].startsWith('--')||!argv[i+1])throw E
 if(!options.device)throw Error('--device is required');
 const output=path.resolve(options.output||path.join(process.cwd(),'lan-validation-'+Date.now()));
 fs.mkdirSync(output,{recursive:true});
-const cli=path.resolve(__dirname,'../src/cli.js');
+const cli=path.resolve(options.cli||path.join(__dirname,'../src/cli.js'));
 const common=['--device',options.device,'--json','--reconnect-timeout','15000',...(options.config?['--config',path.resolve(options.config)]:[])];
 const report={startedAt:new Date().toISOString(),client:{platform:process.platform,arch:process.arch,hostname:os.hostname(),node:process.version},target:options.device,steps:[],passed:false};
 let remoteDir;

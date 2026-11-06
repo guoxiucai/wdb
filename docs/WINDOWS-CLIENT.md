@@ -1,6 +1,6 @@
 # Windows CLI 使用与 LAN 验证
 
-目标平台：Windows 10 22H2、Windows 11 24H2/25H2，x64。包内已有 Node，无需安装 Node、npm、Python，也不需要在客户端安装 WdbService。当前包在本机 Windows 验证；跨电脑测试按下面流程执行。
+目标平台：Windows 10 22H2、Windows 11 24H2/25H2，x64。新版默认采用 [npm 客户端](NPM-CLIENT.md)，需要用户先安装 Node/npm；客户端不安装 WdbService。以下自带 Node 的 portable 流程保留为开发/历史入口；新 tarball 的验证记录与旧离线包分别计算。
 
 逐步执行并记录验收结果，请使用 [Windows CLI 局域网验证指导](WINDOWS-CLI-VALIDATION.md)，包含授权、13步基础检查、断网/服务重启与异常恢复的命令和通过标准。
 

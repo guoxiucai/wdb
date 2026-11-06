@@ -1,0 +1,9 @@
+{
+  "name": "wdb-cli-local-test",
+  "version": "0.0.0",
+  "description": "WDB command-line client for Windows servers",
+  "type": "commonjs",
+  "bin": { "wdb": "bin/wdb.js" },
+  "engines": { "node": ">=24.15.0 <25" },
+  "files": ["bin/wdb.js", "src", "docs", "skills", "BUILD-INFO.json", "README.md", "LICENSE"]
+}

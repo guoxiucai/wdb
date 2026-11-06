@@ -466,7 +466,7 @@ Observe task state before retrying side effects after timeouts.
 
 async function execute(argv, io, parsed = parseArgv(argv)) {
   const { positional, options } = parsed;
-  if (options.version) return { result: makeEnvelope({ version: '0.1.0' }), options };
+  if (options.version) return { result: makeEnvelope({ version: require('../package.json').version }), options };
   if (options.help || !positional.length) return { help: HELP, options };
   const [command, ...words] = positional;
   if (options['args-file']) {

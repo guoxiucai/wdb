@@ -35,6 +35,7 @@ mkdir -p "$STAGE/runtime" "$STAGE/src" "$STAGE/bin" "$STAGE/scripts" "$STAGE/doc
 tar -xzf "$ARCHIVE" -C "$STAGE/runtime" --strip-components 2 "node-v$NODE_VERSION-darwin-arm64/bin/node"
 tar -xOf "$ARCHIVE" "node-v$NODE_VERSION-darwin-arm64/LICENSE" > "$STAGE/runtime/NODE-LICENSE.txt"
 for FILE in cli.js client-transport.js device-id.js; do cp "$SOURCE_ROOT/src/$FILE" "$STAGE/src/"; done
+cp "$SOURCE_ROOT/package.json" "$STAGE/"
 cp "$SOURCE_ROOT/bin/wdb" "$STAGE/bin/"
 for FILE in validate-lan.js verify-package.js; do cp "$SOURCE_ROOT/scripts/$FILE" "$STAGE/scripts/"; done
 cp -R "$SOURCE_ROOT/skills/wdb" "$STAGE/skills/"
