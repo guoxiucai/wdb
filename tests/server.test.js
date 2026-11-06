@@ -10,6 +10,8 @@ test('HTTPS authentication, task isolation, files, cancellation, persistence',as
  const pair=await request('POST','/v1/pair',{name:'A',pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')});assert.equal(pair.status,200);const token=pair.data.data.token;
  const b=(await request('POST','/v1/pair',{name:'B',pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')})).data.data;
  assert.equal((await request('GET','/v1/info',null,token)).data.data.protocolVersion,1);
+ bridge.leases.set(pair.data.data.clientId,1);
+ const health=(await request('GET','/v1/health',null,token)).data.data;assert.equal(health.hostname,os.hostname());assert.equal(health.taskSubmissionDeduplication,true);assert.equal(bridge.leases.get(pair.data.data.clientId),1,'Status monitoring must not prolong an input control lease');
  const task=(await request('POST','/v1/tasks',{op:'logs.file',args:{path:path.join(dir,'pairing-code')}},token)).data.data;
  assert.equal((await request('GET','/v1/tasks/'+task.id,null,b.token)).status,404);
  let final;for(let n=0;n<100;n++){final=(await request('GET','/v1/tasks/'+task.id,null,token)).data.data;if(!['accepted','running'].includes(final.status))break;await new Promise(r=>setTimeout(r,100));}

@@ -15,16 +15,24 @@ class Bridge {
  save(t){atomic(path.join(this.dir,'tasks',t.id,'task.json'),t);}
  audit(event){fs.appendFileSync(path.join(this.dir,'audit.jsonl'),JSON.stringify({...event,deviceId:this.config.deviceId,time:new Date().toISOString()})+'\n');}
  persistClients(){atomic(path.join(this.dir,'clients.json'),this.clients);}
- auth(req){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const c=this.clients.find(c=>!c.revokedAt&&equal(c.tokenHash,sha(token)));if(!c)throw fail('UNAUTHORIZED','Valid paired client token required',401);this.leases.set(c.id,Date.now());let sockets=this.clientSockets.get(c.id);if(!sockets){sockets=new Set();this.clientSockets.set(c.id,sockets);}if(!sockets.has(req.socket)){sockets.add(req.socket);req.socket.once('close',()=>{sockets.delete(req.socket);if(sockets.size===0)this.clientSockets.delete(c.id);});}return c;}
+ auth(req,refreshLease=true){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const c=this.clients.find(c=>!c.revokedAt&&equal(c.tokenHash,sha(token)));if(!c)throw fail('UNAUTHORIZED','Valid paired client token required',401);if(refreshLease)this.leases.set(c.id,Date.now());let sockets=this.clientSockets.get(c.id);if(!sockets){sockets=new Set();this.clientSockets.set(c.id,sockets);}if(!sockets.has(req.socket)){sockets.add(req.socket);req.socket.once('close',()=>{sockets.delete(req.socket);if(sockets.size===0)this.clientSockets.delete(c.id);});}return c;}
  owned(id,client){const t=this.tasks.get(id);if(!t||t.clientId!==client.id)throw fail('TASK_NOT_FOUND','Task not found for this client',404);return t;}
  cancel(t,reason='CANCEL_REQUESTED'){const a=this.active.get(t.id);if(!a)return;fs.writeFileSync(path.join(a.dir,'cancel'),reason);a.controller.abort();t.cancelRequested=true;t.cancelReason=reason;this.save(t);}
  async submit(client,b){
   if(typeof b.op!=='string'||!b.op)throw fail('INVALID_ARGUMENT','Task operation required');
+  let submissionHash;
+  if(b.submissionId!==undefined){
+   if(typeof b.submissionId!=='string'||!/^[a-f0-9-]{36}$/i.test(b.submissionId))throw fail('INVALID_SUBMISSION_ID','submissionId must be a UUID');
+   submissionHash=sha(JSON.stringify({op:b.op,args:b.args||{},timeoutMs:b.timeoutMs}));
+   const existing=[...this.tasks.values()].find(t=>t.clientId===client.id&&t.submissionId===b.submissionId);
+   if(existing){if(existing.submissionHash!==submissionHash)throw fail('SUBMISSION_CONFLICT','Submission ID was already used with different arguments',409);return existing;}
+  }
   this.cleanup();if(this.artifactBytes()>=this.config.maxArtifactBytes)throw fail('ARTIFACT_SPACE_EXHAUSTED','Task storage quota exhausted',507);
   const defaultTimeout=b.op==='record.start'?(Number(b.args?.durationSeconds||600)*1000+30000):120000;
   const timeoutMs=Number(b.timeoutMs||b.args?.timeoutMs||defaultTimeout);if(!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>24*3600*1000)throw fail('INVALID_TIMEOUT','Timeout must be 1..86400000 ms');
   const id=crypto.randomUUID(),dir=path.join(this.dir,'tasks',id);fs.mkdirSync(dir);
   const t={id,taskId:id,requestId:id,deviceId:this.config.deviceId,clientId:client.id,op:b.op,status:'accepted',createdAt:new Date().toISOString(),durationMs:0,artifacts:[],error:null};
+  if(b.submissionId!==undefined){t.submissionId=b.submissionId;t.submissionHash=submissionHash;}
   this.tasks.set(id,t);this.save(t);const controller=new AbortController();this.active.set(id,{controller,dir});this.leases.set(client.id,Date.now());
   setImmediate(async()=>{
    if(controller.signal.aborted){t.status='cancelled';t.endedAt=new Date().toISOString();t.error={code:'CANCELLED',message:'Cancelled before execution'};this.active.delete(id);this.save(t);return;}
@@ -50,7 +58,8 @@ class Bridge {
     const b=await body(req);if(!equal(b.pairingCode||'',this.pairingCode))throw fail('PAIRING_DENIED','Invalid device pairing code',401);
     const token=crypto.randomBytes(32).toString('base64url');const c={id:crypto.randomUUID(),name:String(b.name||'wdb client').slice(0,120),tokenHash:sha(token),createdAt:new Date().toISOString()};this.clients.push(c);this.persistClients();this.audit({requestId,clientId:c.id,op:'pair',status:'succeeded'});return respond({clientId:c.id,token,deviceId:this.config.deviceId,version:VERSION});
    }
-   client=this.auth(req);
+   client=this.auth(req,u.pathname!=='/v1/health');
+   if(u.pathname==='/v1/health'&&req.method==='GET')return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),serverProcessId:process.pid,taskSubmissionDeduplication:true});
    if(u.pathname==='/v1/info'&&req.method==='GET'){
     const dir=path.join(this.dir,'tasks','.status');fs.mkdirSync(dir,{recursive:true});let desktop;
     try{desktop=await runOperation('desktop.status',{}, {id:'status',dir,timeoutMs:5000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){desktop={available:false,error:{code:e.code,message:e.message}};}
