@@ -20,6 +20,7 @@ $env:PATH = (Resolve-Path .\bin).Path + ';' + $env:PATH
 
 1. 在服务器本地执行 `scripts\show-pairing.ps1 -RevealCode`，取得 `fingerprint` 与 `pairingCode`，通过可信方式给测试操作者。指纹是证书 DER 的 SHA-256，不是设备 ID。
 2. 在客户端执行下面命令。配对码使用输入变量，避免将字面值写入命令历史；不要把凭据写入共享日志。这里的地址指 Windows **服务器**。
+3. 服务器会弹出“WDB连接授权”，由本机操作者点击同意或拒绝；勾选记住可让后续连接免重复确认。等待超时或拒绝时CLI返回失败，详见 [连接授权](CONNECTION-APPROVAL.md)。
 
 ```powershell
 $server = '172.20.115.75'
@@ -44,6 +45,8 @@ wdb info --device $server --json
 ```
 
 检查 `lan-result\report.json` 的 `passed:true`，并打开 `desktop.png` 确认确实是目标服务器桌面。覆盖身份、默认用户 shell、中文目录/1 MiB 文件往返及字节校验、显示器/窗口枚举、截图拉取、主动断开与复用凭据重连。截图可能包含应用数据，测试报告目录自行保管。
+
+如果首次同意时没有勾选记住，脚本的断开→重连阶段会再次弹窗，需要本机操作者再次确认；无人值守跑完整脚本时使用已经记住的客户端授权。
 
 之后按 [LAN 验收清单](LAN.md) 继续网络中断、服务重启、应用与吞吐测试。本机地址自连接和 1 MiB 文件不能证明真实 LAN 吞吐或远端防火墙放行。
 

@@ -9,7 +9,8 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { main } = require('../src/cli');
 
-test('installed localhost service: CLI pairing, user shell, transfer, logs, lifecycle', { skip: !process.env.WDB_TEST_DATA_DIR, timeout: 60000 }, async () => {
+// A server operator must allow and remember the newly paired test client.
+test('installed localhost service: CLI pairing, user shell, transfer, logs, lifecycle', { skip: !process.env.WDB_TEST_DATA_DIR, timeout: 240000 }, async () => {
   const serverData = process.env.WDB_TEST_DATA_DIR;
   const target = process.env.WDB_TEST_URL || 'https://localhost:18766';
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'wdb-live-cli-'));
@@ -26,6 +27,7 @@ test('installed localhost service: CLI pairing, user shell, transfer, logs, life
     const pairingCode = (await fs.readFile(path.join(serverData, 'pairing-code'), 'utf8')).trim();
     const paired = await cli(['connect', target, '--fingerprint', fingerprint, '--pairing-code', pairingCode, '--name', 'wdb-cli-integration']);
     assert.equal(paired.code, 0, JSON.stringify(paired.result)); clientId = paired.result.data.clientId;
+    assert.notEqual(paired.result.data.remembered,false,'For this opt-in integration test, the server operator must check Remember so its reconnect step does not require a second manual dialog.');
     const info = await cli(['info']); assert.equal(info.code, 0); assert.equal(info.result.data.protocolVersion, 1);
     const shell = await cli(['shell', '--script', "[Console]::WriteLine('中文 shell verified'); whoami"]);
     assert.equal(shell.code, 0, JSON.stringify(shell.result)); assert.match(shell.result.data.data.stdout, /中文 shell verified/);
