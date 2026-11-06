@@ -301,7 +301,9 @@ function desktopCommand(command, words, options) {
   // JSON argument files avoid shell quoting and command-line length limitations.
   const mapped = { window: 'window', path: 'path', name: 'name', title: 'title', process: 'process', method: 'method', action: 'action', text: 'text', cwd: 'cwd', scope: 'scope', state: 'state', value: 'value', 'layout-id': 'layoutId', automationId: 'automationId', controlType: 'controlType', id: 'id', encoding: 'encoding', log: 'log', source: 'source', startTime: 'startTime', endTime: 'endTime', keyword: 'keyword' };
   for (const [flag, property] of Object.entries(mapped)) if (options[flag] !== undefined) args[property] = options[flag];
-  for (const key of ['endpoint','target','selector','backend','expression']) if (options[key] !== undefined) args[key] = options[key];
+  for (const key of ['endpoint','target','selector','backend','expression','isolate','description','contains']) if (options[key] !== undefined) args[key] = options[key];
+  for (const [flag,key] of Object.entries({'widget-type':'widgetType','source-file':'sourceFile','tree-mode':'treeMode'})) if(options[flag]!==undefined)args[key]=options[flag];
+  if(options.line!==undefined)args.line=numberOption(options.line,undefined,'--line',1);
   for (const key of ['port','connectTimeoutMs','commandTimeoutMs']) if (options[key] !== undefined) args[key] = numberOption(options[key],undefined,`--${key}`,1);
   if (options['expression-file']) args.expression = fs.readFileSync(options['expression-file'],'utf8').replace(/^\uFEFF/,'');
   for (const key of ['x', 'y', 'width', 'height', 'toX', 'toY', 'delta', 'durationMs', 'timeoutMs', 'holdMs', 'depth', 'limit', 'fps', 'durationSeconds', 'monitor', 'pid', 'lines', 'limitBytes', 'offset', 'level', 'eventId']) if (options[key] !== undefined) args[key] = numberOption(options[key], undefined, `--${key}`, -1000000);
@@ -315,6 +317,7 @@ function desktopCommand(command, words, options) {
     case 'windows': if (!words[0] || words[0] === 'list') return { op: 'windows.list', args }; args.action = words[0]; if (words[1]) args.window = words[1]; return { op: 'windows.action', args };
     case 'ui': return { op: `ui.${words[0] || 'tree'}`, args };
     case 'electron': if(words[0]==='launch'&&words[1])args.path=words[1];return {op:`electron.${words[0]||'targets'}`,args};
+    case 'flutter': return {op:`flutter.${words[0]||'info'}`,args};
     case 'mouse': if (words[0]) args.action = words[0] === 'doubleclick' ? 'doubleClick' : words[0]; return { op: 'input.mouse', args };
     case 'key': if (words[0]) args.keys = words[0].split('+'); if (words[1]) args.action = words[1]; return { op: 'input.key', args };
     case 'text': if (words[0] !== undefined) args.text = words.join(' '); return { op: 'input.text', args };
@@ -342,6 +345,7 @@ const HELP = `wdb — Windows Debug Bridge (localhost-first)
   wdb ui tree|find|action|wait --args <JSON>
   wdb electron launch <exe> --port <port> [--arguments <JSON-array>]
   wdb electron targets|observe|tree|find|action|wait|eval|screenshot|logs --args <JSON>
+  wdb flutter info|isolates|observe|tree|find|properties|wait|logs|memory|screenshot|action --args-file <JSON>
     --endpoint http://127.0.0.1:9222 --target <id> --selector <CSS> --backend auto|cdp|uia|visual
   wdb mouse click|doubleclick|drag|scroll --args <JSON>
   wdb key Ctrl+A | text <text> | touch --args-file <trajectory.json>

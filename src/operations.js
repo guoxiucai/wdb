@@ -103,11 +103,12 @@ async function record(op,args,ctx){
 }
 async function runOperation(op,args,ctx,config={}){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
- const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.','electron.'].some(p=>op.startsWith(p));
+ const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.','electron.','flutter.'].some(p=>op.startsWith(p));
  const userShell=op==='shell'&&!args.admin;
  if(!config.isHelper&&(desktop||userShell))return helperRequest(op,args,ctx,config);
  if(op==='shell')return shell(args,ctx);
  if(op.startsWith('electron.'))return require('./electron').runElectron(op.slice(9),args,ctx,{native});
+ if(op.startsWith('flutter.'))return require('./flutter').runFlutter(op.slice(8),args,ctx,{native});
  if(op==='apps.list'){
    if(config.isHelper)return {...await installedApps(),userScopeAvailable:true};
    try{return await helperRequest(op,args,ctx,config);}catch(e){if(e.code!=='DESKTOP_HELPER_UNAVAILABLE')throw e;return {...await installedApps(),userScopeAvailable:false,warning:e.message};}
