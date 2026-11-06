@@ -18,7 +18,7 @@
 | 项目 | 当前结果 | 证据/后续 |
 |---|---|---|
 | A01 三类应用 | 已进行真实应用观察与控件验证；见[应用报告](desktop-verification.md) | `artifacts/app-smoke/`，不替代用户指定业务流程 |
-| A02 控件能力 | 自建窗口通过；希沃/鸿镜Invoke成功；EasiClass新增CDP、优化后UIA Invoke和视觉操作均通过 | [Electron复验](ELECTRON-VERIFICATION.md)与[早期应用报告](desktop-verification.md)；应用版本/流程不同，分别留证 |
+| A02 控件能力 | 自建窗口通过；希沃/鸿镜Invoke成功；EasiClass三通道通过；鸿镜Debug新增Inspector及自动视觉兜底闭环 | [Flutter复验](FLUTTER-VERIFICATION.md)、[Electron复验](ELECTRON-VERIFICATION.md)与[早期应用报告](desktop-verification.md)；不同流程分别留证 |
 | A03 部署闭环 | 指定 EasiClass 强制覆盖、启动、卸载通过 | [部署报告](app-deployment-verification.md)；旧包覆盖验证不等于递增版本升级策略验收 |
 | A04 10 指书写 | 本机自建画布通过；实际业务应用待验 | [复验报告](touch-verification-20261106.md)：关闭系统多指手势后，30秒60Hz、10条完整笔迹；原开关已恢复 |
 | A05 书写和录屏并行 | 本机自建画布通过 | CLI完整链路，10指与35秒1080p/30fps录屏并行；事件、截图、录像内容均核实 |
@@ -48,7 +48,7 @@ Git跟踪方案、源代码、测试、文档与报告；`artifacts/` 保存截�
 
 使用DXGI采集与CFR恒定帧率输出。编码器进度明确记录33个重复帧、0个丢弃帧，不能据此宣称每帧都代表独立的新屏幕采样。首轮GDI方案只有约17fps；中间DXGI透传方案17983帧/600秒，保留为调优证据，没有把这两次当作最终达标样本。
 
-2026-11-06 Electron能力更新后标准 `npm test`：45通过、0失败、1项真实服务集成默认跳过；另行启用的真实CLI集成已在SYSTEM服务上通过，Skill格式校验通过，原生桌面含取消防延迟点击回归通过。EasiClass的三通道、中文输入和诊断能力见[Electron复验](ELECTRON-VERIFICATION.md)。所有性能和功能结果仅代表本次实际设备/负载。
+2026-11-06 Flutter能力更新后标准 `npm test`：58通过、0失败、1项真实服务集成默认跳过；另行启用的真实CLI集成在SYSTEM服务上通过，Skill格式校验通过。原生桌面含取消防延迟点击回归此前通过。鸿镜Debug三通道闭环见[Flutter复验](FLUTTER-VERIFICATION.md)，EasiClass结果见[Electron复验](ELECTRON-VERIFICATION.md)。所有结果仅代表本次实际设备/负载。
 
 设备标识现为固定16个小写十六进制字符、无分隔符。本机旧 UUID 已迁移为 `2f493aacf427f3e9`，真实服务重启后确认服务/客户端保存的 ID 一致，原客户端授权令牌和证书指纹未变，历史任务 ID 和状态保留；短 ID 的断开、重新连接与明确设备选择通过。证据：`artifacts/device-id-migration-verification.json`，回归与真实CLI测试输出分别为 `artifacts/device-id-regression.log`、`artifacts/device-id-live.log`。详见[设备标识说明](RECONNECTION.md)。
 

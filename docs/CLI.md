@@ -20,6 +20,8 @@
 
 Electron 应用使用 `wdb electron launch|targets|observe|tree|find|action|wait|eval|screenshot|logs`，支持服务端本机 CDP、UIA 与视觉坐标操作。完整参数、兜底规则、自研应用配置和验证方法见 [Electron 调试指南](ELECTRON.md)。
 
+Flutter 应用使用 `wdb flutter info|isolates|observe|tree|find|properties|wait|logs|memory|screenshot|action`。协议观察接入Dart VM Service/Inspector，操作使用UIA与视觉，详见 [Flutter指南](FLUTTER.md)。
+
 ## 结果和任务
 
 所有命令支持 `--json`；常规命令 stdout 只有最终 JSON，文件进度及重连提示输出到 stderr。JSON 信封包含 `requestId`、`deviceId`、`status`、`error`、`durationMs`、`artifacts` 和 `data`。任务对象在 `data` 内，任务结果在其中的 `data`。失败退出码为 1，成功/接受退出码为 0。`reboot_required` 表示需重启，不自动重启设备。`logs ... --follow --json` 和 `devices --watch --json` 按行输出事件/快照及最终结束结果。
