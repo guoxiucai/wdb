@@ -13,3 +13,9 @@ test('helper startup refusal is retried before dispatch, but a lost reply is not
  const ctx={id:'startup-test',dir:__dirname,timeoutMs:2000},config={helperPort:port,helperSecret:'test-only'};assert.equal((await runOperation('screens',{},ctx,config)).ready,true);assert.equal(requests,1);
  drop=true;await assert.rejects(runOperation('input.mouse',{x:1,y:1},ctx,config),{code:'DESKTOP_HELPER_UNAVAILABLE'});assert.equal(requests,2);
 });
+
+test('cancellation while helper is starting prevents later action dispatch',async t=>{
+ const net=require('node:net'),controller=new AbortController(),reservation=net.createServer();await new Promise(r=>reservation.listen(0,'127.0.0.1',r));const port=reservation.address().port;await new Promise(r=>reservation.close(r));let requests=0;
+ const server=http.createServer((req,res)=>{requests++;req.resume();res.end(JSON.stringify({ok:true,data:{}}));});const pending=runOperation('input.mouse',{}, {id:'cancel-startup',dir:__dirname,timeoutMs:1000,signal:controller.signal},{helperPort:port,helperSecret:'test-only'});
+ await new Promise(r=>setTimeout(r,30));controller.abort();await new Promise(r=>server.listen(port,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));await assert.rejects(pending,{code:'CANCELLED'});assert.equal(requests,0);
+});

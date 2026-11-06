@@ -21,6 +21,7 @@ async function helperRequest(op,args,ctx,config){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
  const started=Date.now();
  while(true){
+ if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled while waiting for the desktop helper');
  try{return await new Promise((resolve,reject)=>{
    const req=http.request({host:'127.0.0.1',port:config.helperPort||18767,path:'/execute',method:'POST',headers:{authorization:'Bearer '+config.helperSecret,'content-type':'application/json'}},res=>{
      res.setEncoding('utf8');let raw='',bytes=0;res.on('data',c=>{raw+=c;bytes+=Buffer.byteLength(c);if(bytes>16*1024*1024)res.destroy(fail('HELPER_RESPONSE_TOO_LARGE','Desktop helper JSON exceeds 16 MiB'));});res.on('error',reject);res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw fail(r.error.code,r.error.message);resolve(r.data);}catch(e){reject(e);}});
