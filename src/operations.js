@@ -21,7 +21,7 @@ async function helperRequest(op,args,ctx,config){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
  return new Promise((resolve,reject)=>{
    const req=http.request({host:'127.0.0.1',port:config.helperPort||18767,path:'/execute',method:'POST',headers:{authorization:'Bearer '+config.helperSecret,'content-type':'application/json'}},res=>{
-     let raw='';res.on('data',c=>{raw+=c;if(raw.length>16*1024*1024)res.destroy();});res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw fail(r.error.code,r.error.message);resolve(r.data);}catch(e){reject(e);}});
+     res.setEncoding('utf8');let raw='',bytes=0;res.on('data',c=>{raw+=c;bytes+=Buffer.byteLength(c);if(bytes>16*1024*1024)res.destroy(fail('HELPER_RESPONSE_TOO_LARGE','Desktop helper JSON exceeds 16 MiB'));});res.on('error',reject);res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw fail(r.error.code,r.error.message);resolve(r.data);}catch(e){reject(e);}});
    });
    req.on('error',e=>reject(fail('DESKTOP_HELPER_UNAVAILABLE',e.message)));req.setTimeout(ctx.timeoutMs+15000,()=>req.destroy(new Error('Desktop helper timeout')));
    req.end(JSON.stringify({op,args,taskId:ctx.id,dir:ctx.dir,timeoutMs:ctx.timeoutMs}));
