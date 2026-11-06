@@ -11,6 +11,7 @@ if ($service) {
 }
 $task = Get-ScheduledTask WdbDesktopHelper -ErrorAction SilentlyContinue
 if ($task) { Stop-ScheduledTask WdbDesktopHelper; Unregister-ScheduledTask WdbDesktopHelper -Confirm:$false }
+Get-NetFirewallRule -Name 'WdbService-LAN' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 if ($RemoveData) {
     $resolved = [IO.Path]::GetFullPath($DataDirectory).TrimEnd('\')
     $expected = [IO.Path]::GetFullPath("$env:ProgramData\wdb").TrimEnd('\')

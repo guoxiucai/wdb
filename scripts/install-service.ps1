@@ -5,6 +5,7 @@ param(
     [string]$DesktopUser = '',
     [int]$Port = 18766,
     [int]$HelperPort = 18767,
+    [string]$ListenAddress,
     [switch]$Development
 )
 $ErrorActionPreference = 'Stop'
@@ -17,6 +18,13 @@ if ($Port -lt 1024 -or $Port -gt 65535 -or $HelperPort -lt 1024 -or $HelperPort 
 $sourceRoot = Split-Path $PSScriptRoot -Parent
 $InstallDirectory = [IO.Path]::GetFullPath($InstallDirectory)
 $DataDirectory = [IO.Path]::GetFullPath($DataDirectory)
+if (!$ListenAddress) {
+    $previousInstallation = Join-Path $DataDirectory 'installation.json'
+    if (Test-Path -LiteralPath $previousInstallation) { $ListenAddress = (Get-Content -LiteralPath $previousInstallation -Raw | ConvertFrom-Json).listenAddress }
+    if (!$ListenAddress) { $ListenAddress = '127.0.0.1' }
+}
+$parsedAddress = $null
+if (![Net.IPAddress]::TryParse($ListenAddress, [ref]$parsedAddress)) { throw 'ListenAddress must be an IP address.' }
 New-Item -ItemType Directory -Force -Path $InstallDirectory, $DataDirectory, (Join-Path $DataDirectory 'logs') | Out-Null
 $logPath = Join-Path $DataDirectory 'install.log'
 Start-Transcript -Path $logPath -Append | Out-Null
@@ -86,7 +94,7 @@ try {
     if (Test-Path -LiteralPath $initScript) { & $initScript -DataDir $DataDirectory }
     $hostExe = Join-Path $InstallDirectory 'native\WdbServiceHost.exe'
     $nodeExe = Join-Path $InstallDirectory 'runtime\node.exe'
-    $serviceArgs = '"{0}" --node "{1}" --script "{2}" --data-dir "{3}" --port {4}' -f $hostExe, $nodeExe, (Join-Path $serverRoot 'src\server.js'), $DataDirectory, $Port
+    $serviceArgs = '"{0}" --node "{1}" --script "{2}" --data-dir "{3}" --port {4} --host {5}' -f $hostExe, $nodeExe, (Join-Path $serverRoot 'src\server.js'), $DataDirectory, $Port, $ListenAddress
     if ($oldService) {
         . (Join-Path $PSScriptRoot 'service-config.ps1')
         Set-WdbServiceConfiguration -Name WdbService -BinaryPath $serviceArgs
@@ -108,10 +116,10 @@ try {
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $DesktopUser
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -Hidden
     Register-ScheduledTask -TaskName WdbDesktopHelper -Action $action -Principal $taskPrincipal -Trigger $trigger -Settings $settings -Description 'wdb interactive-session desktop bridge; never runs as SYSTEM.' -Force | Out-Null
-    [ordered]@{ installedAt = [DateTime]::UtcNow.ToString('o'); installDirectory = $InstallDirectory; dataDirectory = $DataDirectory; serverRoot = $serverRoot; desktopUser = $DesktopUser; port = $Port; helperPort = $HelperPort; development = [bool]$Development } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $DataDirectory 'installation.json') -Encoding UTF8
+    [ordered]@{ installedAt = [DateTime]::UtcNow.ToString('o'); installDirectory = $InstallDirectory; dataDirectory = $DataDirectory; serverRoot = $serverRoot; desktopUser = $DesktopUser; port = $Port; helperPort = $HelperPort; development = [bool]$Development; listenAddress = $ListenAddress } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $DataDirectory 'installation.json') -Encoding UTF8
     Start-Service WdbService
     Start-ScheduledTask -TaskName WdbDesktopHelper
-    Write-Output "Installed WdbService and WdbDesktopHelper. Data: $DataDirectory; localhost:$Port."
+    Write-Output "Installed WdbService and WdbDesktopHelper. Data: $DataDirectory; ${ListenAddress}:$Port."
     Get-Service WdbService | Select-Object Name, Status
 } catch {
     # Log the terminating error before ending the transcript. The elevated

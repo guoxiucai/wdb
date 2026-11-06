@@ -71,12 +71,15 @@ internal sealed class WdbServiceHost : ServiceBase
         string script = Option("--script", "");
         string data = Option("--data-dir", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "wdb"));
         string port = Option("--port", helper ? "18767" : "18766");
+        string address = helper ? "127.0.0.1" : Option("--host", "127.0.0.1");
+        System.Net.IPAddress parsedAddress;
+        if (!System.Net.IPAddress.TryParse(address, out parsedAddress)) throw new ArgumentException("--host must be an IP address");
         Log("Supervisor started; identity=" + System.Security.Principal.WindowsIdentity.GetCurrent().Name + "; session=" + Process.GetCurrentProcess().SessionId);
         while (!stopped.WaitOne(0)) {
             try {
                 if (!File.Exists(script)) { stopped.WaitOne(2000); continue; }
                 ProcessStartInfo start = new ProcessStartInfo(node,
-                    Quote(script) + " --data-dir " + Quote(data) + " --host 127.0.0.1 --port " + port);
+                    Quote(script) + " --data-dir " + Quote(data) + " --host " + Quote(address) + " --port " + port);
                 start.WorkingDirectory = Path.GetDirectoryName(script);
                 start.UseShellExecute = false; start.CreateNoWindow = true;
                 start.RedirectStandardOutput = true; start.RedirectStandardError = true;
