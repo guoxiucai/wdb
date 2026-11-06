@@ -85,14 +85,15 @@ public static class DesktopBridge {
         string decision="denied";bool remembered=false;
         DateTime deadline=DateTime.UtcNow.AddMilliseconds(Math.Max(1000,Math.Min(120000,I(a,"timeoutMs",120000))));
         Application.EnableVisualStyles();
-        using(var form=new Form()) using(var timer=new System.Windows.Forms.Timer()) {
+        using(var form=new Form()) using(var timer=new System.Windows.Forms.Timer()) using(var nameTip=new ToolTip{ShowAlways=true,AutoPopDelay=15000}) {
             form.Text="WDB 连接授权";form.AutoSize=true;form.AutoSizeMode=AutoSizeMode.GrowAndShrink;
             form.Font=new Font("Microsoft YaHei UI",10F);form.AutoScaleMode=AutoScaleMode.Dpi;
             form.FormBorderStyle=FormBorderStyle.FixedDialog;form.MaximizeBox=false;form.MinimizeBox=false;
             form.StartPosition=FormStartPosition.CenterScreen;form.TopMost=true;form.ShowInTaskbar=true;
             var flow=new FlowLayoutPanel{FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(20)};
             var heading=new Label{Text="允许此客户端连接？",AutoSize=true,MaximumSize=new Size(360,0),Font=new Font("Microsoft YaHei UI",11F,FontStyle.Bold)};
-            var identity=new Label{Text="客户端："+S(a,"name"),AutoEllipsis=true,Size=new Size(360,26),AccessibleName="客户端："+S(a,"name")};
+            var identity=new Label{Text=S(a,"name"),AutoEllipsis=true,Size=new Size(360,26),AccessibleName=S(a,"name")};
+            nameTip.SetToolTip(identity,identity.Text);
             var address=new Label{Text="来源："+S(a,"remoteAddress"),AutoEllipsis=true,Size=new Size(360,26),ForeColor=SystemColors.GrayText};
             var remember=new CheckBox{Text="记住此客户端",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
             var buttons=new Panel{Size=new Size(360,38)};
@@ -109,9 +110,23 @@ public static class DesktopBridge {
             deny.Click+=delegate {decision="denied";form.Close();};
             form.AcceptButton=deny;form.CancelButton=deny;
             buttons.Controls.AddRange(new Control[]{countdown,allow,deny});
-            foreach(Control control in new Control[]{heading,identity,address,remember,buttons}){control.Margin=new Padding(0,0,0,8);flow.Controls.Add(control);}
+            foreach(Control control in new Control[]{identity,heading,address,remember,buttons}){control.Margin=new Padding(0,0,0,8);flow.Controls.Add(control);}
             form.Controls.Add(flow);
-            timer.Interval=250;timer.Tick+=delegate {check();};form.Shown+=delegate {deny.Focus();check();timer.Start();};
+            timer.Interval=250;timer.Tick+=delegate {check();};
+            form.Shown+=delegate {
+                // Scale the finished window width (including DPI and frame) by
+                // 1.5, keeping its original height and all vertical spacing.
+                Rectangle original=form.Bounds;
+                int extraWidth=(int)Math.Round(original.Width*0.5,MidpointRounding.AwayFromZero);
+                form.SuspendLayout();flow.SuspendLayout();form.AutoSize=false;
+                heading.MaximumSize=new Size(heading.MaximumSize.Width+extraWidth,0);
+                identity.Width+=extraWidth;address.Width+=extraWidth;buttons.Width+=extraWidth;
+                allow.Left+=extraWidth;deny.Left+=extraWidth;
+                flow.ResumeLayout(true);
+                form.Bounds=new Rectangle(original.X-extraWidth/2,original.Y,original.Width+extraWidth,original.Height);
+                form.ResumeLayout(true);
+                deny.Focus();check();timer.Start();
+            };
             form.ShowDialog();timer.Stop();
         }
         return new {decision=decision,remember=decision=="approved"&&remembered};
