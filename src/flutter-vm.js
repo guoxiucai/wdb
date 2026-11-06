@@ -16,6 +16,16 @@ function flatten(root,args){
   }return {nodes,truncated};
 }
 function matches(node,args){return (args.description===undefined||node.description===args.description)&&(args.widgetType===undefined||node.widgetType===args.widgetType)&&(args.contains===undefined||node.description.includes(args.contains))&&(args.sourceFile===undefined||node.creationLocation?.file===args.sourceFile)&&(args.line===undefined||node.creationLocation?.line===Number(args.line));}
+function selectNodes(tree,args){
+  let nodes=tree.nodes;
+  if(args.ancestor){
+    if(typeof args.ancestor!=='object'||!Object.keys(args.ancestor).some(k=>['description','widgetType','contains','sourceFile'].includes(k)))throw fail('INVALID_ARGUMENT','ancestor requires a widget selector');
+    if(tree.truncated)throw fail('FLUTTER_TREE_TRUNCATED','Cannot prove an ancestor selection is unique');
+    const parents=nodes.filter(n=>matches(n,args.ancestor));if(!parents.length)throw fail('CONTROL_NOT_FOUND','Ancestor widget was not found');if(parents.length!==1)throw fail('AMBIGUOUS_CONTROL','Ancestor selector matches multiple widgets');
+    nodes=nodes.filter(n=>n.path.startsWith(parents[0].path+'.'));
+  }
+  return nodes.filter(n=>matches(n,args));
+}
 function publicNode({diagnosticId,valueId,properties,...node}){return node;}
 function artifact(file,type='application/json'){return {path:file,type,size:fs.statSync(file).size};}
 async function runVm(operation,args,ctx){
@@ -52,10 +62,18 @@ async function runVm(operation,args,ctx){
         const start=Date.now(),waitMs=integer(args.timeoutMs,10000,1,300000),state=args.state||'present';
         if(operation==='wait'&&!['present','absent'].includes(state))throw fail('INVALID_ARGUMENT','Flutter wait supports present or absent');
         while(true){
-          const tree=await snapshot(),selected=tree.nodes.filter(n=>matches(n,args));
+          const tree=await snapshot(),selected=selectNodes(tree,args);
           if(operation==='wait'){
             if(state==='absent'&&tree.truncated)throw fail('FLUTTER_TREE_TRUNCATED','Cannot prove absence from a truncated tree; increase depth/limit');
-            if(state==='present'?selected.length>0:selected.length===0){data={state,count:selected.length,elapsedMs:Date.now()-start};break;}
+            let satisfied=state==='present'?selected.length>0:selected.length===0,property;
+            if(args.property!==undefined){
+              if(state!=='present'||args.value===undefined)throw fail('INVALID_ARGUMENT','Property wait requires present state and value');
+              if(tree.truncated)throw fail('FLUTTER_TREE_TRUNCATED','Property wait requires a unique complete selection');
+              if(selected.length>1)throw fail('AMBIGUOUS_CONTROL','Property wait matched multiple widgets');
+              const props=selected.length?await ext('getProperties',{arg:selected[0].diagnosticId,objectGroup:group}):[];
+              property=(props||[]).find(p=>p.name===args.property);satisfied=!!property&&property.description===String(args.value);
+            }
+            if(satisfied){data={state,count:selected.length,elapsedMs:Date.now()-start,...(property?{property:{name:property.name,description:property.description}}:{})};break;}
             if(Date.now()-start>=waitMs)throw fail('TIMEOUT','Flutter widget wait timed out');await delay(150,null,{signal});continue;
           }
           if(operation==='properties'){

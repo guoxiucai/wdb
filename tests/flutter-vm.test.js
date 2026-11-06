@@ -37,3 +37,10 @@ test('VM RPC failures do not expose remote error secrets or retry a dropped requ
   const f=await fixture((req,reply,socket,send)=>req.method==='error'?send({id:req.id,error:{code:-32000,message:'secret-token-path'}}):socket.destroy()),c=new VmConnection(f.endpoint);
   try{await assert.rejects(c.send('error'),e=>e.code==='FLUTTER_PROTOCOL_ERROR'&&!e.message.includes('secret-token-path'));await assert.rejects(c.send('drop'),{code:'FLUTTER_DISCONNECTED'});assert.equal(f.calls.filter(x=>x.method==='drop').length,1);}finally{c.close();await f.close();}
 });
+test('Scoped property wait observes a later snapshot and releases each group',async()=>{
+  let reads=0;const f=await fixture(vmHandler({
+    [prefix+'getRootWidgetSummaryTree']:(_,reply)=>reply({result:{description:'App',children:[{description:'Panel',valueId:'panel',children:[{description:'AnimatedCrossFade',valueId:'fade'}]},{description:'AnimatedCrossFade',valueId:'other'}]}}),
+    [prefix+'getProperties']:(req,reply)=>{assert.equal(req.params.arg,'fade');reply({result:[{name:'crossFadeState',description:++reads===1?'showFirst':'showSecond'}]});}
+  })),context=ctx();
+  try{const r=await runVm('wait',{endpoint:f.endpoint,widgetType:'AnimatedCrossFade',ancestor:{widgetType:'Panel'},property:'crossFadeState',value:'showSecond'},context);assert.equal(r.property.description,'showSecond');assert.equal(reads,2);assert.equal(f.calls.filter(x=>x.method===prefix+'disposeGroup').length,2);}finally{context.cleanup();await f.close();}
+});

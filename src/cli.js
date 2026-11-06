@@ -301,7 +301,7 @@ function desktopCommand(command, words, options) {
   // JSON argument files avoid shell quoting and command-line length limitations.
   const mapped = { window: 'window', path: 'path', name: 'name', title: 'title', process: 'process', method: 'method', action: 'action', text: 'text', cwd: 'cwd', scope: 'scope', state: 'state', value: 'value', 'layout-id': 'layoutId', automationId: 'automationId', controlType: 'controlType', id: 'id', encoding: 'encoding', log: 'log', source: 'source', startTime: 'startTime', endTime: 'endTime', keyword: 'keyword' };
   for (const [flag, property] of Object.entries(mapped)) if (options[flag] !== undefined) args[property] = options[flag];
-  for (const key of ['endpoint','target','selector','backend','expression','isolate','description','contains']) if (options[key] !== undefined) args[key] = options[key];
+  for (const key of ['endpoint','target','selector','backend','expression','isolate','description','contains','property']) if (options[key] !== undefined) args[key] = options[key];
   for (const [flag,key] of Object.entries({'widget-type':'widgetType','source-file':'sourceFile','tree-mode':'treeMode'})) if(options[flag]!==undefined)args[key]=options[flag];
   if(options.line!==undefined)args.line=numberOption(options.line,undefined,'--line',1);
   for (const key of ['port','connectTimeoutMs','commandTimeoutMs']) if (options[key] !== undefined) args[key] = numberOption(options[key],undefined,`--${key}`,1);
