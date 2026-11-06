@@ -97,8 +97,8 @@ async function deviceSnapshot(dir,options,io,blocked){
     const cached=blocked?.get(device.url);if(cached?.identityKey===identityKey)return {...cached.result,checkedAt};
     setSession(device,options,io);
     try{const health=await discoverServer(device,{reconnectMs:0,timeoutMs:numberOption(options['probe-timeout'],2000,'--probe-timeout',1)});Object.assign(result,{connected:true,connectionState:'online',hostname:health.data.hostname||result.hostname,version:health.data.version||result.version,serverProcessId:health.data.serverProcessId});}
-    catch(e){Object.assign(result,{connectionState:e.code==='UNAUTHORIZED'?'unauthorized':['CERTIFICATE_MISMATCH','DEVICE_ID_MISMATCH'].includes(e.code)?'identity_mismatch':e.code==='INCOMPATIBLE_PROTOCOL'?'incompatible':'offline',error:{code:e.code,message:e.message}});}
-    if(['unauthorized','identity_mismatch','incompatible'].includes(result.connectionState))blocked?.set(device.url,{identityKey,result});else blocked?.delete(device.url);
+    catch(e){Object.assign(result,{connectionState:e.code==='UNAUTHORIZED'?'unauthorized':e.code==='PAIRING_REQUIRED'?'approval_required':['CERTIFICATE_MISMATCH','DEVICE_ID_MISMATCH'].includes(e.code)?'identity_mismatch':e.code==='INCOMPATIBLE_PROTOCOL'?'incompatible':'offline',error:{code:e.code,message:e.message}});}
+    if(['unauthorized','approval_required','identity_mismatch','incompatible'].includes(result.connectionState))blocked?.set(device.url,{identityKey,result});else blocked?.delete(device.url);
     return result;
   }));
   const latest=await readConfig(dir);let changed=false;
@@ -332,6 +332,7 @@ function desktopCommand(command, words, options) {
 const HELP = `wdb — Windows Debug Bridge
 
   wdb connect <server-IP-or-hostname>[:18766] --fingerprint <SHA256> --pairing-code <code>
+    Server operator must approve new clients; --approval-timeout <ms> defaults to 150000.
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
   wdb clients list | clients revoke <clientId>
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]
@@ -375,19 +376,23 @@ async function execute(argv, io) {
   if (command === 'devices') return { options, result: boolOption(options.watch)?await watchDevices(dir,options,io):makeEnvelope(await deviceSnapshot(dir,options,io)) };
   if (command === 'connect') {
     const url = normalizeTarget(words[0]);
+    const approvalTimeout=numberOption(options['approval-timeout'],150000,'--approval-timeout',1000);
     let device = config.devices.find(entry => entry.url === url);
     if (device && !options['pairing-code']) {
       setSession(device,options,io);
       if (options.fingerprint && normalizeFingerprint(options.fingerprint) !== device.fingerprint) throw new CliError('CERTIFICATE_MISMATCH', 'Supplied fingerprint differs from saved device identity; re-pair explicitly.');
-      const info = await api(device, 'GET', '/v1/info');
+      let info;
+      try{info=await api(device,'GET','/v1/info');}
+      catch(e){if(e.code!=='PAIRING_REQUIRED')throw e;io.stderr.write('Waiting for approval on the Windows server.\n');const renewed=await api(device,'POST','/v1/connection',{},approvalTimeout,{reconnectMs:0});device.remembered=renewed.data.remembered;info=await api(device,'GET','/v1/info');}
       device.connected = true; device.lastConnected = new Date().toISOString();device.hostname=info.data.hostname||device.hostname;
       await saveConfig(dir, config);
       return { options, result: makeEnvelope({ url, deviceId: device.deviceId, clientId: device.clientId, reconnected: true, info: info.data }, { deviceId: device.deviceId }) };
     }
     if (!options['pairing-code']) throw new CliError('PAIRING_CODE_REQUIRED', 'First connection requires --pairing-code and --fingerprint from the server.');
-    const next = { url, fingerprint: normalizeFingerprint(options.fingerprint) };
+    const next = { url, fingerprint: normalizeFingerprint(options.fingerprint||device?.fingerprint) };
     setSession(next,options,io);
-    const paired = await api(next, 'POST', '/v1/pair', { name: options.name || os.hostname(), pairingCode: String(options['pairing-code']) });
+    io.stderr.write('Waiting for approval on the Windows server (new connection).\n');
+    const paired = await api(next, 'POST', '/v1/pair', { name: options.name || os.hostname(), pairingCode: String(options['pairing-code']) },approvalTimeout,{reconnectMs:0});
     if (!paired.data?.token || !paired.data.clientId || !paired.data.deviceId) throw new CliError('INVALID_RESPONSE', 'Pairing response is missing credentials or identity.');
     device = { ...next, ...paired.data, connected: true, lastConnected: new Date().toISOString() };
     setSession(device,options,io);

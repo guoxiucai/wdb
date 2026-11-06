@@ -12,7 +12,7 @@ async function requestApproval(bridge,req,res,name,requestId){
  const controller=new AbortController(),dir=path.join(bridge.dir,'tasks','.pair-'+crypto.randomUUID());
  const timeoutMs=bridge.options.approvalTimeoutMs||APPROVAL_TIMEOUT_MS;
  const input={name,remoteAddress:req.socket.remoteAddress,requestId,timeoutMs};
- bridge.pendingPairing={controller,dir};fs.mkdirSync(dir);
+ fs.mkdirSync(dir);bridge.pendingPairing={controller,dir};
  const cancel=()=>{if(!res.writableEnded){controller.abort();try{fs.writeFileSync(path.join(dir,'cancel'),'CLIENT_DISCONNECTED');}catch{}}};
  res.once('close',cancel);
  let expired=false;
