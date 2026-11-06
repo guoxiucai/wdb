@@ -46,6 +46,8 @@ Windows 服务端现在提供内置 Node / 外部 Node 两种独立 EXE 安装�
 
 当前分发构建使用 `scripts/build-release.ps1` 的 Prepare / Package / Finalize 三阶段，同时生成 npm 包和两种 EXE，命令见[安装器指南](docs/WINDOWS-INSTALLERS.md)。人工签名清单与完整目标矩阵保留在 [分发与服务端打包实现交接](docs/DISTRIBUTION-AND-PACKAGING.md)。下列命令是保留的开发目录包入口。
 
+**后续双向通信能力（待实现）：** [交互式 Shell 与 TCP 端口转发实现交接](docs/INTERACTIVE-SHELL-AND-FORWARDING.md) 定义同 HTTPS 端口 WSS、Windows ConPTY、forward/reverse 协议，以及 Windows 先实现、Mac 后接入的验证流程。
+
 ```powershell
 .\scripts\build.ps1
 # 独立客户端（不含 Windows 服务、FFmpeg 和桌面桥）
