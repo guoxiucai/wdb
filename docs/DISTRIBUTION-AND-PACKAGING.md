@@ -94,6 +94,8 @@ npm 根据 `bin` 建立平台命令入口，Windows 可用 `wdb.cmd`，Mac 使�
 
 不设置会下载 Node、编译原生组件、申请管理员权限或注册服务的 install/postinstall hook。当前 CLI 无第三方运行依赖，保持此特性。体积目标为 tarball 和解压内容均小于 1 MB，作为预算检查；新增必要内容使其超出时应输出明细并评审，不能通过删许可来达标。
 
+后续[交互式 Shell 与端口转发方案](INTERACTIVE-SHELL-AND-FORWARDING.md)对此增加明确扩展：允许客户端引入锁定版本的纯 JS `ws`，仍不携带 Node 或原生模块；届时需同步依赖白名单，并报告包括 npm 依赖在内的安装体积。该方案还新增仅服务端交付的 `PtyHost.exe`，须纳入包内签名清单，两种 EXE 都包含。
+
 原客户端凭据位置保持不变，npm 更新/卸载只影响程序文件。迁移后指引用户移除自己配置的旧 portable PATH/符号链接，并用 Windows `where.exe wdb`、Mac `command -v wdb` 核实入口；安装器或 npm hook 不擅自删除旧目录和配对配置。
 
 ### 3.4 客户端签名边界
