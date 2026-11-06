@@ -17,6 +17,8 @@ foreach ($file in @('verify-package.ps1','validate-lan.js')) { Copy-Item -Litera
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'skills\wdb') -Destination (Join-Path $outputRoot 'skills') -Recurse -Force
 Copy-Item -Path (Join-Path $sourceRoot 'docs\*.md') -Destination (Join-Path $outputRoot 'docs') -Force
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'docs\WINDOWS-CLIENT.md') -Destination (Join-Path $outputRoot 'README.md') -Force
+. (Join-Path $PSScriptRoot 'package-metadata.ps1')
+Write-WdbPackageMetadata -SourceRoot $sourceRoot -OutputRoot $outputRoot -Kind Client -Node (Join-Path $outputRoot 'runtime\node.exe')
 $manifest = Get-ChildItem -LiteralPath $outputRoot -Recurse -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
     '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.FullName.Substring($outputRoot.Length + 1)
 }

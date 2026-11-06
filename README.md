@@ -1,6 +1,6 @@
 # wdb — Windows Debug Bridge
 
-Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost；macOS 客户端和局域网实机验收后续开展。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
+Windows 服务端 + Windows CLI + Agent Skill。localhost 功能已验证，Windows LAN 交付包已准备并在本机 LAN IP 完成自检；另一台电脑的局域网验收接下来开展。macOS CLI 可按 [开发交接文档](docs/MACOS-CLI-DEVELOPMENT.md) 同步开发。原始基线保留在 [wdb-phase1-requirements.md](wdb-phase1-requirements.md)，本次用户授权优先于其中早期“只编写需求”的记录。
 
 ## 当前状态
 
@@ -15,6 +15,8 @@ Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost�
 用户指定的 EasiClass 安装包已完成强制覆盖、启动观察及卸载，见[部署记录](docs/app-deployment-verification.md)。无触摸屏设备上已通过 10 指 30 秒 / 60 Hz 与录屏并行验证；需要关闭 Windows 系统多指手势以让应用接收输入，本次测试后已恢复原开关。详见[触摸复验](docs/touch-verification-20261106.md)，真实业务画布和 LAN / macOS 仍分别验收。
 
 ## 直接使用
+
+**局域网测试入口：** [Windows 客户端使用](docs/WINDOWS-CLIENT.md)、[服务端网络配置与验收](docs/LAN.md)、[本次交付记录](docs/LAN-DELIVERY-VERIFICATION.md)。本机已安装服务地址为 `https://172.20.115.75:18766`，设备 `qingwei / 2f493aacf427f3e9`；IP 变化后按网络文档更新规则。
 
 在本目录 PowerShell 中：
 
@@ -38,9 +40,13 @@ Windows 服务端 + Windows CLI + Agent Skill。本次范围是本机 localhost�
 
 ```powershell
 .\scripts\build.ps1
+# 独立客户端（不含 Windows 服务、FFmpeg 和桌面桥）
+.\scripts\build-client.ps1
 ```
 
 输出 `dist\wdb-windows-x64`，包含 Node、FFmpeg/ffprobe、预编译服务宿主/桌面桥、CLI、Skill、源码、许可、安装脚本和 SHA-256 清单。把整个目录复制到目标机，以管理员运行其中 `scripts\install-service.ps1`；安装过程不联网。开发机器首次准备录屏依赖才需 `scripts\fetch-ffmpeg.ps1`。安装、升级、诊断和卸载见 [Windows 服务文档](docs/windows-service.md)。
+
+独立客户端输出 `dist\wdb-client-windows-x64`，解压即可使用；服务端与客户端包均带 `BUILD-INFO.json` 记录源码提交和运行时。`dist` 不提交 Git，交付时压缩整个目录并保留校验清单。
 
 Agent Skill 在 `skills/wdb/SKILL.md`。将整个 `skills/wdb` 目录复制到 Codex/Claude Code 的 skills 目录，并确保 `bin\wdb.cmd` 在 PATH 中，或在调用时使用完整路径。Skill 指导先控件、必要时截图、操作后验证、超时先查询，服务端不配置模型密钥。
 

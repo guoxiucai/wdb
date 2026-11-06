@@ -42,6 +42,8 @@ if (!$HostOnly) {
     if (Test-Path -LiteralPath $ffmpegRoot) {
         Get-ChildItem -LiteralPath $ffmpegRoot -File | ForEach-Object { Copy-RuntimeFile $_.FullName (Join-Path $outputRoot "runtime\$($_.Name)") }
     } else { Write-Warning 'FFmpeg is absent: run scripts/fetch-ffmpeg.ps1 before producing the recording-enabled offline bundle.' }
+    . (Join-Path $PSScriptRoot 'package-metadata.ps1')
+    Write-WdbPackageMetadata -SourceRoot $sourceRoot -OutputRoot $outputRoot -Kind Server -Node (Join-Path $outputRoot 'runtime\node.exe')
     $manifest = Get-ChildItem -LiteralPath $outputRoot -Recurse -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
         $relative = $_.FullName.Substring($outputRoot.Length + 1)
         '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $relative

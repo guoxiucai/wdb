@@ -21,7 +21,7 @@ foreach ($line in (Get-Content -LiteralPath $manifest)) {
 foreach ($file in (Get-ChildItem -LiteralPath $packageRoot -Recurse -File)) {
     if ($file.Name -ne 'SHA256SUMS.txt' -and !$verified.ContainsKey($file.FullName)) { throw "Unlisted package file: $($file.FullName)" }
 }
-$requiredFiles = @('runtime\node.exe','runtime\NODE-LICENSE.txt','bin\wdb.cmd','src\cli.js','src\client-transport.js','src\device-id.js','skills\wdb\SKILL.md')
+$requiredFiles = @('BUILD-INFO.json','runtime\node.exe','runtime\NODE-LICENSE.txt','bin\wdb.cmd','src\cli.js','src\client-transport.js','src\device-id.js','skills\wdb\SKILL.md')
 if ($Kind -eq 'Server') { $requiredFiles += @('runtime\ffmpeg.exe','runtime\ffprobe.exe','runtime\FFMPEG-LICENSE','native\WdbServiceHost.exe','native\bin\DesktopBridge.exe','src\server.js','src\helper.js','scripts\install-service.ps1','scripts\service-config.ps1','scripts\set-network.ps1') }
 foreach ($required in $requiredFiles) {
     if (!(Test-Path -LiteralPath (Join-Path $packageRoot $required))) { throw "Required offline component missing: $required" }

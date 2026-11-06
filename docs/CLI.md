@@ -1,6 +1,6 @@
 # wdb Windows CLI
 
-本阶段在 Windows x64 的 localhost 上验证；macOS 客户端和局域网实机验收后续进行。开发目录运行 `bin\wdb.cmd`，离线安装包携带 Node.js 运行时，目标机器不需配置 Node、Python 或 SSH。
+Windows x64 的 localhost 已验证，LAN 交付包与本机 LAN IP 自检已完成；另一台电脑的网络验收见 [LAN 指南](LAN.md)，独立客户端使用见 [WINDOWS-CLIENT.md](WINDOWS-CLIENT.md)，Mac 并行开发见 [MACOS-CLI-DEVELOPMENT.md](MACOS-CLI-DEVELOPMENT.md)。开发目录运行 `bin\wdb.cmd`，离线安装包携带 Node.js 运行时，目标机器不需配置 Node、Python 或 SSH。
 
 ## 配对和选择设备
 

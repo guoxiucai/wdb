@@ -64,7 +64,7 @@ try {
     $serverRoot = $InstallDirectory
     if ($Development) { $serverRoot = $sourceRoot; Write-Warning "Development install: SYSTEM executes source in $serverRoot. Keep this checkout protected." }
     else {
-        foreach ($name in @('src','bin','scripts','skills','docs','package.json','README.md','wdb.cmd')) {
+        foreach ($name in @('src','bin','scripts','skills','docs','package.json','README.md','wdb.cmd','BUILD-INFO.json')) {
             $item = Join-Path $payloadRoot $name
             if ((Test-Path -LiteralPath $item) -and $payloadRoot -ne $InstallDirectory) { Copy-Item -LiteralPath $item -Destination $InstallDirectory -Recurse -Force }
         }

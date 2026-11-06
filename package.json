@@ -2,7 +2,7 @@
   "name": "windows-debug-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Windows Debug Bridge localhost phase one",
+  "description": "Windows Debug Bridge server and portable CLI",
   "type": "commonjs",
   "bin": { "wdb": "src/cli.js" },
   "scripts": {

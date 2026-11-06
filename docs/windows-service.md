@@ -1,6 +1,6 @@
 # Windows 后台服务与离线交付
 
-服务端采用真正的 Windows SCM 服务 `WdbService`（开机自动启动、SYSTEM、Session 0），仅在 `127.0.0.1` 监听。桌面操作由计划任务 `WdbDesktopHelper` 在指定已登录用户的交互会话内执行，权限为 `Limited`。没有登录或桌面锁定时，服务与桌面可用性分别报告。
+服务端采用真正的 Windows SCM 服务 `WdbService`（开机自动启动、SYSTEM、Session 0），默认在 `127.0.0.1` 监听。局域网交付使用 [LAN 配置脚本](LAN.md) 显式开放指定网卡/来源子网；升级保留监听地址。桌面操作由计划任务 `WdbDesktopHelper` 在指定已登录用户的交互会话内执行，权限为 `Limited`，助手仍只监听本机。没有登录或桌面锁定时，服务与桌面可用性分别报告。
 
 ## 本机开发安装
 
