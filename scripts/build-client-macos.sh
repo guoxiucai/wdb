@@ -34,7 +34,8 @@ trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
 mkdir -p "$STAGE/runtime" "$STAGE/src" "$STAGE/bin" "$STAGE/scripts" "$STAGE/docs" "$STAGE/skills"
 tar -xzf "$ARCHIVE" -C "$STAGE/runtime" --strip-components 2 "node-v$NODE_VERSION-darwin-arm64/bin/node"
 tar -xOf "$ARCHIVE" "node-v$NODE_VERSION-darwin-arm64/LICENSE" > "$STAGE/runtime/NODE-LICENSE.txt"
-for FILE in cli.js client-transport.js device-id.js; do cp "$SOURCE_ROOT/src/$FILE" "$STAGE/src/"; done
+for FILE in cli.js client-transport.js device-id.js client-stream.js stream-channel.js stream-flow.js stream-protocol.js stream-tcp.js forward-client.js terminal-client.js; do cp "$SOURCE_ROOT/src/$FILE" "$STAGE/src/"; done
+node "$SOURCE_ROOT/scripts/copy-ws.js" "$STAGE"
 cp "$SOURCE_ROOT/package.json" "$STAGE/"
 cp "$SOURCE_ROOT/bin/wdb" "$STAGE/bin/"
 for FILE in validate-lan.js verify-package.js; do cp "$SOURCE_ROOT/scripts/$FILE" "$STAGE/scripts/"; done

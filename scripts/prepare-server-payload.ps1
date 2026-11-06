@@ -18,11 +18,15 @@ $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe';$
 if($LASTEXITCODE -ne 0){throw 'ServiceHost compilation failed'}
 & $compiler /nologo /target:exe /platform:x64 /optimize+ "/out:$(Join-Path $output 'native\bin\DesktopBridge.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$framework\WPF\UIAutomationClient.dll" "/r:$framework\WPF\UIAutomationTypes.dll" "/r:$framework\WPF\WindowsBase.dll" (Join-Path $root 'native\DesktopBridge.cs')
 if($LASTEXITCODE -ne 0){throw 'DesktopBridge compilation failed'}
+& (Join-Path $PSScriptRoot 'build-pty.ps1') -OutputFile (Join-Path $output 'native\bin\PtyHost.exe') | Out-Null
+& node.exe (Join-Path $PSScriptRoot 'copy-ws.js') $output | Out-Null
+if($LASTEXITCODE -ne 0){throw 'Locked WebSocket production dependency staging failed'}
 Get-ChildItem -LiteralPath (Join-Path $root 'src') -File -Filter '*.js' | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $output 'src')}
 $scripts=@('installer-action.ps1','install-service.ps1','register-service.ps1','repair-service.ps1','uninstall-service.ps1','service-config.ps1','service.ps1','set-network.ps1','init-data.ps1','resolve-node.ps1','payload-common.ps1','installer-health.js')
 foreach($file in $scripts){Copy-Item -LiteralPath (Join-Path $root "scripts\$file") -Destination (Join-Path $output 'scripts')}
 Copy-Item -LiteralPath (Join-Path $root 'native\desktop.ps1') -Destination (Join-Path $output 'native')
 Copy-Item -LiteralPath (Join-Path $root 'package.json') -Destination $output
+Copy-Item -LiteralPath (Join-Path $root 'package-lock.json') -Destination $output
 Get-ChildItem -LiteralPath (Join-Path $root 'docs') -File -Filter '*.md' | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $output 'docs')}
 Copy-Item -LiteralPath (Join-Path $root 'packaging\windows\dependencies.json') -Destination (Join-Path $output 'DEPENDENCIES.json')
 Copy-Item -LiteralPath (Join-Path $NodeCache 'node.exe'),(Join-Path $NodeCache 'NODE-LICENSE.txt') -Destination (Join-Path $output 'runtime')

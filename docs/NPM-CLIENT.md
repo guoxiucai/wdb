@@ -1,6 +1,6 @@
 # 纯 JavaScript npm 客户端
 
-Windows/macOS 共用一个 tarball，支持 Node `>=24.15.0 <25`。无第三方运行依赖、原生程序、服务端代码或 install/postinstall hook；不会下载 Node 或复制 Skill。仓库根包仍为 private。
+Windows/macOS 共用一个 tarball，支持 Node `>=24.15.0 <25`。唯一第三方运行依赖为固定版本的纯 JavaScript `ws@8.22.1`（MIT）；无原生程序、服务端代码或 install/postinstall hook，不下载 Node 或自动复制 Skill。安装时可使用 `--omit=optional --ignore-scripts`，无需 ws 的可选原生加速模块。仓库根包仍为 private。交互式 shell 与转发用法见 [STREAMING.md](STREAMING.md)。
 
 ```powershell
 # 新目录，不覆盖已有构建；仅本地开发包

@@ -6,7 +6,9 @@ const args=argv(),dataDir=path.resolve(args['data-dir']||path.join(__dirname,'..
 const secret=fs.readFileSync(path.join(dataDir,'helper-secret'),'utf8').trim();
 const {ServerStreams}=require('./server-streams'),{shellFactory}=require('./shell-sessions'),{HELPER_PROTOCOL}=require('./stream-protocol');
 const helperOwner={id:'wdb-service'};
-const streams=new ServerStreams({deviceId:JSON.parse(fs.readFileSync(path.join(dataDir,'config.json'),'utf8')).deviceId,protocol:HELPER_PROTOCOL,endpoint:'/stream/shell',authorize:req=>{if(req.owner===helperOwner)return helperOwner;if(!equal(req.headers.authorization||'','Bearer '+secret))throw fail('UNAUTHORIZED','Invalid helper secret',401);return helperOwner;},renew:()=>{},limits:{shell:{client:16,total:16}},factories:{shell:shellFactory({helper:true})}});
+// The fallback launcher starts the helper before the server creates config.json.
+// Resolve its device identity on the first authenticated Upgrade, not at startup.
+const streams=new ServerStreams({deviceId:'0000000000000000',protocol:HELPER_PROTOCOL,endpoint:'/stream/shell',authorize:req=>{if(req.owner===helperOwner)return helperOwner;if(!equal(req.headers.authorization||'','Bearer '+secret))throw fail('UNAUTHORIZED','Invalid helper secret',401);streams.deviceId=require('./device-id').normalizeDeviceId(JSON.parse(fs.readFileSync(path.join(dataDir,'config.json'),'utf8')).deviceId);return helperOwner;},renew:()=>{},limits:{shell:{client:16,total:16}},factories:{shell:shellFactory({helper:true})}});
 const server=http.createServer(async(req,res)=>{
  try{
   if(!equal(req.headers.authorization||'','Bearer '+secret))throw fail('UNAUTHORIZED','Invalid helper secret',401);

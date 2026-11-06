@@ -41,7 +41,7 @@ Flutter 应用使用 `wdb flutter info|isolates|observe|tree|find|properties|wai
 
 ## 结果和任务
 
-所有命令支持 `--json`；常规命令 stdout 只有最终 JSON，文件进度及重连提示输出到 stderr。JSON 信封包含 `requestId`、`deviceId`、`status`、`error`、`durationMs`、`artifacts` 和 `data`。任务对象在 `data` 内，任务结果在其中的 `data`。失败退出码为 1，成功/接受退出码为 0。`reboot_required` 表示需重启，不自动重启设备。`logs ... --follow --json` 和 `devices --watch --json` 按行输出事件/快照及最终结束结果。
+常规命令支持 `--json`，stdout 只有最终 JSON，文件进度及重连提示输出到 stderr。JSON 信封包含 `requestId`、`deviceId`、`status`、`error`、`durationMs`、`artifacts` 和 `data`。任务对象在 `data` 内，任务结果在其中的 `data`。失败退出码为 1，成功/接受退出码为 0。`reboot_required` 表示需重启，不自动重启设备。`logs ... --follow --json` 和 `devices --watch --json` 按行输出事件/快照及最终结束结果。无脚本的 `shell` 是交互终端，不接受 JSON；`forward` / `reverse --json` 输出生命周期 NDJSON，见 [交互与转发](STREAMING.md)。
 
 默认提交任务后轮询至结束，`--detach` 在接受任务后返回任务 ID。`--timeout <毫秒>` 设置服务端执行超时；`--wait-timeout <毫秒>` 只限制客户端等待。超时或连接错误不能证明操作没有发生，应查询任务或重新观察界面，禁止盲目重复点击、安装、触摸回放。
 

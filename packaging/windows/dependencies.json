@@ -113,5 +113,14 @@
         "sha256": "e8502209965f4c93997996dd2c6acedab4d71054a3b20bd34984808ffac0e184"
       }
     ]
+  },
+  "javascript": {
+    "ws": {
+      "integrity": "sha512-oyL6OPYme/CmiFvNuGzeoxCJ4nOrZE2O1FwM9MWM1AsGri6nLXB2pg+lNA8aLeXMSav0J6eIVS1j6vUPzUtK9g==",
+      "optionalNativeModules": false,
+      "source": "https://registry.npmjs.org/ws/-/ws-8.22.1.tgz",
+      "license": "MIT",
+      "version": "8.22.1"
+    }
   }
 }

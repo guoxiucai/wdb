@@ -11,7 +11,9 @@ Copy-Item -LiteralPath $node -Destination (Join-Path $outputRoot 'runtime\node.e
 $license = Join-Path (Split-Path $node -Parent) 'LICENSE'
 if (!(Test-Path -LiteralPath $license)) { $license = Join-Path $sourceRoot '.runtime\NODE-LICENSE.txt' }
 Copy-Item -LiteralPath $license -Destination (Join-Path $outputRoot 'runtime\NODE-LICENSE.txt') -Force
-foreach ($file in @('cli.js','client-transport.js','device-id.js')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "src\$file") -Destination (Join-Path $outputRoot 'src') -Force }
+foreach ($file in @('cli.js','client-transport.js','device-id.js','client-stream.js','stream-channel.js','stream-flow.js','stream-protocol.js','stream-tcp.js','forward-client.js','terminal-client.js')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "src\$file") -Destination (Join-Path $outputRoot 'src') -Force }
+& node.exe (Join-Path $PSScriptRoot 'copy-ws.js') $outputRoot
+if($LASTEXITCODE -ne 0){throw 'WebSocket dependency staging failed'}
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'package.json') -Destination $outputRoot -Force
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'bin\wdb.cmd') -Destination (Join-Path $outputRoot 'bin') -Force
 foreach ($file in @('verify-package.ps1','validate-lan.js')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "scripts\$file") -Destination (Join-Path $outputRoot 'scripts') -Force }

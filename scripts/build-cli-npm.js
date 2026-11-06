@@ -29,7 +29,7 @@ function build(options={}) {
       }
     }
   }
-  for(const file of ['bin/wdb.js','src/cli.js','src/client-transport.js','src/device-id.js','docs/CLI.md','docs/WINDOWS-CLI-VALIDATION.md','docs/MACOS-CLIENT.md'])copy(file);
+  for(const file of ['bin/wdb.js',...['cli','client-transport','device-id','client-stream','stream-channel','stream-flow','stream-protocol','stream-tcp','forward-client','terminal-client'].map(n=>'src/'+n+'.js'),'docs/CLI.md','docs/WINDOWS-CLI-VALIDATION.md','docs/MACOS-CLIENT.md','docs/STREAMING.md'])copy(file);
   for(const entry of fs.readdirSync(path.join(root,'skills/wdb'),{recursive:true,withFileTypes:true})) {
     if(entry.isFile())copy(path.relative(root,path.join(entry.parentPath,entry.name)));
   }
@@ -37,6 +37,7 @@ function build(options={}) {
   if(options['license-file'])fs.copyFileSync(path.resolve(options['license-file']),path.join(stage,'LICENSE'));
   else fs.writeFileSync(path.join(stage,'LICENSE'),'UNLICENSED\nDevelopment artifact only. Project distribution license has not been configured.\n');
   const pkg={...JSON.parse(fs.readFileSync(path.join(root,'packaging/npm/package.template.json'))),name,version:JSON.parse(fs.readFileSync(path.join(root,'package.json'))).version,license:options.license||'UNLICENSED',...(development?{private:true}:{})};
+  pkg.dependencies={ws:JSON.parse(fs.readFileSync(path.join(root,'package.json'))).dependencies.ws};
   fs.writeFileSync(path.join(stage,'package.json'),JSON.stringify(pkg,null,2)+'\n');
   const git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',windowsHide:true}).trim();
   const info={version:pkg.version,buildId:options['build-id']||path.basename(output),sourceCommit:git(['rev-parse','HEAD']),sourceDirty:!!git(['status','--porcelain']),builtAt:new Date().toISOString(),nodeRange:pkg.engines.node,development};
