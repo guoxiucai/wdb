@@ -56,6 +56,8 @@ Flutter 应用使用 `wdb flutter info|isolates|observe|tree|find|properties|wai
 
 `--follow` 在人类输出模式下把任务新增 stdout 打到 stderr；JSON 模式保持单个最终 JSON。输入任务的等待过程发送控制心跳；客户端退出、`disconnect` 或网络失联后服务端按心跳超时取消输入并释放按键/触点。安装、长 shell 断开后继续，重连查询；录屏继续到预设上限。不要对输入任务使用 `--detach`，除非另有客户端持续维护该身份的控制心跳。
 
+支持 `taskEvents` 的服务端通过 HTTPS SSE 推送任务状态和 stdout，CLI 自动使用，无需新参数；旧服务端回退轮询。`--poll-ms` 用于回退轮询，`--wait-timeout` 仍约束整个等待。单次 CLI 命令内复用已校验证书的 HTTPS 连接，退出时释放。详见 [重连规则](RECONNECTION.md)。
+
 ## PowerShell 和文件
 
 ```powershell

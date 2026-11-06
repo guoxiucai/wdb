@@ -20,6 +20,17 @@
 
 ## 环境与追溯
 
+### 连接复用与任务事件更新（2026-11-06）
+
+基于 `039dc30`，拉取检查确认 `origin/main` 无新增提交。新增按命令隔离的 HTTPS keep-alive 池，以及可选的任务 SSE 协议；没有更新远端 Windows 安装。
+
+- 46 项客户端/传输回归通过，0 失败。新增测试使用本机临时证书与实际 HTTPS Bridge，覆盖连接和凭据隔离、证书替换、SSE、助手输出文件通知、UTF-8 断流恢复、旧版回退、超时、授权、重启和背压。
+- Mac → 当前 Windows 的 8 次认证 health 请求仅建立 1 条 TLS 连接，设备 ID 为 `2f493aacf427f3e9`。
+- 远端 health 尚未声明 `taskEvents`，新 CLI 正确回退轮询；短 shell 输出 `wdb-transport-smoke`、`done`，任务成功。
+- SSE 已通过本地端到端验证；真实 Windows 推送仍需部署含 `src/task-events.js` 的新版服务后复验。未把旧服务端兼容性验证记作远端 SSE 验收。
+
+本轮证据位于 `artifacts/transport-events/client-tests.log`、`live-report.json`；协议说明见 [TASK-EVENTS.md](TASK-EVENTS.md)。
+
 | 项目 | 实际值 |
 |---|---|
 | Mac | MacBook Pro / Apple M5 / arm64 / 24 GB |

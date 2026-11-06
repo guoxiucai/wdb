@@ -8,12 +8,13 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { StringDecoder } = require('node:string_decoder');
 
 const DEFAULT_PORT = 18766;
 const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
 const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version']);
-const {CliError,normalizeFingerprint,discoverFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer}=require('./client-transport');
+const {CliError,normalizeFingerprint,discoverFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer,withTransport,supportsTaskEvents,consumeTaskEvents,isTransient}=require('./client-transport');
 const {normalizeDeviceId}=require('./device-id');
 function parseArgv(argv) {
   const positional = [], options = {};
@@ -185,31 +186,66 @@ async function waitTask(device, id, options = {}, initial, io = process) {
   const poll = numberOption(options['poll-ms'], 350, '--poll-ms', 50);
   const waitMs = numberOption(options['wait-timeout'], 24 * 60 * 60 * 1000, '--wait-timeout', 1);
   const start = Date.now(); let lastHeartbeat = 0, result = initial;
-  let lastOutputLength = 0;
+  let lastOutputLength = 0, outputOffset = 0, eventFailures = 0, useEvents;
+  const decoder = new StringDecoder('utf8');
+  const timeout=()=>new CliError('CLIENT_WAIT_TIMEOUT',`Stopped waiting for task ${id}; it may still be running.`,{taskId:id});
+  const remaining=()=>{const ms=waitMs-(Date.now()-start);if(ms<=0)throw timeout();return ms;};
   const query=async(method,endpoint,body)=>{
-    const remaining=waitMs-(Date.now()-start);
-    const timeout=()=>new CliError('CLIENT_WAIT_TIMEOUT',`Stopped waiting for task ${id}; it may still be running.`,{taskId:id});
-    if(remaining<=0)throw timeout();
-    try{return await api(device,method,endpoint,body,Math.min(numberOption(options['request-timeout'],10000,'--request-timeout',1),remaining),{reconnectMs:Math.min(numberOption(options['reconnect-timeout'],60000,'--reconnect-timeout'),remaining)});}
+    const ms=remaining();
+    try{return await api(device,method,endpoint,body,Math.min(numberOption(options['request-timeout'],10000,'--request-timeout',1),ms),{reconnectMs:Math.min(numberOption(options['reconnect-timeout'],60000,'--reconnect-timeout'),ms)});}
     catch(e){if(e.code==='RECONNECT_TIMEOUT'&&Date.now()-start>=waitMs)throw timeout();throw e;}
+  };
+  let lastCheck = 0;
+  const tick = async () => {
+    remaining();
+    if (Date.now() - lastCheck < 500) return;
+    await ensureEnabled(device); lastCheck = Date.now();
+    if (Date.now() - lastHeartbeat > 1500) { await query('POST', '/v1/heartbeat', {}); lastHeartbeat = Date.now(); }
   };
   while (true) {
     await ensureEnabled(device);
     if (!result) result = await query('GET', `/v1/tasks/${encodeURIComponent(id)}`);
     const task = taskFrom(result);
-    if (options.follow && !options.json) {
-      const live = ACTIVE.has(task?.status || result.status) ? await query('GET', `/v1/tasks/${encodeURIComponent(id)}/output`) : null;
+    const active = ACTIVE.has(task?.status || result.status);
+    if (active && useEvents === undefined) useEvents = await supportsTaskEvents(device, { timeoutMs: Math.min(numberOption(options['request-timeout'],10000,'--request-timeout',1),remaining()), reconnectMs: Math.min(numberOption(options['reconnect-timeout'],60000,'--reconnect-timeout'),remaining()) });
+    if (options.follow && !options.json && (!active || !useEvents)) {
+      const live = active ? await query('GET', `/v1/tasks/${encodeURIComponent(id)}/output`) : null;
       const output = live?.data?.stdout ?? task?.data?.stdout ?? task?.result?.stdout ?? task?.output?.stdout ?? task?.stdout ?? '';
       if (output.length > lastOutputLength) io.stderr.write(output.slice(lastOutputLength));
       lastOutputLength = output.length;
     }
-    if (!ACTIVE.has(task?.status || result.status)) return result;
-    if (Date.now() - start > waitMs) throw new CliError('CLIENT_WAIT_TIMEOUT', `Stopped waiting for task ${id}; it may still be running.`, { taskId: id });
-    if (Date.now() - lastHeartbeat > 1500) {
-      await query('POST', '/v1/heartbeat', {});
-      lastHeartbeat = Date.now();
+    if (!active) return result;
+    await tick();
+    if (useEvents) {
+      const controller = new AbortController(), timer = setTimeout(() => controller.abort(timeout()), remaining());
+      try {
+        result = await consumeTaskEvents(device, id, {
+          stdoutOffset: options.follow && !options.json ? outputOffset : undefined,
+          timeoutMs: Math.min(numberOption(options['request-timeout'],10000,'--request-timeout',1),remaining()), signal: controller.signal, onTick: tick,
+          onEvent: (event, value) => {
+            if (event === 'task') return !ACTIVE.has(taskFrom(value).status);
+            if (event === 'output') {
+              if (value.stream !== 'stdout' || !options.follow || options.json || value.offset !== outputOffset || typeof value.base64 !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.base64)) throw new CliError('INVALID_RESPONSE', 'Unexpected task output offset or encoding.');
+              const bytes = Buffer.from(value.base64, 'base64'), text = decoder.write(bytes);
+              outputOffset += bytes.length; lastOutputLength += text.length;
+              if (text) io.stderr.write(text);
+            }
+            return false;
+          }
+        });
+        continue;
+      } catch (error) {
+        // Old/rolled-back servers may lack the endpoint. Repeatedly interrupted
+        // streams fall back to the existing bounded query recovery, never submit.
+        if ((error.statusCode === 404 && error.code === 'NOT_FOUND') || error.statusCode === 501) useEvents = false;
+        else if (isTransient(error) && numberOption(options['reconnect-timeout'],60000,'--reconnect-timeout') > 0) {
+          if (++eventFailures >= 3) useEvents = false;
+          await sleep(Math.min(250, remaining()));
+        } else throw error;
+        result = null; continue;
+      } finally { clearTimeout(timer); }
     }
-    await sleep(poll); result = null;
+    await sleep(Math.min(poll, remaining())); result = null;
   }
 }
 async function runTask(device, op, args, options, io) {
@@ -340,7 +376,7 @@ async function pullFile(device, remote, local, options, io) {
     if (boolOption(options.overwrite)) await fsp.rename(temporary, absolute);
     else { await fsp.link(temporary, absolute); await fsp.unlink(temporary); }
     return { type: 'file', localPath: absolute, path: remote, bytes: progress.byteCount(), sha256: actual, responseWaitMs: responseAt - start, transferMs, checksumMode: 'inline-sha256', durationMs: Date.now() - start };
-  } finally { req.destroy(); await fsp.rm(temporary, { force: true }); }
+  } finally { if (!response.complete) req.destroy(); await fsp.rm(temporary, { force: true }); }
 }
 async function pullDirectory(device, remote, local, options, io) {
   const listing = await api(device, 'GET', `/v1/directories?${new URLSearchParams({ path: remote })}`);
@@ -550,7 +586,7 @@ function printResult(result, options, io) {
     if (result.data !== undefined && result.data !== null) io.stdout.write(`${JSON.stringify(result.data, null, 2)}\n`);
   }
 }
-async function main(argv = process.argv.slice(2), io = process) {
+async function runMain(argv, io) {
   let parsed;
   try {
     parsed = parseArgv(argv);
@@ -565,5 +601,6 @@ async function main(argv = process.argv.slice(2), io = process) {
     return 1;
   }
 }
+function main(argv = process.argv.slice(2), io = process) { return withTransport(() => runMain(argv, io)); }
 if (require.main === module) main().then(code => { process.exitCode = code; });
 module.exports = { main, execute, parseArgv, normalizeTarget, normalizeFingerprint, selectDevice, openRequest, api, sha256, pushOne, pullFile, pullDirectory, desktopCommand, CliError, resolveConfigDir, readConfig, saveConfig };
