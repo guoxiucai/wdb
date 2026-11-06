@@ -2,6 +2,8 @@
 
 目标平台：Windows 10 22H2、Windows 11 24H2/25H2，x64。包内已有 Node，无需安装 Node、npm、Python，也不需要在客户端安装 WdbService。当前包在本机 Windows 验证；跨电脑测试按下面流程执行。
 
+逐步执行并记录验收结果，请使用 [Windows CLI 局域网验证指导](WINDOWS-CLI-VALIDATION.md)，包含授权、13步基础检查、断网/服务重启与异常恢复的命令和通过标准。
+
 ## 解压与校验
 
 解压 `wdb-client-windows-x64.zip`，在解压后的 `wdb-client-windows-x64` 目录打开 PowerShell：
