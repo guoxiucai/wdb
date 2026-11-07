@@ -5,6 +5,10 @@ param(
  [string]$SignSource,[ValidateRange(1,3600)][int]$SignTimeoutSeconds=300
 )
 $ErrorActionPreference='Stop'
+# npm launched from PowerShell 7 can pass a module path without Windows
+# PowerShell's built-ins. Prefer this process's own modules, preserving extras.
+$builtInModules=Join-Path $PSHOME 'Modules'
+$env:PSModulePath=(@($builtInModules)+@($env:PSModulePath -split ';' | Where-Object {$_ -and $_ -ine $builtInModules})) -join ';'
 $root=Split-Path $PSScriptRoot -Parent
 $version=(Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
 if(!$OutputRoot){$OutputRoot=Join-Path $root 'dist\server-builds'}
