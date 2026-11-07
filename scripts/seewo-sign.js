@@ -13,7 +13,7 @@ async function request(url,options,body,timeoutMs){
  try{const results=await Promise.all([response,body?pipeline(body,req):Promise.resolve(req.end())]);return results[0];}
  catch(e){clearTimeout(timer);req.destroy();body?.destroy();throw e;}
 }
-async function readJson(response){let size=0;const chunks=[];for await(const b of response){size+=b.length;if(size>1024*1024){response.destroy();throw Error('Signing response exceeds 1 MiB');}chunks.push(b);}if(response.statusCode!==200)throw Error(`Signing service HTTP ${response.statusCode}`);try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw Error('Signing service returned invalid JSON');}}
+async function readJson(response){let size=0;const chunks=[];for await(const b of response){size+=b.length;if(size>1024*1024){response.destroy();throw Error('Signing response exceeds 1 MiB');}chunks.push(b);}if(response.statusCode<200||response.statusCode>=300)throw Error(`Signing service HTTP ${response.statusCode}`);try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw Error('Signing service returned invalid JSON');}}
 function assertSigned(file){
  const bytes=fs.readFileSync(file);
  if(/\.ps[1m]1?$/i.test(file)){const text=bytes.toString('utf8');if(!text.includes('# SIG # Begin signature block')||!text.includes('# SIG # End signature block'))throw Error('Downloaded PowerShell signature block is missing');return;}

@@ -10,7 +10,7 @@ async function setup(t,mode='normal'){
   const match=/name="file"; filename="([^"]+)"[^]*?\r\n\r\n/.exec(text);filename=match[1];names.push(filename);const start=match.index+match[0].length;const b=body.subarray(start,body.lastIndexOf(Buffer.from('\r\n--')));download=signed(b);if(mode==='changed')download[500]=43;if(mode==='unsigned')download=b;
   const md5=crypto.createHash('md5').update(b).digest('hex');assert.ok(text.includes(md5));
   if(mode==='failure'){res.writeHead(503);res.end('Unavailable');return;}
-  res.setHeader('content-type','application/json');res.end(JSON.stringify({md5,trackId:'fixture-track',downloadUrl:mode==='foreign'?'https://example.invalid/download':'/download?file=fixture'}));
+  res.statusCode=201;res.setHeader('content-type','application/json');res.end(JSON.stringify({md5,trackId:'fixture-track',downloadUrl:mode==='foreign'?'https://example.invalid/download':'/download?file=fixture'}));
  }else if(req.url.startsWith('/download')){downloads++;if(mode==='download-failure'&&downloads===1){res.destroy();return;}res.end(download);}else{res.writeHead(404);res.end();}});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(async()=>{await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});});
  return {dir,names,endpoint:`http://127.0.0.1:${server.address().port}/`,get uploads(){return uploads;},get filename(){return filename;}};
