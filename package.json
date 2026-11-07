@@ -13,6 +13,7 @@
     "test:client": "node --test tests/cli.test.js tests/macos-client.test.js tests/client-portable.test.js tests/transport-events.test.js",
     "build:macos": "sh scripts/build-client-macos.sh",
     "build:npm": "node scripts/build-cli-npm.js",
+    "build:server": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-server.ps1",
     "start": "node src/server.js",
     "helper": "node src/helper.js"
   },
