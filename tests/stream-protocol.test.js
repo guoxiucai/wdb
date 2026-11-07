@@ -16,6 +16,7 @@ test('delayed credit does not send after the peer starts the close handshake',as
  const send=c.control;c.control=function(m){if(this.transport.readyState!==1)throw Error('WebSocket is closing');send.call(this,m);};
  const flow=new Flow(c,source,sink,{tcp:true});flow.activate();
  c.emit('data',Buffer.from('response after FIN'));
+ await new Promise(resolve=>setImmediate(resolve));
  assert.equal(flow.consumed,18);assert.equal(c.controls.length,0);
  c.transport.readyState=2;
  await new Promise(resolve=>setTimeout(resolve,40));
