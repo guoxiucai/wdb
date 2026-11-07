@@ -68,6 +68,7 @@ if($Phase -eq 'Package'){
  if($state.phase -notin @('prepared','awaiting-uninstaller-signature')){throw 'Package already consumed; use Finalize or a new BuildId'}
  Assert-Inno $state.innoDirectory $lock
  New-Item -ItemType Directory -Path $release,(Join-Path $build 'signed-uninstaller'),(Join-Path $build 'unsigned-installers') -Force | Out-Null
+ $pendingUninstallers=@()
  . (Join-Path $common 'scripts\payload-common.ps1')
  foreach($mode in @('with-node','external-node')){
   $payload=Join-Path $build ('payloads\'+$mode)
@@ -81,13 +82,17 @@ if($Phase -eq 'Package'){
   $args=@('/Qp',"/DPayload=$payload","/DProductVersion=$($state.version)","/DPublisher=$($state.publisher)","/DRuntimeMode=$mode","/DSigningMode=$($state.signingMode)","/DOutputDir=$release","/DSignedCache=$(Join-Path $build 'signed-uninstaller')",(Join-Path $build 'tools\wdb-server.iss'))
   # Close stdin: Manual mode reports a pending signing artifact instead of
   # leaving an unattended compiler waiting for a keypress.
-  '' | & (Join-Path $state.innoDirectory 'ISCC.exe') @args *> (Join-Path $build "compile-$mode.log")
-  if($LASTEXITCODE -ne 0){
-   $pending=@(Get-ChildItem -LiteralPath (Join-Path $build 'signed-uninstaller') -Filter '*.exe' | Where-Object {(Get-AuthenticodeSignature -LiteralPath $_.FullName).Status -ne 'Valid'})
-   if($state.signingMode -eq 'Manual' -and $pending.Count){$state.phase='awaiting-uninstaller-signature';Write-State $state;[ordered]@{status=$state.phase;files=@($pending.FullName);resume="build-release.ps1 -Phase Package -BuildId $BuildId"} | ConvertTo-Json;return}
+  $stdin=Join-Path $build 'compiler-stdin.txt';[IO.File]::WriteAllText($stdin,'')
+  $compilerArgs=($args | ForEach-Object {'"'+$_.Replace('"','\"')+'"'}) -join ' '
+  $process=Start-Process (Join-Path $state.innoDirectory 'ISCC.exe') -WindowStyle Hidden -ArgumentList $compilerArgs -RedirectStandardInput $stdin -RedirectStandardOutput (Join-Path $build "compile-$mode.log") -RedirectStandardError (Join-Path $build "compile-$mode.stderr.log") -Wait -PassThru
+  if($process.ExitCode -ne 0){
+   $compilerError=[IO.File]::ReadAllText((Join-Path $build "compile-$mode.stderr.log"))
+   $pending=@(Get-ChildItem -LiteralPath (Join-Path $build 'signed-uninstaller') -File | Where-Object {$_.Extension -in @('.exe','.e32','.e64')})
+   if($state.signingMode -eq 'Manual' -and $pending.Count -and $compilerError -match 'Signed uninstaller mode is enabled'){$pendingUninstallers+=$pending.FullName;continue}
    throw "Inno compilation failed: $(Join-Path $build "compile-$mode.log")"
   }
  }
+ if($pendingUninstallers.Count){$state.phase='awaiting-uninstaller-signature';Write-State $state;[ordered]@{status=$state.phase;files=@($pendingUninstallers | Select-Object -Unique);resume="build-release.ps1 -Phase Package -BuildId $BuildId -OutputRoot `"$OutputRoot`""} | ConvertTo-Json;return}
  $executables=@(Get-ChildItem -LiteralPath $release -Filter '*-setup.exe');if($executables.Count -ne 2){throw 'Both installer variants are required'}
  foreach($exe in $executables){Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $build 'unsigned-installers')}
  if(!$state.serverOnly){$npm=Get-Content -LiteralPath (Join-Path $build 'npm\npm-package.json') -Raw | ConvertFrom-Json;Copy-Item -LiteralPath $npm.tarball -Destination $release}
@@ -102,7 +107,7 @@ foreach($exe in Get-ChildItem -LiteralPath $release -Filter '*-setup.exe'){
  $record=Signature-Record $exe.FullName $exe.Name 'wdb-installer';$signatures+=$record
  if($state.signingMode -eq 'Manual' -and !$state.trustManualSignatures -and ($record.status -ne 'Valid' -or $record.thumbprint -ine $state.signerThumbprint -or !$record.timestampAuthority)){throw 'Final installers await valid publisher/timestamp signatures'}
 }
-foreach($exe in Get-ChildItem -LiteralPath (Join-Path $build 'signed-uninstaller') -Filter '*.exe'){$record=Signature-Record $exe.FullName ('signed-uninstaller/'+$exe.Name) 'wdb-uninstaller';$signatures+=$record;if($state.signingMode -eq 'Manual' -and !$state.trustManualSignatures -and ($record.status -ne 'Valid' -or $record.thumbprint -ine $state.signerThumbprint -or !$record.timestampAuthority)){throw 'Uninstaller cache signature does not match release publisher/timestamp'}}
+foreach($exe in Get-ChildItem -LiteralPath (Join-Path $build 'signed-uninstaller') -File | Where-Object {$_.Extension -in @('.exe','.e32','.e64')}){$record=Signature-Record $exe.FullName ('signed-uninstaller/'+$exe.Name) 'wdb-uninstaller';$signatures+=$record;if($state.signingMode -eq 'Manual' -and !$state.trustManualSignatures -and ($record.status -ne 'Valid' -or $record.thumbprint -ine $state.signerThumbprint -or !$record.timestampAuthority)){throw 'Uninstaller cache signature does not match release publisher/timestamp'}}
 $artifacts=@(Get-ChildItem -LiteralPath $release -File | Where-Object {$_.Extension -in @('.exe','.tgz')} | ForEach-Object {[ordered]@{name=$_.Name;bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}})
 if(@($artifacts | Where-Object {$_.name -like '*-setup.exe'}).Count -ne 2 -or @($artifacts | Where-Object {$_.name -like '*.tgz'}).Count -ne $(if($state.serverOnly){0}else{1})){throw 'Incomplete release outputs'}
 $manifest=[ordered]@{buildId=$BuildId;version=$state.version;protocolVersion=1;sourceCommit=$state.sourceCommit;sourceDirty=$state.sourceDirty;signingMode=$state.signingMode;serverOnly=[bool]$state.serverOnly;signatureValidation=$(if($state.signingMode -eq 'Development'){'not-validated-development'}elseif($state.trustManualSignatures){'user-managed-not-validated'}else{'certificate-and-timestamp-validated'});status=$(if($state.signingMode -eq 'Development'){'development-unsigned'}else{'signed-awaiting-installation-acceptance'});releaseReady=$false;builtAt=[DateTime]::UtcNow.ToString('o');innoVersion=$state.innoVersion;nodeVersion=$lock.node.version;nodeRange='>=22.0.0';artifacts=$artifacts;payloads=@(@('with-node','external-node') | ForEach-Object {@{runtimeMode=$_;bytes=(Get-ChildItem -LiteralPath (Join-Path $build "payloads\$_") -Recurse -File | Measure-Object Length -Sum).Sum}})}
