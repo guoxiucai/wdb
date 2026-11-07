@@ -3,7 +3,7 @@
 正式包名：`@tsingwill/wdb`，命令名：`wdb`。Windows/macOS 均可执行：
 
 ```sh
-npm install -g @tsingwill/wdb@0.1.0 --omit=optional --ignore-scripts
+npm install -g @tsingwill/wdb
 wdb --version
 ```
 

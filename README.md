@@ -97,7 +97,7 @@ Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通
 Windows 与 macOS 共用一个 npm 包，需要 **Node.js `>=22.0.0`**：
 
 ```sh
-npm install -g @tsingwill/wdb@0.1.0 --omit=optional --ignore-scripts
+npm install -g @tsingwill/wdb
 wdb --version
 wdb --help
 ```
@@ -176,7 +176,7 @@ wdb reverse tcp:9000 tcp:3000
 
 ## 与 AI Agent 配合
 
-将整个 [`skills/wdb`](skills/wdb) 目录放入所用 Agent 的 Skill 搜索目录，并确保 `wdb` 在该 Agent 的 PATH 中。具体使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
+将整个 [`skills/wdb`](skills/wdb) 目录放入所用 Agent 的 Skill 搜索目录。Agent 在需要调试 Windows 设备时可自动使用此 Skill；缺少 CLI 时会指导或执行 npm 安装。具体使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
 
 Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观察确认结果；UIA 不可用时按应用选择 CDP、Flutter Inspector 或视觉坐标。自动化脚本使用 `shell --script`，需要人类终端的交互 shell 单独使用。请求超时先查任务状态，避免重复点击、安装或输入。
 

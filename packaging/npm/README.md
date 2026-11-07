@@ -2,7 +2,7 @@
 
 Windows/macOS 共享的纯 JavaScript 客户端。需要先安装 Node **>=22.0.0**（[官方安装指引](https://nodejs.org/)）。此包不携带或下载 Node，不安装 Windows 服务，也没有 install/postinstall hooks。
 
-安装：`npm install -g @tsingwill/wdb@0.1.0 --omit=optional --ignore-scripts`。安装后运行 `wdb --version`。
+安装：`npm install -g @tsingwill/wdb`。安装后运行 `wdb --version`。
 
 本地验证：`npm install -g --prefix <测试目录> <包文件.tgz>`；Windows 使用 `<测试目录>\wdb.cmd`，Mac 使用 `<测试目录>/bin/wdb`。正式包名为 `@tsingwill/wdb`；本地开发包不用于 npm 发布。
 
