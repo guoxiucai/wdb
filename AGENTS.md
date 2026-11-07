@@ -15,8 +15,6 @@
 
 后续开发分析、实施计划和本机验证记录优先放在本地 `dev_doc/`（Git 忽略）。`docs/` 用于需要 Git 跟踪共享的用户指南、协议和交接文档。
 
-内网签名服务的接入脚本、配置、测试和操作说明只保存在本地 Git 忽略目录；公开构建入口不包含此逻辑，生成未签名安装包。
-
 | 位置 | 职责 |
 | --- | --- |
 | `src/cli.js`、`bin/` | CLI 参数、命令路由、输出和启动器 |
@@ -77,6 +75,17 @@ node --test tests/stream-protocol.test.js tests/stream-transport.test.js tests/s
 ## 安装、打包与实机操作
 
 生产安装使用双 EXE：with-node 和 external-node，共用一个服务身份及数据目录。三阶段构建 `Prepare → Package → Finalize` 的 BuildId 和冻结内容不可复写；修改源码后使用新 BuildId。详见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
+
+在 Windows 项目根目录构建未签名的 Development 服务端双 EXE：
+
+```powershell
+npm run build:server
+# 可指定新的 BuildId；检查失败原因后，使用同一 BuildId 串行续跑。
+npm run build:server -- -BuildId server-dev-example
+npm run build:server -- -BuildId server-dev-example -Resume
+```
+
+产物位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含 with-node、external-node 两个安装器和 `SHA256SUMS.txt`。此命令只编译和校验产物，不安装或重启服务。
 
 安装、重启、真实桌面操作和故障注入在本次授权范围内执行；需要用户本人操作的系统授权及时说明，不能绕过 UAC 或首次连接同意窗口。先用临时目录、测试窗口和 loopback 验证；不要干扰无关进程或真实网卡。
 

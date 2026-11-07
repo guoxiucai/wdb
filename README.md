@@ -222,6 +222,10 @@ node scripts/build-cli-npm.js --development true --license MIT --license-file LI
 
 ```powershell
 npm run build:server
+# 可选：指定新的 BuildId
+npm run build:server -- -BuildId server-dev-example
+# 检查失败原因后，使用相同 BuildId 串行续跑
+npm run build:server -- -BuildId server-dev-example -Resume
 ```
 
 产物在 `dist/server-builds/<BuildId>/output/0.1.0/`，不覆盖已有发布包；构建参数及续跑方法见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
