@@ -15,6 +15,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Automation;
 using System.Windows.Forms;
 
+[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
+
 // A short-lived, interactive-session adapter. No GUI work is performed in Session 0.
 public static class DesktopBridge {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 64 * 1024 * 1024, RecursionLimit = 100 };
@@ -33,6 +35,8 @@ public static class DesktopBridge {
     [STAThread] public static int Main(string[] args) {
         Console.OutputEncoding = new UTF8Encoding(false);
         try {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
             try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch(EntryPointNotFoundException) { SetProcessDPIAware(); }
             Require(args.Length==1,"INVALID_ARGUMENT","Expected request JSON file.");
             var req=D(Json.DeserializeObject(File.ReadAllText(args[0],Encoding.UTF8)));
@@ -81,52 +85,78 @@ public static class DesktopBridge {
         try { return SwitchDesktop(desktop); } finally { CloseDesktop(desktop); }
     }
     static object Status() { return new {available=Available(),sessionId=Process.GetCurrentProcess().SessionId,identity=System.Security.Principal.WindowsIdentity.GetCurrent().Name,coordinateSpace="virtual-desktop-physical",layoutId=Layout()}; }
+    // The same presentation is used by the read-only DPI fixture. Authorization
+    // handlers exist only in ApproveConnection, never in this layout class.
+    sealed class ApprovalDialog : Form {
+        public readonly Label Identity, Heading, Countdown;
+        public readonly CheckBox Remember;
+        public readonly Button Allow, Deny;
+        readonly TableLayoutPanel content, buttons;
+        readonly ToolTip nameTip;
+        readonly Font normalFont, headingFont;
+        bool fitting;
+        public ApprovalDialog(string name) {
+            SuspendLayout();
+            Text="WDB 连接授权";AutoSize=true;AutoSizeMode=AutoSizeMode.GrowAndShrink;
+            AutoScaleDimensions=new SizeF(96F,96F);AutoScaleMode=AutoScaleMode.Dpi;
+            normalFont=new Font("Microsoft YaHei UI",10F);headingFont=new Font("Microsoft YaHei UI",11F,FontStyle.Bold);Font=normalFont;
+            FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;
+            StartPosition=FormStartPosition.CenterScreen;TopMost=true;ShowInTaskbar=true;
+            content=new TableLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,RowCount=4,Padding=new Padding(20),Dock=DockStyle.Fill};
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for(int i=0;i<4;i++)content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Identity=new Label{Name="ClientName",Text=name,UseMnemonic=false,AutoSize=true,MinimumSize=new Size(560,0),MaximumSize=new Size(560,0),AccessibleName=name};
+            Heading=new Label{Name="ApprovalHeading",Text="允许此客户端连接？",AutoSize=true,MaximumSize=new Size(560,0),Font=headingFont};
+            Remember=new CheckBox{Name="RememberClient",Text="记住此客户端",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
+            buttons=new TableLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=3,RowCount=1,Dock=DockStyle.Fill,Margin=Padding.Empty,MinimumSize=new Size(560,0)};
+            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            buttons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Countdown=new Label{Name="Countdown",Text="120 秒后关闭",AutoSize=true,Anchor=AnchorStyles.Left,Margin=new Padding(0,0,8,0),ForeColor=SystemColors.GrayText};
+            Allow=new Button{Name="Allow",Text="同意",AutoSize=true,MinimumSize=new Size(96,36),Margin=new Padding(0,0,8,0),AccessibleName="同意连接"};
+            Deny=new Button{Name="Deny",Text="拒绝",AutoSize=true,MinimumSize=new Size(96,36),Margin=Padding.Empty,AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+            buttons.Controls.Add(Countdown,0,0);buttons.Controls.Add(Allow,1,0);buttons.Controls.Add(Deny,2,0);
+            int row=0;foreach(Control control in new Control[]{Identity,Heading,Remember}){control.Margin=new Padding(0,0,0,8);content.Controls.Add(control,0,row++);}
+            content.Controls.Add(buttons,0,3);Controls.Add(content);
+            nameTip=new ToolTip{ShowAlways=true,AutoPopDelay=15000};nameTip.SetToolTip(Identity,name);
+            AcceptButton=Deny;CancelButton=Deny;
+            Shown+=delegate {FitWidth();CenterToScreen();Deny.Focus();};
+            DpiChanged+=delegate {BeginInvoke((Action)FitWidth);};
+            ResumeLayout(true);
+        }
+        void FitWidth() {
+            if(fitting||IsDisposed)return;fitting=true;
+            try {
+                var work=Screen.FromHandle(Handle).WorkingArea;
+                int dpi=(int)GetDpiForWindow(Handle);
+                int gap=(int)Math.Ceiling(16*dpi/96.0);
+                int width=Math.Max(1,Math.Min((int)Math.Round(560*dpi/96.0),work.Width-(Width-ClientSize.Width)-content.Padding.Horizontal-gap));
+                SuspendLayout();content.SuspendLayout();
+                Identity.MinimumSize=new Size(width,0);Identity.MaximumSize=new Size(width,0);
+                Heading.MaximumSize=new Size(width,0);buttons.MinimumSize=new Size(width,0);
+                content.ResumeLayout(true);ResumeLayout(true);
+                Location=new Point(Math.Max(work.Left,Math.Min(Left,work.Right-Width)),Math.Max(work.Top,Math.Min(Top,work.Bottom-Height)));
+            } finally {fitting=false;}
+        }
+        protected override void Dispose(bool disposing) {
+            base.Dispose(disposing);
+            if(disposing){nameTip.Dispose();normalFont.Dispose();headingFont.Dispose();}
+        }
+    }
     static object ApproveConnection(Dictionary<string,object>a) {
         string decision="denied";bool remembered=false;
         DateTime deadline=DateTime.UtcNow.AddMilliseconds(Math.Max(1000,Math.Min(120000,I(a,"timeoutMs",120000))));
-        Application.EnableVisualStyles();
-        using(var form=new Form()) using(var timer=new System.Windows.Forms.Timer()) using(var nameTip=new ToolTip{ShowAlways=true,AutoPopDelay=15000}) {
-            form.Text="WDB 连接授权";form.AutoSize=true;form.AutoSizeMode=AutoSizeMode.GrowAndShrink;
-            form.Font=new Font("Microsoft YaHei UI",10F);form.AutoScaleMode=AutoScaleMode.Dpi;
-            form.FormBorderStyle=FormBorderStyle.FixedDialog;form.MaximizeBox=false;form.MinimizeBox=false;
-            form.StartPosition=FormStartPosition.CenterScreen;form.TopMost=true;form.ShowInTaskbar=true;
-            var flow=new FlowLayoutPanel{FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,Padding=new Padding(20)};
-            var heading=new Label{Text="允许此客户端连接？",AutoSize=true,MaximumSize=new Size(360,0),Font=new Font("Microsoft YaHei UI",11F,FontStyle.Bold)};
-            var identity=new Label{Text=S(a,"name"),AutoEllipsis=true,Size=new Size(360,26),AccessibleName=S(a,"name")};
-            nameTip.SetToolTip(identity,identity.Text);
-            var address=new Label{Text="来源："+S(a,"remoteAddress"),AutoEllipsis=true,Size=new Size(360,26),ForeColor=SystemColors.GrayText};
-            var remember=new CheckBox{Text="记住此客户端",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
-            var buttons=new Panel{Size=new Size(360,38)};
-            var countdown=new Label{Location=new Point(0,10),Size=new Size(120,26),ForeColor=SystemColors.GrayText};
-            var allow=new Button{Text="同意",Location=new Point(160,0),Size=new Size(96,36),AccessibleName="同意连接"};
-            var deny=new Button{Text="拒绝",Location=new Point(264,0),Size=new Size(96,36),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+        using(var form=new ApprovalDialog(S(a,"name"))) using(var timer=new System.Windows.Forms.Timer()) {
             Action check=delegate(){
                 if(File.Exists(S(a,"cancelFile"))){decision="cancelled";form.Close();}
                 else if(!Available()){decision="desktop_unavailable";form.Close();}
                 else if(DateTime.UtcNow>=deadline){decision="timed_out";form.Close();}
-                else countdown.Text=Math.Ceiling((deadline-DateTime.UtcNow).TotalSeconds)+" 秒后关闭";
+                else form.Countdown.Text=Math.Ceiling((deadline-DateTime.UtcNow).TotalSeconds)+" 秒后关闭";
             };
-            allow.Click+=delegate {check();if(!form.IsDisposed&&form.Visible){decision="approved";remembered=remember.Checked;form.Close();}};
-            deny.Click+=delegate {decision="denied";form.Close();};
-            form.AcceptButton=deny;form.CancelButton=deny;
-            buttons.Controls.AddRange(new Control[]{countdown,allow,deny});
-            foreach(Control control in new Control[]{identity,heading,address,remember,buttons}){control.Margin=new Padding(0,0,0,8);flow.Controls.Add(control);}
-            form.Controls.Add(flow);
+            form.Allow.Click+=delegate {check();if(!form.IsDisposed&&form.Visible){decision="approved";remembered=form.Remember.Checked;form.Close();}};
+            form.Deny.Click+=delegate {decision="denied";form.Close();};
             timer.Interval=250;timer.Tick+=delegate {check();};
-            form.Shown+=delegate {
-                // Scale the finished window width (including DPI and frame) by
-                // 1.5, keeping its original height and all vertical spacing.
-                Rectangle original=form.Bounds;
-                int extraWidth=(int)Math.Round(original.Width*0.5,MidpointRounding.AwayFromZero);
-                form.SuspendLayout();flow.SuspendLayout();form.AutoSize=false;
-                heading.MaximumSize=new Size(heading.MaximumSize.Width+extraWidth,0);
-                identity.Width+=extraWidth;address.Width+=extraWidth;buttons.Width+=extraWidth;
-                allow.Left+=extraWidth;deny.Left+=extraWidth;
-                flow.ResumeLayout(true);
-                form.Bounds=new Rectangle(original.X-extraWidth/2,original.Y,original.Width+extraWidth,original.Height);
-                form.ResumeLayout(true);
-                deny.Focus();check();timer.Start();
-            };
+            form.Shown+=delegate {check();timer.Start();};
             form.ShowDialog();timer.Stop();
         }
         return new {decision=decision,remember=decision=="approved"&&remembered};
@@ -268,6 +298,7 @@ public static class DesktopBridge {
     [DllImport("user32.dll")]static extern void DestroySyntheticPointerDevice(IntPtr device);
     delegate bool EnumWindowsProc(IntPtr hwnd,IntPtr lparam);
     [DllImport("user32.dll")]static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")]static extern uint GetDpiForWindow(IntPtr handle);
     [DllImport("user32.dll")]static extern bool SetProcessDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")]static extern IntPtr OpenInputDesktop(uint flags,bool inherit,uint access);
     [DllImport("user32.dll")]static extern bool CloseDesktop(IntPtr desktop);

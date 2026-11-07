@@ -16,8 +16,9 @@ foreach($folder in @('src','native\bin','runtime','scripts','docs')){New-Item -I
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe';$framework=Split-Path $compiler
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ /r:System.ServiceProcess.dll "/out:$(Join-Path $output 'native\WdbServiceHost.exe')" (Join-Path $root 'native\ServiceHost.cs')
 if($LASTEXITCODE -ne 0){throw 'ServiceHost compilation failed'}
-& $compiler /nologo /target:exe /platform:x64 /optimize+ "/out:$(Join-Path $output 'native\bin\DesktopBridge.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$framework\WPF\UIAutomationClient.dll" "/r:$framework\WPF\UIAutomationTypes.dll" "/r:$framework\WPF\WindowsBase.dll" (Join-Path $root 'native\DesktopBridge.cs')
+& $compiler /nologo /target:exe /platform:x64 /optimize+ "/win32manifest:$(Join-Path $root 'native\DesktopBridge.manifest')" "/out:$(Join-Path $output 'native\bin\DesktopBridge.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$framework\WPF\UIAutomationClient.dll" "/r:$framework\WPF\UIAutomationTypes.dll" "/r:$framework\WPF\WindowsBase.dll" (Join-Path $root 'native\DesktopBridge.cs')
 if($LASTEXITCODE -ne 0){throw 'DesktopBridge compilation failed'}
+Copy-Item -LiteralPath (Join-Path $root 'native\DesktopBridge.exe.config') -Destination (Join-Path $output 'native\bin\DesktopBridge.exe.config')
 & (Join-Path $PSScriptRoot 'build-pty.ps1') -OutputFile (Join-Path $output 'native\bin\PtyHost.exe') | Out-Null
 & node.exe (Join-Path $PSScriptRoot 'copy-ws.js') $output | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Locked WebSocket production dependency staging failed'}
