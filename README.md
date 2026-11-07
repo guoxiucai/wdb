@@ -15,9 +15,9 @@
 </p>
 
 <p align="center">
+  <a href="#how-it-works">工作原理</a> ·
   <a href="#quick-start">快速开始</a> ·
   <a href="#commands">核心命令</a> ·
-  <a href="#how-it-works">工作原理</a> ·
   <a href="#agent-skill">Agent Skill</a> ·
   <a href="#development">参与开发</a>
 </p>
@@ -29,6 +29,16 @@ WDB (Windows Debug Bridge) 由 Windows 后台服务、跨平台 CLI 和 Agent Sk
 WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截图与录屏用于观察和取证，目前不提供实时远程桌面视频串流。
 
 当前版本为 **0.1.0**，采用 [MIT 许可证](LICENSE)。CLI 通过 npm 分发，Windows 服务端安装器及 CLI tarball 通过 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 分发。
+
+<a id="how-it-works"></a>
+
+## 工作原理
+
+![WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理](docs/assets/wdb-architecture.svg)
+
+CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：HTTPS 处理命令、任务和文件，SSE 推送任务状态 / 输出，WSS 承载交互终端与 TCP 双向字节流。无需额外开放交互服务端口。
+
+Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通用户 helper 执行。只有显式 `--admin` 才请求 SYSTEM shell。
 
 ## 核心能力
 
@@ -84,9 +94,7 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 ### 2. 安装 CLI
 
-Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=22.0.0`**。安装正式 CLI：
-
-最低版本为 Node 22.0.0；Node 18 / 20 已停止上游维护，不再支持。推荐使用 Node 24 LTS 的受维护补丁版本。自带运行时的服务端安装包仍使用固定的 Node 24，不要求用户另外安装 Node。Electron/Flutter 调试的 WebSocket 使用已锁定的 `ws` 依赖。
+Windows 与 macOS 共用一个 npm 包，需要 **Node.js `>=22.0.0`**：
 
 ```sh
 npm install -g @tsingwill/wdb@0.1.0 --omit=optional --ignore-scripts
@@ -138,8 +146,6 @@ wdb reverse tcp:9000 tcp:3000
 
 转发命令各自在前台运行，用 Ctrl+C 停止。端口目标需要已有程序监听。交互 shell / 转发断线即结束，**不自动重连或重放**；批处理任务的查询与恢复另按任务 ID 处理。
 
-当前 TCP 转发仍有已知的关闭阶段竞态：并发传输并半关闭连接时，可能截断尾部数据。修复完成前，不应将其用于要求可靠完整传输的场景。
-
 <a id="commands"></a>
 
 ## 核心命令速查
@@ -166,16 +172,6 @@ wdb reverse tcp:9000 tcp:3000
 
 完整参数、错误语义、文件路径和操作示例请查 [CLI 手册](docs/CLI.md)，也可随时运行 `wdb --help`。
 
-<a id="how-it-works"></a>
-
-## 工作原理
-
-![WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理](docs/assets/wdb-architecture.svg)
-
-CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：HTTPS 处理命令、任务和文件，SSE 推送任务状态 / 输出，WSS 承载交互终端与 TCP 双向字节流。无需额外开放交互服务端口。
-
-Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通用户 helper 执行。只有显式 `--admin` 才请求 SYSTEM shell。流通道有窗口、配额、租约和关闭回收；ConPTY 进程树由 Windows Job 管理。
-
 <a id="agent-skill"></a>
 
 ## 与 AI Agent 配合
@@ -191,7 +187,6 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 - 首次安装默认监听全部 IPv4，并由防火墙限制为本地子网；helper、CDP 和 VM Service 调试端点保持本机访问，不直接暴露公网。需要仅本机时运行 `set-network.ps1 -Mode Localhost`。
 - UIA 和应用调试接口取决于应用自身实现。Electron 的 CDP 与可访问性是两条通路；Flutter 的具体构建要求见 [Flutter 指南](docs/FLUTTER.md)。
 - 错误或超时不保证操作尚未发生。批处理任务应按任务 ID 查询状态；交互 shell 与转发断线后结束，不重放输入。安全问题报告方式见 [SECURITY.md](SECURITY.md)。
-
 
 <a id="development"></a>
 
@@ -235,6 +230,7 @@ node scripts/build-cli-npm.js --development true --license MIT --license-file LI
 bin/           CLI 启动器
 src/           CLI、服务、任务、传输协议与平台适配
 native/        Windows 服务宿主、桌面桥、ConPTY C# 源码
+release/       签名发布包
 scripts/       构建、安装、校验与实机验证工具
 packaging/     npm 白名单、安装器模板、依赖锁定清单
 tests/         自动化回归与测试夹具
@@ -245,9 +241,8 @@ AGENTS.md      项目开发、验证、提交与交付规范
 
 ## 后续计划
 
-- 完善 Mac 终端兼容性与使用体验。
-- 扩展 Windows 版本兼容性，改善跨主机连接稳定性。
-- 持续完善 npm 与 Windows 安装器的发布和升级体验。
+- 连接稳定性优化。
+- 扩展 Windows 操作与调试能力。
 
 ## 贡献与反馈
 
@@ -255,6 +250,6 @@ AGENTS.md      项目开发、验证、提交与交付规范
 
 ## 许可与致谢
 
-WDB 采用 [MIT 许可证](LICENSE)，允许使用、修改和再分发，具体条件见许可证全文。第三方依赖及随包组件仍遵循各自许可证，不因 WDB 使用 MIT 而改变。
+WDB 采用 [MIT 许可证](LICENSE)，允许使用、修改和再分发，具体条件见许可证全文。第三方依赖及随包组件仍遵循各自许可证。
 
-感谢 Node.js、ws、FFmpeg、Inno Setup 及 Windows ConPTY / UI Automation 生态提供基础能力。第三方依赖遵循各自许可，发行包保留相应声明。
+感谢 Node.js、ws、FFmpeg、Inno Setup 及 Windows ConPTY / UI Automation 生态提供基础能力，发行包保留相应许可声明。
