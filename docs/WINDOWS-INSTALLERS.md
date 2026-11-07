@@ -13,21 +13,17 @@ npm run build:server
 # 或 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-server.ps1
 ```
 
-只有显式加 `-Sign` 才使用 SEEWO 签名客户自动完成三轮签名：
+该入口只生成未签名的 Development 包，不提供自动签名参数，不调用签名服务。可指定 BuildId，并在检查失败原因后串行续跑：
 
 ```powershell
-npm run build:server -- -Sign -BuildId server-auto-example
+npm run build:server -- -BuildId server-dev-example
 # 失败后检查构建日志，再使用相同参数续跑：
-npm run build:server -- -Sign -BuildId server-auto-example -Resume
+npm run build:server -- -BuildId server-dev-example -Resume
 ```
 
-该入口沿用 Prepare → Package → Finalize，依次签内部 EXE/PowerShell、Inno 卸载缓存和两个 Setup.exe。`.e32/.e64` 以 `.exe` 文件名上传，下载后保留原缓存名。Node 保留上游签名，FFmpeg 按分发文件签名。默认输出位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含双 EXE 和 SHA256SUMS.txt；不会覆盖既有 `release/0.1.0`。`-OutputDirectory` 可指定另一目录，已有不同内容文件会拒绝覆盖。
+该入口沿用 Prepare → Package → Finalize，构建 with-node 和 external-node 两个 Setup.exe，校验冻结内容及最终哈希。默认输出位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含双 EXE 和 SHA256SUMS.txt；不会覆盖既有 `release/0.1.0`。`-OutputRoot` 可指定构建工作目录，`-OutputDirectory` 可指定产物目录，已有不同内容文件会拒绝覆盖。构建不会安装程序或重启服务。
 
-构建机需可访问 `https://mhci-sign.gz.cvte.cn/`。自动接口与页面一致：POST `/uploadAndSign`，multipart 字段 file/name/md5/customer/from，客户固定 SEEWO；响应中的 MD5 是原文件 MD5，下载后另外计算 SHA256。`-SignSource` 可传入经过维护者确认的来源字符串（如不含凭据的 CI 构建 URL）；默认只含 WDB 版本及 BuildId，不自动发送本机路径或用户信息。签名报告保存在忽略的构建目录，包含追踪 ID 和签前/后哈希；不要求浏览器权限、私钥或 PIN。
-
-自动流程检查签名结构和程序/脚本文本不变；沿用维护者此前选择，不绑定证书指纹、不以证书链验证作为门槛。签名失败立即停止，不降级为未签名产物。已完成文件通过签后 hash 复用；已有下载结果只重试下载，上传结果未知时报告 outcome unknown 并要求人工查看服务日志后使用新 BuildId，不自动重发有副作用的 POST。`-SignTimeoutSeconds` 控制单次请求上限。普通构建完全跳过该流程。
-
-同一 BuildId 按串行方式执行；前一个构建进程退出后再使用 Resume。不要同时对同一批文件启动多个签名进程。
+同一 BuildId 按串行方式执行；前一个构建进程退出后再使用 Resume。仅可续跑此入口创建的 Development 服务端构建；源码或版本修改后使用新 BuildId。通用的人工签名阶段见下文，具体组织的签名服务及配置不属于公开构建流程。
 
 构建机需要 Windows x64、Node/npm 22+、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。
 
