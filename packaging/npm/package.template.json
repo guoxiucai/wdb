@@ -4,7 +4,27 @@
   "version": "0.0.0",
   "description": "WDB command-line client for Windows servers",
   "type": "commonjs",
-  "bin": { "wdb": "bin/wdb.js" },
-  "engines": { "node": ">=22.0.0" },
-  "files": ["bin/wdb.js", "src", "docs", "skills", "BUILD-INFO.json", "README.md", "LICENSE"]
+  "bin": {
+    "wdb": "bin/wdb.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "bin/wdb.js",
+    "src",
+    "docs",
+    "skills",
+    "BUILD-INFO.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guoxiucai/wdb.git"
+  },
+  "homepage": "https://github.com/guoxiucai/wdb#readme",
+  "bugs": {
+    "url": "https://github.com/guoxiucai/wdb/issues"
+  }
 }
