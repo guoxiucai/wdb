@@ -218,6 +218,15 @@ npm run test:client
 node scripts/build-cli-npm.js --development true --license MIT --license-file LICENSE --output dist/npm/local-dev-01
 ```
 
+仅构建服务端双 EXE，默认不签名；显式 `-Sign` 时使用 SEEWO 服务自动完成内部文件、卸载程序和安装器签名：
+
+```powershell
+npm run build:server
+npm run build:server -- -Sign
+```
+
+自动签名需要构建机能访问配置的签名服务。产物在 `dist/server-builds/<BuildId>/output/0.1.0/`，不覆盖已有发布包；续跑及追踪报告见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
+
 构建包含 CLI 与两个 Windows EXE 的开发分发：
 
 ```powershell
