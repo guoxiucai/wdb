@@ -49,3 +49,9 @@ Mac CLI 经 LAN 连接 Windows 服务，构建以下链路：
 - Windows 本机、Mac → Windows LAN 分开记录 pass/fail；Windows 通过不能替代 Mac 实机复验。
 
 本交接只提供问题分析及排查建议，不宣称截断已经修复。
+
+## Windows 后续实现（2026-11-07）
+
+上述为原始交接结论。后续修复 `4739e69` 增加最终消费确认等待、FIN 后小尾块及时 credit、WebSocket 重复关闭幂等，以及 TCP 正常 FIN 排空与 manager 回收等待；字段和协议版本不变，详见 [收尾规则及双端同步要求](TCP-FORWARDING-LIFECYCLE.md)。
+
+Windows loopback 源码验证覆盖 forward、reverse、组合链路，4 路并发、慢读、EOF 后响应；3 分钟固定批次间隔测试完成 1323 次交换、零 connection_error、资源归零及端口重绑定。高频无间隔短连接测试曾出现超时/复位，未作为通过项。Windows 结果不替代 Mac → Windows LAN；客户端和服务端须同时更新，再按上文负载复验。
