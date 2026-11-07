@@ -16,7 +16,7 @@ async function createForward(device,kind,listen,target,options={}){
   const report=e=>{if(!reported&&!stopped){reported=true;events.emit('connection_error',{code:e.code||'STREAM_INTERRUPTED',message:e.message,connectionId:resource.channel?.opened?.connectionId||connectionId});}};
   try{check(resources.size<=16,'Local TCP quota exceeded','RESOURCE_LIMIT');const channel=await openStream(device,{kind:'tcp',forwardId:control.opened.forwardId,...(connectionId?{connectionId}:{})},{...options,signal:abort.signal,instanceId:control.hello.serverInstanceId});resource.channel=channel;channel.on('failure',report);check(channel.opened.forwardId===control.opened.forwardId,'Wrong rule in TCP response','INVALID_STATE');
    if(kind==='reverse')resource.socket=await connectTcp(target,abort.signal);
-   if(stopped||channel.closed)throw error('STREAM_INTERRUPTED','Rule stopped during connection setup');resource.adapter=attachTcp(channel,resource.socket);await channel.ready();resource.adapter.activate();channel.once('closed',()=>{resource.adapter.close();resources.delete(resource);});
+   if(stopped||channel.closed)throw error('STREAM_INTERRUPTED','Rule stopped during connection setup');resource.adapter=attachTcp(channel,resource.socket);await channel.ready();resource.adapter.activate();channel.once('closed',()=>{resource.adapter.close().finally(()=>resources.delete(resource));});
   }catch(e){report(e);if(resource.channel&&!resource.channel.closed){try{resource.channel.control({type:'reset',code:e.code||'STREAM_INTERRUPTED',message:String(e.message).slice(0,2048)});}catch{}resource.channel.close();}resource.adapter?.close();resource.socket?.destroy();resources.delete(resource);}
  }
  try{

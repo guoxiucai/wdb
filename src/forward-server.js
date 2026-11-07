@@ -4,10 +4,10 @@ const {error,check}=require('./stream-protocol');const {connectTcp,listenTcp,att
 class ForwardServer{
  constructor(){this.rules=new Map();this.connections=new Map();}
  reserve(rule,socket){const all=[...this.connections.values()];check(all.length<64&&all.filter(c=>c.rule.owner===rule.owner).length<16,'TCP connection quota exceeded','RESOURCE_LIMIT');const conn={id:crypto.randomUUID(),rule,socket,claimed:false};this.connections.set(conn.id,conn);rule.connections.add(conn);return conn;}
- release(conn,closeChannel=true){if(conn.released)return;conn.released=true;clearTimeout(conn.timer);if(closeChannel)conn.channel?.close();conn.adapter?.close();conn.socket?.destroy();conn.rule.connections.delete(conn);this.connections.delete(conn.id);}
+ release(conn,closeChannel=true){if(conn.released)return conn.releasePromise;conn.released=true;clearTimeout(conn.timer);if(closeChannel)conn.channel?.close();const closing=conn.adapter?.close();if(!conn.adapter)conn.socket?.destroy();conn.releasePromise=Promise.resolve(closing).then(()=>{conn.rule.connections.delete(conn);this.connections.delete(conn.id);});return conn.releasePromise;}
  async rule(ctx,m){
   const rule={id:crypto.randomUUID(),kind:m.kind,owner:ctx.owner.id,ctx,listen:m.listen,target:m.target,connections:new Set(),active:false,closed:false};this.rules.set(rule.id,rule);
-  const close=()=>{if(rule.closing)return rule.closing;rule.closed=true;rule.active=false;this.rules.delete(rule.id);rule.closing=(async()=>{for(const conn of [...rule.connections])this.release(conn);if(rule.server)await new Promise(r=>rule.server.close(()=>r()));})();return rule.closing;};ctx.signal.addEventListener('abort',()=>{close().catch(()=>{});},{once:true});
+  const close=()=>{if(rule.closing)return rule.closing;rule.closed=true;rule.active=false;this.rules.delete(rule.id);rule.closing=(async()=>{await Promise.all([...rule.connections].map(conn=>this.release(conn)));if(rule.server)await new Promise(r=>rule.server.close(()=>r()));})();return rule.closing;};ctx.signal.addEventListener('abort',()=>{close().catch(()=>{});},{once:true});
   const announce=conn=>{if(!rule.active||conn.claimed||conn.announced||conn.released)return;conn.announced=true;ctx.channel.control({type:'incoming',forwardId:rule.id,connectionId:conn.id,attachTimeoutMs:10000});};
   try{
    if(m.kind==='reverse'){
