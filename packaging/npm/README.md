@@ -1,6 +1,6 @@
 # WDB CLI
 
-Windows/macOS 共享的纯 JavaScript 客户端。需要先安装 Node **>=24.15.0 <25**（[官方安装指引](https://nodejs.org/)）。此包不携带或下载 Node，不安装 Windows 服务，也没有 install/postinstall hooks。
+Windows/macOS 共享的纯 JavaScript 客户端。需要先安装 Node **>=18.17.0**（[官方安装指引](https://nodejs.org/)）。此包不携带或下载 Node，不安装 Windows 服务，也没有 install/postinstall hooks。
 
 本地验证：`npm install -g --prefix <测试目录> <包文件.tgz>`；Windows 使用 `<测试目录>\wdb.cmd`，Mac 使用 `<测试目录>/bin/wdb`。正式 registry 名称由维护者确认，本地测试包不用于 npm 发布。
 

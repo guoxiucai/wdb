@@ -339,7 +339,7 @@ async function pushOne(device, local, remote, options, io) {
   const req = await openRequest(device, 'PUT', `/v1/files?${new URLSearchParams({ path: remote, overwrite: String(boolOption(options.overwrite)) })}`, { 'content-type': 'application/octet-stream', 'content-length': stat.size, 'x-content-sha256': checksum }, numberOption(options['transfer-timeout'], 120000, '--transfer-timeout', 1));
   const responsePromise = receiveResponse(req).then(responseJson);
   // Attach rejection handler immediately while the stream is still uploading.
-  responsePromise.catch(() => {});
+  responsePromise.catch(error => req.destroy(error));
   const progress = progressTransform(io, `push ${path.basename(local)}`, stat.size);
   try {
     await pipeline(fs.createReadStream(local, { highWaterMark: 1024 * 1024 }), progress, req);

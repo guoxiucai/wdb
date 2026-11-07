@@ -1,4 +1,5 @@
 'use strict';
+const WebSocket=require('ws');
 const {fail}=require('./common');
 const MAX_JSON=16*1024*1024;
 

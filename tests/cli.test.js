@@ -13,6 +13,7 @@ const {discoverFingerprint}=require('../src/client-transport');
 let temporary, server, target, fingerprint, requestCount = 0, protocolVersion = 1;
 let approvalRequired=false,approvalDelay=0,revoked=false,lastPairBody;
 const requests=[];
+const sockets=new Set();
 const stored = new Map();
 function envelope(data, status = 'succeeded') { return { requestId: crypto.randomUUID(), deviceId: 'device-test', status, error: null, durationMs: 0, artifacts: [], data }; }
 before(async () => {
@@ -76,10 +77,15 @@ before(async () => {
     }
     res.writeHead(404); res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'No route' } }));
   });
+  server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  // Node 18 runs the root after hook at beforeExit; the fixture must not keep it alive.
+  server.unref();
   target = `https://127.0.0.1:${server.address().port}`;
 });
 after(async () => {
+  for (const socket of sockets) socket.destroy();
+  server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));
   await fs.rm(temporary, { recursive: true, force: true });
 });
