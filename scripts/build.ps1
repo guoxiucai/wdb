@@ -44,7 +44,7 @@ if (!$HostOnly) {
     if (Test-Path -LiteralPath $nodeLicense) { Copy-Item -LiteralPath $nodeLicense -Destination (Join-Path $outputRoot 'runtime\NODE-LICENSE.txt') -Force }
     $ffmpegRoot = Join-Path $sourceRoot '.runtime\ffmpeg'
     if (Test-Path -LiteralPath $ffmpegRoot) {
-        Get-ChildItem -LiteralPath $ffmpegRoot -File | ForEach-Object { Copy-RuntimeFile $_.FullName (Join-Path $outputRoot "runtime\$($_.Name)") }
+        Get-ChildItem -LiteralPath $ffmpegRoot -File | Where-Object { $_.Name -ne 'ffprobe.exe' } | ForEach-Object { Copy-RuntimeFile $_.FullName (Join-Path $outputRoot "runtime\$($_.Name)") }
     } else { Write-Warning 'FFmpeg is absent: run scripts/fetch-ffmpeg.ps1 before producing the recording-enabled offline bundle.' }
     . (Join-Path $PSScriptRoot 'package-metadata.ps1')
     Write-WdbPackageMetadata -SourceRoot $sourceRoot -OutputRoot $outputRoot -Kind Server -Node (Join-Path $outputRoot 'runtime\node.exe')

@@ -129,6 +129,8 @@ UI 操作用 `ui.find` / `ui.tree` 返回的完整 `reference` 对象。保存 J
 
 录屏启动是有上限的长任务。下面开始 10 分钟录屏后立即返回录屏任务 ID；`record stop --id` 可提前结束，随后用 `task get` 读取 MP4 产物路径并 `pull`。客户端断开不让录像无限继续。
 
+录屏使用捆绑 FFmpeg，安装包不再包含 ffprobe。结果保留兼容字段 `probe: null`；`recordingStats` 的 `frames` 和 `outputDurationSeconds` 来自 FFmpeg 编码进度，缺失时为 null，`complete` 表示进度收到 end。它们不是文件完整解码或实际画面采集帧率的证明；`requestedFps` 是请求值。开发验收通过 FFmpeg 完整解码到 EOF、H.264 检查和提取画面核对尺寸；Media Foundation 元数据读取留作后续扩展。
+
 ```powershell
 .\bin\wdb.cmd record start --durationSeconds 600 --monitor 0 --timeout 630000 --detach --json
 .\bin\wdb.cmd record stop --id '<录屏任务ID>' --json

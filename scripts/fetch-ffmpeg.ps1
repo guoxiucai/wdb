@@ -31,7 +31,7 @@ else {
 $ffmpeg = Get-ChildItem -LiteralPath $extractRoot -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1
 if (!$ffmpeg) { throw 'Archive did not contain ffmpeg.exe.' }
 $releaseRoot = Split-Path (Split-Path $ffmpeg.FullName -Parent) -Parent
-foreach ($name in @('ffmpeg.exe','ffprobe.exe')) {
+foreach ($name in @('ffmpeg.exe')) {
     Copy-Item -LiteralPath (Join-Path $releaseRoot "bin\$name") -Destination $outputRoot -Force
 }
 foreach ($name in @('LICENSE','README.txt')) {
@@ -40,5 +40,4 @@ foreach ($name in @('LICENSE','README.txt')) {
 }
 [ordered]@{ source = $SourceUri; archiveSha256 = $Sha256; version = '9.0.2-essentials_build'; license = 'GPL-3.0-or-later'; upstream = 'https://ffmpeg.org'; buildProvider = 'https://www.gyan.dev/ffmpeg/builds/'; sourceCode = 'https://github.com/FFmpeg/FFmpeg/tree/946fcce07b' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputRoot 'FFMPEG-PROVENANCE.json') -Encoding UTF8
 & (Join-Path $outputRoot 'ffmpeg.exe') -version | Select-Object -First 1
-& (Join-Path $outputRoot 'ffprobe.exe') -version | Select-Object -First 1
 Write-Output $outputRoot

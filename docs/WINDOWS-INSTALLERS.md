@@ -15,7 +15,7 @@
 .\scripts\verify-release.ps1 -ReleaseDirectory dist/release-builds/my-build/release/Development
 ```
 
-Prepare 只编译一次服务宿主、桌面桥和 PtyHost，冻结公共 payload、构建模板、npm tarball 和签名前基线。Package 只消费该 BuildId，生成两个独立的单文件 EXE；每个都包含 FFmpeg/ffprobe、许可、服务与助手。with-node 包含已校验官方 Node；external-node 不含 Node，也不在安装时下载 Node。两者共用 AppId `{CB6CE060-4707-4E8F-880A-64CBB085D781}`、服务名和升级通道，不能并存为两套服务。
+Prepare 只编译一次服务宿主、桌面桥和 PtyHost，冻结公共 payload、构建模板、npm tarball 和签名前基线。Package 只消费该 BuildId，生成两个独立的单文件 EXE；每个都包含 FFmpeg、许可、服务与助手。with-node 包含已校验官方 Node；external-node 不含 Node，也不在安装时下载 Node。两者共用 AppId `{CB6CE060-4707-4E8F-880A-64CBB085D781}`、服务名和升级通道，不能并存为两套服务。
 
 Release 目录包含两个 Setup.exe、同一个 npm tarball、SHA256SUMS、release-manifest、signing-report、verification-report。报告分开记录下载大小、解压 payload 大小和实机安装大小。`releaseReady:false` 表示本地开发/等待发行验收，不可当作正式签名版本。
 
@@ -56,4 +56,4 @@ Prepare 的 Manual 模式要求干净提交和维护者明确提供 `-Publisher`
 
 首次 Package 可能返回 `awaiting-uninstaller-signature` 和缓存文件路径；用户签名后用相同 BuildId 续跑。启用 `SignedUninstaller=yes`，保证编译器使用签名卸载程序/安装临时副本。两个 Setup.exe 生成后用户逐个签名，Finalize 验证发布者、时间戳、原始内容及最终 SHA-256；脚本不访问私钥或请求密码/PIN。[Inno 官方签名流程](https://jrsoftware.org/ishelp/topic_setup_signeduninstaller.htm)。
 
-第三方 Node 保留上游签名；FFmpeg/ffprobe 的未签名状态如实记录，不视为自有签名。Development 模式允许未签名本地验证，Manual 模式不能跳过自有签名。真实人工证书签名、干净 Windows、Mac npm 和 registry 测试是独立验收项；本轮不会执行 npm publish 或上传安装包。
+第三方 Node 保留上游签名；FFmpeg 的未签名状态如实记录，不视为自有签名。Development 模式允许未签名本地验证，Manual 模式不能跳过自有签名。真实人工证书签名、干净 Windows、Mac npm 和 registry 测试是独立验收项；本轮不会执行 npm publish 或上传安装包。

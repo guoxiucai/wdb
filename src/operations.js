@@ -5,6 +5,7 @@ const http=require('node:http');
 const crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
 const {ROOT,fail,powershell,execute,read}=require('./common');
+const {parseProgress,recordingStats}=require('./recording-stats');
 function psQuote(s){return "'"+String(s).replaceAll("'","''")+"'";}
 async function native(op,args,ctx){
   if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
@@ -97,9 +98,9 @@ async function record(op,args,ctx){
  const child=spawn(ffmpeg,cmd,{windowsHide:true,stdio:['pipe','ignore','pipe']});entry.child=child;child.stdin.on('error',()=>{});let stderr='';child.stderr.on('data',c=>{stderr=(stderr+c).slice(-65536);});
  const started=Date.now();const timer=setTimeout(()=>child.stdin.write('q\n'),(duration+10)*1000);const abort=()=>child.stdin.write('q\n');ctx.signal?.addEventListener('abort',abort);
  const hardStop=setTimeout(()=>{if(child.exitCode===null)spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});},(duration+30)*1000);
- return await new Promise((resolve,reject)=>{child.on('error',e=>{clearTimeout(timer);clearTimeout(hardStop);reject(e);resolveDone();});child.on('close',async code=>{clearTimeout(timer);clearTimeout(hardStop);ctx.signal?.removeEventListener('abort',abort);const log=path.join(ctx.dir,'encoder.log');fs.writeFileSync(log,stderr);let probe=null;try{const r=await execute(path.join(path.dirname(ffmpeg),'ffprobe.exe'),['-v','error','-show_entries','stream=codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames,duration','-of','json',target],{timeoutMs:30000});if(r.exitCode===0)probe=JSON.parse(r.stdout);}catch{}
- const progress={};try{for(const line of fs.readFileSync(progressPath,'utf8').split(/\r?\n/)){const at=line.indexOf('=');if(at>0)progress[line.slice(0,at)]=line.slice(at+1);}}catch{}
- entry.result={id,path:target,exitCode:code,durationMs:Date.now()-started,captureMethod:'DXGI Desktop Duplication (ddagrab)',monitor:Number(args.monitor||0),captureIndex,monitorMappingVerified:list.length===1,requestedFps:fps,probe,progress,encoderLog:log,artifacts:fs.existsSync(target)?[{path:target,type:'video/mp4',size:fs.statSync(target).size},{path:log,type:'text/plain',size:fs.statSync(log).size},...(fs.existsSync(progressPath)?[{path:progressPath,type:'text/plain',size:fs.statSync(progressPath).size}]:[])]:[]};resolveDone();recordings.delete(id);if(code===0)resolve(entry.result);else reject(fail('RECORDING_FAILED',stderr.slice(-2000)));});});
+ return await new Promise((resolve,reject)=>{child.on('error',e=>{clearTimeout(timer);clearTimeout(hardStop);reject(e);resolveDone();});child.on('close',async code=>{clearTimeout(timer);clearTimeout(hardStop);ctx.signal?.removeEventListener('abort',abort);const log=path.join(ctx.dir,'encoder.log');fs.writeFileSync(log,stderr);const probe=null; // Legacy optional metadata field; no ffprobe runtime dependency.
+ let progress={};try{progress=parseProgress(fs.readFileSync(progressPath,'utf8'));}catch{}
+ entry.result={id,path:target,exitCode:code,durationMs:Date.now()-started,captureMethod:'DXGI Desktop Duplication (ddagrab)',monitor:Number(args.monitor||0),captureIndex,monitorMappingVerified:list.length===1,requestedFps:fps,probe,progress,recordingStats:recordingStats(progress),encoderLog:log,artifacts:fs.existsSync(target)?[{path:target,type:'video/mp4',size:fs.statSync(target).size},{path:log,type:'text/plain',size:fs.statSync(log).size},...(fs.existsSync(progressPath)?[{path:progressPath,type:'text/plain',size:fs.statSync(progressPath).size}]:[])]:[]};resolveDone();recordings.delete(id);if(code===0)resolve(entry.result);else reject(fail('RECORDING_FAILED',stderr.slice(-2000)));});});
 }
 async function runOperation(op,args,ctx,config={}){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
