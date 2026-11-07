@@ -6,10 +6,16 @@ function sameContent(original,signed){
  const a=fs.readFileSync(original),b=fs.readFileSync(signed);
  if(a.equals(b))return true;
  if(/\.ps[1m]1?$/.test(original)){
-  const strip=buffer=>buffer.toString('utf8').split('# SIG # Begin signature block')[0].replace(/[\r\n]+$/,'');
+  const strip=buffer=>{
+   const text=buffer.toString('utf8'),marker=/^# SIG # Begin signature block\r?$/m.exec(text);
+   if(!marker)return text.replace(/[\r\n]+$/,'');
+   const block=text.slice(marker.index);
+   assert.ok(/^# SIG # Begin signature block\r?\n(?:#[^\r\n]*\r?\n)*# SIG # End signature block(?:\r?\n)?\s*$/.test(block),'Invalid PowerShell signature block or trailing executable code');
+   return text.slice(0,marker.index).replace(/[\r\n]+$/,'');
+  };
   assert.equal(strip(a),strip(b),'Signed PowerShell content differs from Prepare');return true;
  }
- assert.ok(/\.(exe|dll)$/i.test(original),'Non-signable file changed');
+ assert.ok(/\.(exe|dll|e32|e64)$/i.test(original),'Non-signable file changed');
  assert.equal(a.toString('ascii',0,2),'MZ');assert.equal(b.toString('ascii',0,2),'MZ');
  const pe=a.readUInt32LE(60);assert.equal(b.readUInt32LE(60),pe);const opt=pe+24;
  const directory=opt+(a.readUInt16LE(opt)===0x20b?112:96)+4*8;
