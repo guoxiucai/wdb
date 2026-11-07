@@ -19,4 +19,4 @@ Mac 对同一个 `.tgz` 执行 `npm install -g --prefix "$HOME/wdb-test" <tarbal
 
 客户端凭据位置保持不变。`npm uninstall -g --prefix <prefix> <包名>` 只卸载程序；旧 portable PATH 请操作者自行调整，用 `where.exe wdb` 或 `command -v wdb` 确认当前入口。
 
-2026-11-06 Windows 首轮结果：27 个文件，tgz 84,977 bytes、解压 215,411 bytes；中文/空格 prefix、任意 cwd、Node 和 `.cmd` 入口正常。从安装产物完成 13 步文件往返、截图与连接验证。后续最终包大小以 release-manifest 为准。Mac npm 实机、registry 安装尚未执行。
+Mac arm64 支持从 npm tarball 安装，交互 shell 需要 TTY，forward/reverse 在前台运行。安装产物不携带 Node，更新或卸载保留客户端配置。具体包体大小以该次构建报告为准；本地 tarball 可用不代表正式 registry 已发布。

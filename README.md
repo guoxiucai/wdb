@@ -51,7 +51,7 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 | --- | --- |
 | Windows 服务端 | x64；安装预检要求桌面版 build 19045+、.NET Framework 4.8、Windows PowerShell 5.1 |
 | Windows CLI | Node.js `>=22.0.0`；纯 JavaScript npm 客户端 |
-| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=22.0.0`。交互 shell / 转发的真实终端兼容性尚未确认 |
+| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=22.0.0`。交互 shell 需要 TTY；支持前台 TCP 正向与反向转发 |
 
 桌面操作需要目标用户已登录且解锁。Flutter Inspector 依赖应用提供相应调试服务。
 
