@@ -27,6 +27,8 @@ npm run build:server -- -Sign -BuildId server-auto-example -Resume
 
 自动流程检查签名结构和程序/脚本文本不变；沿用维护者此前选择，不绑定证书指纹、不以证书链验证作为门槛。签名失败立即停止，不降级为未签名产物。已完成文件通过签后 hash 复用；已有下载结果只重试下载，上传结果未知时报告 outcome unknown 并要求人工查看服务日志后使用新 BuildId，不自动重发有副作用的 POST。`-SignTimeoutSeconds` 控制单次请求上限。普通构建完全跳过该流程。
 
+同一 BuildId 按串行方式执行；前一个构建进程退出后再使用 Resume。不要同时对同一批文件启动多个签名进程。
+
 构建机需要 Windows x64、Node/npm 22+、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。
 
 ```powershell
