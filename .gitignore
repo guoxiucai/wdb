@@ -13,3 +13,7 @@ native/bin/
 .DS_Store
 
 dev_doc
+
+/release-signing/
+/wdb-server-*-windows-x64-*-setup.exe
+/wdb-server-0.1.0-SHA256SUMS.txt

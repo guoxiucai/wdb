@@ -1,6 +1,6 @@
 # Windows 双运行时安装器与本地构建
 
-当前交付是未签名的 **Development** 测试包，不发布 npm。正式 npm 名称、项目许可、发布者证书尚未配置。CLI 使用同一个纯 JS tarball，见 [NPM-CLIENT.md](NPM-CLIENT.md)。
+项目许可为 MIT。安装器支持未签名 Development 测试包及人工签名 Manual 包；CLI/npm 可通过 ServerOnly 从本轮服务端构建中排除。正式发布动作由维护者执行。CLI 分发见 [NPM-CLIENT.md](NPM-CLIENT.md)。
 
 首轮安装/SSE 验收见 [WINDOWS-DISTRIBUTION-VERIFICATION.md](WINDOWS-DISTRIBUTION-VERIFICATION.md)；加入交互 shell / 转发后的最终包、SHA-256、安装矩阵与 30 分钟验证见 [STREAMING-WINDOWS-VERIFICATION.md](STREAMING-WINDOWS-VERIFICATION.md)。
 
@@ -54,7 +54,17 @@ Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-Development-setup.ex
 
 ## 人工签名续跑
 
-Prepare 的 Manual 模式要求干净提交和维护者明确提供 `-Publisher`、`-NpmName`、`-License`、`-LicenseFile`、`-SignerThumbprint`。它导出 signing-plan.json 与文字清单；用户对 common 中自有 EXE/脚本逐个签名并加时间戳，再执行 Package。原始程序字节冻结；只接受 Authenticode 排除字段和附加证书、或 PowerShell 附加签名块的变化，不能用新程序替换后刷新 hash。
+仅构建服务端双 EXE 时使用 `-ServerOnly`，不构建 npm、不要求 npm 包名。维护者自行负责手动签名、无需绑定或验证证书时可显式选择 `-TrustManualSignatures`；报告记录 `user-managed-not-validated`，不宣称证书链、发布者或时间戳已验证。文件冻结与最终 SHA-256 仍执行。默认未指定该选项时保持证书/时间戳校验。
+
+```powershell
+.\scripts\build-release.ps1 -Phase Prepare -SigningMode Manual -ServerOnly -TrustManualSignatures -Publisher WDB -License MIT -LicenseFile LICENSE -BuildId server-0-1-0-signing
+```
+
+Prepare 输出的 signing-plan.json 是精确清单：当前包含四个自有 EXE（CLI 启动器、服务宿主、桌面桥、PtyHost）、十三个 PowerShell 脚本，以及本次分发的 FFmpeg。FFmpeg 保持第三方归属与许可，签名表示分发者签署此二进制；Node 保留上游签名，不重新签署。JS、JSON、配置、文档不做独立 Authenticode 签名，其内容由包内哈希清单覆盖。
+
+只签 `common` 清单中的文件，保持 PowerShell 的 UTF-8 BOM 编码，不改正文；不要改 `pristine`。之后由 Package 生成待签卸载程序，签好再续跑；最后签两个 Setup.exe。最终文件签好后才能生成发布 SHA256SUMS，不能使用签名前的哈希。
+
+Prepare 的 Manual 模式要求干净提交、发布者与许可信息；完整 CLI 构建还要求 npm 名称。默认要求 SignerThumbprint；TrustManualSignatures 按维护者的手动签名确认继续。它导出 signing-plan.json 与文字清单；用户对 common 清单中的 EXE/脚本逐个签名并加时间戳，再执行 Package。原始程序字节冻结；只接受 Authenticode 排除字段和附加证书、或 PowerShell 附加签名块的变化，不能用新程序替换后刷新 hash。
 
 首次 Package 可能返回 `awaiting-uninstaller-signature` 和缓存文件路径；用户签名后用相同 BuildId 续跑。启用 `SignedUninstaller=yes`，保证编译器使用签名卸载程序/安装临时副本。两个 Setup.exe 生成后用户逐个签名，Finalize 验证发布者、时间戳、原始内容及最终 SHA-256；脚本不访问私钥或请求密码/PIN。[Inno 官方签名流程](https://jrsoftware.org/ishelp/topic_setup_signeduninstaller.htm)。
 
