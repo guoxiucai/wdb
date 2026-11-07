@@ -35,7 +35,7 @@ for($attempt=0;$attempt -lt 15;$attempt++){
 }
 if(!$diagnostic){throw 'Service failed HTTPS startup validation'}
 $service=Get-CimInstance Win32_Service -Filter "Name='WdbService'"
-$child=@(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {$_.ParentProcessId -eq $service.ProcessId -and $_.ExecutablePath -eq $Runtime.path})
+$child=@(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($service.ProcessId)" | Where-Object {$_.ExecutablePath -eq $Runtime.path})
 if($service.State -ne 'Running' -or $service.StartName -ne 'LocalSystem' -or $child.Count -ne 1){throw 'SYSTEM service runtime binding is not active'}
 $diagnostic | Add-Member NoteProperty serviceProcessId $service.ProcessId
 $diagnostic | Add-Member NoteProperty serverProcessId $child[0].ProcessId

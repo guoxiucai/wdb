@@ -132,6 +132,12 @@ begin
   end;
 end;
 
+function GetCustomSetupExitCode: Integer;
+begin
+  Result := 0;
+  if TransactionStarted and not TransactionFinished then Result := 100;
+end;
+
 procedure DeinitializeSetup;
 begin
   if TransactionStarted and not TransactionFinished then RunAction('Rollback');
