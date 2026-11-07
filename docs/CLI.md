@@ -148,3 +148,5 @@ UI 操作用 `ui.find` / `ui.tree` 返回的完整 `reference` 对象。保存 J
 所有服务端操作都可通过 `wdb call <op> --args-file <文件> --json` 调用，不需要绕过 CLI。安装器的静默参数必须来自用户或应用配置，不推测通用 EXE 参数。应用部署、日志、录屏具体参数以服务端能力输出和项目实现文档为准。
 
 将交付的 `skills\wdb` 目录复制到项目 `.agents\skills\wdb`（Codex）或 `.claude\skills\wdb`（Claude Code）；也可在需要时直接让 Agent 读取该 SKILL.md。Skill 不包含配对密码或模型 API Key。
+
+`devices` 在 Windows/macOS 采用相同规则：在线设备正常显示；历史配对记录在新终端中不会显示为 `offline`。仅在当前终端通过 `connect` 或 `devices` 观察到在线的设备，随后探测离线时才保留离线条目，从首次发现离线起最多显示 10 分钟；重复探测不延长时间。恢复在线后重新显示。该过滤同时适用于文本、JSON 和 `--watch`，不删除配对凭据，也不改变显式 `--device` 的使用。授权/证书错误仍显示。会话按终端标识及父 shell 进程识别（Windows 跳过 npm 的临时 cmd /c 启动层）；无法识别时仅保留当前 CLI 调用内的观察，不继承历史离线条目。

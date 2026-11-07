@@ -3,14 +3,11 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {Bridge}=require('../src/server');const {main}=require('../src/cli');const {api,setSession}=require('../src/client-transport');
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function setup(t){
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-reconnect-'));for(const name of ['tls.pfx','tls-password','helper-secret','pairing-code'])fs.copyFileSync(path.join(__dirname,'../.runtime/server',name),path.join(dir,name));
- const bridge=new Bridge({dataDir:dir,approvePairing:async()=>({decision:'approved',remember:true})});await bridge.listen(0);const target='https://127.0.0.1:'+bridge.server.address().port;
- // Read the server certificate with an unauthenticated TLS handshake; never print credentials.
- const tls=require('node:tls');const fingerprint=await new Promise((resolve,reject)=>{const s=tls.connect({host:'127.0.0.1',port:bridge.server.address().port,rejectUnauthorized:false},()=>{resolve(crypto.createHash('sha256').update(s.getPeerCertificate().raw).digest('hex'));s.destroy();});s.on('error',reject);});
- const seed={url:target,fingerprint};setSession(seed,{'reconnect-timeout':2000,'request-timeout':300});const paired=await api(seed,'POST','/v1/pair',{pairingCode:fs.readFileSync(path.join(dir,'pairing-code'),'utf8')});const device={...seed,...paired.data,connected:true};
+ const {dir,bridge,device}=await require('./stream-fixture').fixture(t);
+ fs.writeFileSync(path.join(dir,'pairing-code'),'fixture-pairing');
  const configDir=path.join(dir,'client');fs.mkdirSync(configDir);fs.writeFileSync(path.join(configDir,'devices.json'),JSON.stringify({version:1,devices:[device]}));
  const cli=async(args)=>{let stdout='',stderr='';const code=await main([...args,'--config',configDir,'--json','--reconnect-timeout','2500','--request-timeout','300','--poll-ms','50'],{stdout:{write:s=>stdout+=s},stderr:{write:s=>stderr+=s}});return {code,result:JSON.parse(stdout),stderr};};
- t.after(async()=>{await bridge.close();fs.rmSync(dir,{recursive:true,force:true});});return {dir,configDir,bridge,device,cli};
+ return {dir,configDir,bridge,device,cli};
 }
 test('lost task acceptance response recovers the same persisted task without replay',async t=>{
  const f=await setup(t),original=f.bridge.route.bind(f.bridge);let posts=0;
@@ -45,7 +42,7 @@ test('task waiter survives a server outage and reports restart uncertainty witho
 
 test('devices watches real online/offline recovery and displays hostname, URL and stable ID without credentials',async t=>{
  const f=await setup(t),original=f.bridge.route.bind(f.bridge);let dropped=false,restored=false,mode='online',stdout='';const events=[];
- f.bridge.route=(req,res)=>{if(mode==='offline'){req.socket.destroy();return;}return original(req,res);};
+ f.bridge.route=(req,res)=>{if(mode==='offline'){req.socket.destroy();return;}if(req.url==='/v1/info'){res.end(JSON.stringify({deviceId:f.device.deviceId,data:{hostname:os.hostname()}}));return;}return original(req,res);};
  const code=await main(['devices','--watch','--duration','1200','--poll-ms','50','--probe-timeout','100','--config',f.configDir,'--json'],{stdout:{write:s=>{stdout+=s;const e=JSON.parse(s);if(!Array.isArray(e.data))return;events.push(e.data[0]);if(e.data[0].connectionState==='online'&&!dropped){dropped=true;mode='offline';}else if(e.data[0].connectionState==='offline'&&!restored){restored=true;setTimeout(()=>{mode='online';},200);}}},stderr:{write(){}}});
  assert.equal(code,0);assert.deepEqual(events.map(d=>d.connectionState),['online','offline','online']);assert.ok(events.every(d=>d.deviceId===f.device.deviceId&&d.url===f.device.url&&d.hostname===os.hostname()));assert.ok(!stdout.includes(f.device.token));assert.equal(events[1].enabled,true);assert.equal(events[1].connected,false);
  assert.equal((await f.cli(['info','--device',os.hostname()])).code,0);

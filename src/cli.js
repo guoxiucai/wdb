@@ -152,7 +152,7 @@ function selectDevice(config, selector, allowDisconnected = false) {
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function deviceSnapshot(dir,options,io,blocked){
+async function deviceSnapshot(dir,options,io,blocked,visibility){
   const config=await readConfig(dir),checkedAt=new Date().toISOString();
   const entries=await Promise.all(config.devices.map(async device=>{
     const result={url:device.url,hostname:device.hostname||null,deviceId:device.deviceId,clientId:device.clientId,version:device.version,fingerprint:device.fingerprint,enabled:device.connected!==false,connected:false,connectionState:'disconnected',lastConnected:device.lastConnected,checkedAt};
@@ -169,12 +169,12 @@ async function deviceSnapshot(dir,options,io,blocked){
   for(const entry of entries){const saved=latest.devices.find(d=>d.url===entry.url&&d.deviceId===entry.deviceId);if(!saved)continue;if(saved.connected===false){entry.enabled=false;entry.connected=false;entry.connectionState='disconnected';}
     if(entry.hostname&&saved.hostname!==entry.hostname){saved.hostname=entry.hostname;changed=true;}
   }
-  if(changed)await saveConfig(dir,latest);return entries;
+  if(changed)await saveConfig(dir,latest);return visibility?visibility.filter(entries):entries;
 }
-async function watchDevices(dir,options,io){
+async function watchDevices(dir,options,io,visibility){
   const duration=numberOption(options.duration,Infinity,'--duration',1),interval=numberOption(options['poll-ms'],1000,'--poll-ms',50);let stopped=false,previous='',changes=0;const start=Date.now(),blocked=new Map();
   const interrupt=()=>{stopped=true;};process.once('SIGINT',interrupt);process.once('SIGTERM',interrupt);
-  try{while(!stopped&&Date.now()-start<duration){const snapshot=await deviceSnapshot(dir,options,io,blocked);const signature=JSON.stringify(snapshot.map(({checkedAt,error,...d})=>({...d,errorCode:error?.code})));
+  try{while(!stopped&&Date.now()-start<duration){const snapshot=await deviceSnapshot(dir,options,io,blocked,visibility);const signature=JSON.stringify(snapshot.map(({checkedAt,error,...d})=>({...d,errorCode:error?.code})));
     if(signature!==previous){printResult(makeEnvelope(snapshot,{status:'running'}),options,io);previous=signature;changes++;}
     if(!stopped)await sleep(Math.min(interval,Math.max(0,duration-(Date.now()-start))));
   }return makeEnvelope({stopped:true,changes,reason:stopped?'interrupted':'duration_limit'});}
@@ -435,6 +435,7 @@ const HELP = `wdb — Windows Debug Bridge
     Prints connected / already connected / failed / timed out. Use info for details.
     Optional trusted pin: --fingerprint <SHA256>; --approval-timeout <ms> defaults to 150000.
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
+    Offline rows: current terminal only, hidden after 10 minutes; pairing is retained.
   wdb clients list | clients revoke <clientId>
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]
   wdb shell [--interactive] [--program powershell|cmd|pwsh] [--cwd <dir>] [--admin]
@@ -479,7 +480,10 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   }
   const dir = await resolveConfigDir(options);
   const config = await readConfig(dir);
-  if (command === 'devices') return { options, result: boolOption(options.watch)?await watchDevices(dir,options,io):makeEnvelope(await deviceSnapshot(dir,options,io)) };
+  if (command === 'devices') {
+    const visibility=await new (require('./device-visibility').DeviceVisibility)(dir).load();
+    return { options, result: boolOption(options.watch)?await watchDevices(dir,options,io,visibility):makeEnvelope(await deviceSnapshot(dir,options,io,undefined,visibility)) };
+  }
   if (command === 'connect') {
     const url = normalizeTarget(words[0]);
     const approvalTimeout=numberOption(options['approval-timeout'],150000,'--approval-timeout',1000);
@@ -501,6 +505,7 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
       if (health) {
         device.connected = true; device.lastConnected = new Date().toISOString(); device.hostname = health.data.hostname || device.hostname;
         await saveConfig(dir, config);
+        await (await new (require('./device-visibility').DeviceVisibility)(dir).load()).online(device);
         return { options, result: connectionResult(url, alreadyConnected ? 'already_connected' : 'connected') };
       }
     }
@@ -515,6 +520,7 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
     const health=await discoverServer(device);device.hostname=health.data.hostname;
     config.devices = [...config.devices.filter(entry => entry.url !== url), device];
     await saveConfig(dir, config);
+    await (await new (require('./device-visibility').DeviceVisibility)(dir).load()).online(device);
     return { options, result: connectionResult(url, 'connected') };
   }
   const device = selectDevice(config, command === 'disconnect' ? words[0] || options.device : options.device, command === 'disconnect');
