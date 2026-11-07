@@ -9,3 +9,7 @@ native/*.dll
 native/bin/
 .tmp/
 .test-*/
+
+.DS_Store
+
+dev_doc
