@@ -1,6 +1,6 @@
 # CLI capability index
 
-Use this index after installation to choose the relevant command family. Run `wdb --help` for the installed version; read its package `docs/CLI.md` for exact arguments and JSON schemas. Find the package with `npm root -g`, then append `/@tsingwill/wdb`; a custom install uses `npm root -g --prefix <prefix>`. These references remain usable when the Skill is copied without the repository. Do not guess operation names or parameters from this index.
+Use this index to choose a command family. Read [cli.md](cli.md) for command examples and JSON semantics; [electron.md](electron.md), [flutter.md](flutter.md) and [streaming.md](streaming.md) cover specialized tasks. These files ship with this Skill. Run `wdb --help` to check the installed version; do not guess operation names or parameters.
 
 All remote examples use `wdb --device <server> ...`; `<server>` is the supplied address or returned device ID. Replace placeholders with observed values. Use `--json` for ordinary commands and `--args-file <local.json>` for structured arguments. Bare shell requires a real TTY; forwarding JSON is NDJSON.
 
@@ -26,8 +26,8 @@ All remote examples use `wdb --device <server> ...`; `<server>` is the supplied 
 | Deploy applications | `app install\|update\|uninstall` | Use supplied installer parameters, user vs machine scope and intended elevation; verify installed version/state. Do not guess silent flags. |
 | Record desktop | `record start`; `record stop --id <record-task-id>` | Set bounded duration; inspect task result, pull MP4 and verify content. Stop uses the recording task ID. |
 | File / event diagnostics | `logs file`; `logs events` | Select documented path/log/time/count; `--follow` is bounded where supported and must be stopped when done. |
-| Electron | `electron launch\|targets\|observe\|tree\|find\|action\|wait\|eval\|screenshot\|logs` | Read installed `docs/ELECTRON.md`; CDP endpoint lives on Windows, page ID is not window ID. |
-| Flutter | `flutter info\|isolates\|observe\|tree\|find\|properties\|wait\|logs\|memory\|screenshot\|action` | Read installed `docs/FLUTTER.md`; preserve authenticated VM Service URI privately; extensions depend on app build. |
+| Electron | `electron launch\|targets\|observe\|tree\|find\|action\|wait\|eval\|screenshot\|logs` | Read [electron.md](electron.md); CDP endpoint lives on Windows, page ID is not window ID. |
+| Flutter | `flutter info\|isolates\|observe\|tree\|find\|properties\|wait\|logs\|memory\|screenshot\|action` | Read [flutter.md](flutter.md); preserve authenticated VM Service URI privately; extensions depend on app build. |
 | Other service operations | `call <operation> --args-file <local.json>` | Only invoke operations documented by the installed client/server. Use this for supported operations without an alias. |
 
 ## Minimal task patterns
@@ -50,4 +50,4 @@ wdb --device <server> screenshot --window '<returned-window-id>' --json
 wdb --device <server> pull '<returned-artifact-path>' './screen.png' --json
 ```
 
-For record duration/FPS, touch schema, app installers, log filters, forwarding endpoint options or framework selectors, consult the appropriate installed guide and `--help`. Match options to the installed version; do not assume newer repository documentation implies an older installed server supports the feature. A terminal command returning success is not proof that a UI or deployment goal succeeded.
+For record duration/FPS, touch schema, app installers, log filters, forwarding endpoint options or framework selectors, consult the bundled references and `wdb --help`. Match options to the installed version; do not assume newer Skill guidance implies an older installed server supports the feature. A terminal command returning success is not proof that a UI or deployment goal succeeded.
