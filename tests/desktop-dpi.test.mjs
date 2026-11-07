@@ -25,7 +25,7 @@ test('approval layout and screenshot physical pixels at current Windows DPI', {s
   assert.equal(build.status,0,build.stdout+build.stderr);
   fs.copyFileSync(`${bridge}.config`,`${fixture}.config`);
   const results=[];
-  const scales=process.env.WDB_DPI_LAYOUT_STRESS==='1'?[1,1.25,1.5,1.75,2,2.5,3]:[1];
+  const scales=process.env.WDB_DPI_LAYOUT_STRESS==='1'?[1,1.25,1.5,1.75,2,2.5,3].map(value=>value*96/screens.monitors[0].dpiX):[1];
   const cases=scales.flatMap(scale=>['QMacBookPro.local','研发笔记本 & QA — '+ 'LongDeviceName-'.repeat(10)].map(name=>({scale,name})));
   for(const [index,{scale,name}] of cases.entries()) {
     const metrics=path.join(dir,`layout-${index}.json`);

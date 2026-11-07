@@ -87,6 +87,15 @@ public static class DesktopBridge {
     static object Status() { return new {available=Available(),sessionId=Process.GetCurrentProcess().SessionId,identity=System.Security.Principal.WindowsIdentity.GetCurrent().Name,coordinateSpace="virtual-desktop-physical",layoutId=Layout()}; }
     // The same presentation is used by the read-only DPI fixture. Authorization
     // handlers exist only in ApproveConnection, never in this layout class.
+    sealed class ApprovalButtons : TableLayoutPanel {
+        protected override void OnPaint(PaintEventArgs e) {
+            base.OnPaint(e);
+            using(var pen=new Pen(Color.FromArgb(229,230,233))) {
+                e.Graphics.DrawLine(pen,0,0,Width,0);
+                e.Graphics.DrawLine(pen,Width/2,Height/4,Width/2,Height*3/4);
+            }
+        }
+    }
     sealed class ApprovalDialog : Form {
         public readonly Label Identity, Heading, Countdown;
         public readonly CheckBox Remember;
@@ -99,25 +108,34 @@ public static class DesktopBridge {
             SuspendLayout();
             Text="WDB 连接授权";AutoSize=true;AutoSizeMode=AutoSizeMode.GrowAndShrink;
             AutoScaleDimensions=new SizeF(96F,96F);AutoScaleMode=AutoScaleMode.Dpi;
-            normalFont=new Font("Microsoft YaHei UI",10F);headingFont=new Font("Microsoft YaHei UI",11F,FontStyle.Bold);Font=normalFont;
-            FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;
+            normalFont=new Font("Microsoft YaHei UI",11F);headingFont=new Font("Microsoft YaHei UI",14F,FontStyle.Bold);Font=normalFont;
+            FormBorderStyle=FormBorderStyle.None;MaximizeBox=false;MinimizeBox=false;
+            BackColor=Color.FromArgb(253,253,254);ForeColor=Color.FromArgb(30,31,33);
+            DoubleBuffered=true;
             StartPosition=FormStartPosition.CenterScreen;TopMost=true;ShowInTaskbar=true;
-            content=new TableLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,RowCount=4,Padding=new Padding(20),Dock=DockStyle.Fill};
+            content=new TableLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,RowCount=5,Padding=new Padding(24,24,24,12),Dock=DockStyle.Fill};
             content.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            for(int i=0;i<4;i++)content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Identity=new Label{Name="ClientName",Text=name,UseMnemonic=false,AutoSize=true,MinimumSize=new Size(560,0),MaximumSize=new Size(560,0),AccessibleName=name};
-            Heading=new Label{Name="ApprovalHeading",Text="允许此客户端连接？",AutoSize=true,MaximumSize=new Size(560,0),Font=headingFont};
+            for(int i=0;i<5;i++)content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Identity=new Label{Name="ClientName",Text=name,UseMnemonic=false,AutoSize=true,MinimumSize=new Size(420,0),MaximumSize=new Size(420,0),AccessibleName=name,TextAlign=ContentAlignment.MiddleCenter};
+            Heading=new Label{Name="ApprovalHeading",Text="允许此客户端连接？",AutoSize=true,MinimumSize=new Size(420,0),MaximumSize=new Size(420,0),Font=headingFont,TextAlign=ContentAlignment.MiddleCenter};
             Remember=new CheckBox{Name="RememberClient",Text="记住此客户端",AutoSize=true,Checked=false,AccessibleName="记住此客户端"};
-            buttons=new TableLayoutPanel{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=3,RowCount=1,Dock=DockStyle.Fill,Margin=Padding.Empty,MinimumSize=new Size(560,0)};
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            buttons=new ApprovalButtons{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=2,RowCount=1,Dock=DockStyle.Fill,Margin=Padding.Empty,MinimumSize=new Size(420,0)};
+            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             buttons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Countdown=new Label{Name="Countdown",Text="120 秒后关闭",AutoSize=true,Anchor=AnchorStyles.Left,Margin=new Padding(0,0,8,0),ForeColor=SystemColors.GrayText};
-            Allow=new Button{Name="Allow",Text="同意",AutoSize=true,MinimumSize=new Size(96,36),Margin=new Padding(0,0,8,0),AccessibleName="同意连接"};
-            Deny=new Button{Name="Deny",Text="拒绝",AutoSize=true,MinimumSize=new Size(96,36),Margin=Padding.Empty,AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
-            buttons.Controls.Add(Countdown,0,0);buttons.Controls.Add(Allow,1,0);buttons.Controls.Add(Deny,2,0);
+            Countdown=new Label{Name="Countdown",Text="120 秒后关闭",AutoSize=true,Margin=new Padding(0,0,0,12),ForeColor=Color.FromArgb(114,117,124)};
+            Allow=new Button{Name="Allow",Text="同意",AutoSize=true,MinimumSize=new Size(96,48),Margin=new Padding(0,1,1,0),AccessibleName="同意连接"};
+            Deny=new Button{Name="Deny",Text="拒绝",AutoSize=true,MinimumSize=new Size(96,48),Margin=new Padding(1,1,0,0),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+            foreach(var button in new[]{Allow,Deny}) {
+                button.MaximumSize=new Size(0,48);
+                button.FlatStyle=FlatStyle.Flat;button.FlatAppearance.BorderSize=0;
+                button.FlatAppearance.MouseOverBackColor=Color.FromArgb(238,245,255);
+                button.FlatAppearance.MouseDownBackColor=Color.FromArgb(222,235,255);
+                button.ForeColor=Color.FromArgb(0,102,255);button.Dock=DockStyle.Fill;button.Cursor=Cursors.Hand;
+            }
+            buttons.Controls.Add(Allow,0,0);buttons.Controls.Add(Deny,1,0);
             int row=0;foreach(Control control in new Control[]{Identity,Heading,Remember}){control.Margin=new Padding(0,0,0,8);content.Controls.Add(control,0,row++);}
-            content.Controls.Add(buttons,0,3);Controls.Add(content);
+            Heading.Margin=new Padding(0,0,0,20);
+            content.Controls.Add(Countdown,0,3);content.Controls.Add(buttons,0,4);Controls.Add(content);
             nameTip=new ToolTip{ShowAlways=true,AutoPopDelay=15000};nameTip.SetToolTip(Identity,name);
             AcceptButton=Deny;CancelButton=Deny;
             Shown+=delegate {FitWidth();CenterToScreen();Deny.Focus();};
@@ -130,13 +148,23 @@ public static class DesktopBridge {
                 var work=Screen.FromHandle(Handle).WorkingArea;
                 int dpi=(int)GetDpiForWindow(Handle);
                 int gap=(int)Math.Ceiling(16*dpi/96.0);
-                int width=Math.Max(1,Math.Min((int)Math.Round(560*dpi/96.0),work.Width-(Width-ClientSize.Width)-content.Padding.Horizontal-gap));
+                int width=Math.Max(1,Math.Min((int)Math.Round(420*dpi/96.0),work.Width-(Width-ClientSize.Width)-content.Padding.Horizontal-gap));
                 SuspendLayout();content.SuspendLayout();
                 Identity.MinimumSize=new Size(width,0);Identity.MaximumSize=new Size(width,0);
-                Heading.MaximumSize=new Size(width,0);buttons.MinimumSize=new Size(width,0);
+                Heading.MinimumSize=new Size(width,0);Heading.MaximumSize=new Size(width,0);buttons.MinimumSize=new Size(width,0);
                 content.ResumeLayout(true);ResumeLayout(true);
                 Location=new Point(Math.Max(work.Left,Math.Min(Left,work.Right-Width)),Math.Max(work.Top,Math.Min(Top,work.Bottom-Height)));
             } finally {fitting=false;}
+        }
+        protected override void OnSizeChanged(EventArgs e) {
+            base.OnSizeChanged(e);
+            if(ClientSize.Width<1||ClientSize.Height<1)return;
+            int diameter=Math.Min(Math.Min(ClientSize.Width,ClientSize.Height),(int)Math.Round(48*DeviceDpi/96.0));
+            using(var path=new System.Drawing.Drawing2D.GraphicsPath()) {
+                path.AddArc(0,0,diameter,diameter,180,90);path.AddArc(ClientSize.Width-diameter,0,diameter,diameter,270,90);
+                path.AddArc(ClientSize.Width-diameter,ClientSize.Height-diameter,diameter,diameter,0,90);path.AddArc(0,ClientSize.Height-diameter,diameter,diameter,90,90);path.CloseFigure();
+                var previous=Region;Region=new Region(path);if(previous!=null)previous.Dispose();
+            }
         }
         protected override void Dispose(bool disposing) {
             base.Dispose(disposing);
