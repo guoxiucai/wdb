@@ -42,6 +42,8 @@ Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-Development-setup.ex
 
 启动器读取受保护的 `runtime-binding.json`，使用与服务相同的 Node 路径，保留当前用户身份、工作目录、标准输入输出和退出码。不会将捆绑 Node 加入 PATH，也不会提升 CLI 权限。安装器保留其他 PATH 项，升级不重复添加，失败回滚和卸载只删除它添加的 WDB 项；预先由用户添加的同路径项保留。若已有其他版本的 `wdb`，用 `Get-Command wdb -All` 检查命令优先级，或直接运行安装目录的 `bin\wdb.exe`。
 
+服务器本机用 `wdb clients list` 查看授权，`wdb clients revoke <clientId>` 撤销授权；默认直接管理本机，无需将本机再 connect 成客户端。使用配置的桌面账户或有权限的管理员运行。显式 `--device` 用于选择远端已配对服务，详见 [CLI 指南](CLI.md)。
+
 依赖、端口、完整性、空间和用户预检发生在停止旧服务前。事务记录和旧程序备份保存在受保护的 `C:\ProgramData\WdbInstaller`。启动校验失败恢复旧程序和运行时绑定；不会覆盖用户数据。进行中任务保持现有 SERVICE_RESTARTED/unknown 语义，不自动重跑；临时授权因重启失效，已记住授权和 TLS/deviceId 保留。
 
 普通修复重新运行同版本 Setup；完整 payload 可通过 `scripts/repair-service.ps1 -NodePath <合格Node>` 重新绑定。缺失/改动程序文件需要 Setup 修复，不会在用户机器触发构建。开发源码安装必须显式 `-Development`，与正式 payload 分开。

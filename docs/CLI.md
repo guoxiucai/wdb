@@ -31,6 +31,12 @@ connection to 172.20.115.75:18766 timed out (PAIRING_TIMEOUT)
 
 `disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
 
+Windows 服务端本机安装后，`wdb clients list` / `wdb clients revoke <clientId>` 默认管理本机服务，无需先 connect，也不读取本地 CLI 设备记录。可加 `--local` 明确选择本机；`--local` 与 `--device` 互斥。指定 `--device` 则保留远端已配对管理流程。未安装本机服务的 CLI 按原设备选择规则执行。
+
+本机管理仅允许安装时配置的桌面账户或有权限读取受保护服务凭据的管理员，使用已保存的本机证书指纹和凭据访问服务；不自动提权，不因缺少凭据而跳过认证。服务未启动会报告连接错误；权限不足报告 LOCAL_ADMIN_UNAVAILABLE。撤销立即终止目标客户端的连接、订阅、转发与正在执行的任务；列表仍保留带 revokedAt 的记录。
+
+撤销并非永久禁止设备连接。远端再次执行 `wdb connect <服务端地址>` 会申请新的授权，服务端再次弹窗同意后生成新凭据；拒绝、关闭或超时不恢复访问。旧凭据始终失效，旧撤销记录保留。
+
 `devices` 和 `devices --watch` 的文本表格中，ADDRESS 显示主机及端口，例如 `172.20.115.75:18766`，省略 `https://`。这是显示格式；JSON的`url`、保存的服务地址及实际HTTPS传输保持不变。
 
 `devices` 同时展示实时状态、Windows 设备名、URL、固定 16 字符且无分隔符的设备 ID；JSON 的 `enabled` 为本地启用，`connected` 为本次在线探测结果。旧 UUID 自动迁移，不需重新配对。`devices --watch` 持续观察离线/恢复变化。已配对命令和任务等待默认自动重连最多 60 秒；`--reconnect-timeout` 可调整。证书、设备 ID 或授权错误不自动重试；服务重启不重跑结果未知的任务。详见[自动重连与设备标识](RECONNECTION.md)。

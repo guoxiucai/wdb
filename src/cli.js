@@ -13,7 +13,7 @@ const { StringDecoder } = require('node:string_decoder');
 const DEFAULT_PORT = 18766;
 const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
-const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version','interactive']);
+const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version','interactive','local']);
 const {CliError,normalizeFingerprint,discoverFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer,withTransport,supportsTaskEvents,consumeTaskEvents,isTransient}=require('./client-transport');
 const {normalizeDeviceId}=require('./device-id');
 function parseArgv(argv) {
@@ -437,6 +437,8 @@ const HELP = `wdb — Windows Debug Bridge
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
     Offline rows: current terminal only, hidden after 10 minutes; pairing is retained.
   wdb clients list | clients revoke <clientId>
+    Installed Windows server: local management by default; --local forces local,
+    --device <server> explicitly manages a paired remote server.
   wdb shell --script <PowerShell> [--cwd <dir>] [--env <JSON>] [--admin] [--detach]
   wdb shell [--interactive] [--program powershell|cmd|pwsh] [--cwd <dir>] [--admin]
   wdb forward <tcp:listen-port> <tcp:target-port> [--json]
@@ -477,6 +479,12 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   if (options['args-file']) {
     if (options.args !== undefined) throw new CliError('INVALID_ARGUMENT', 'Use either --args or --args-file.');
     options.args = await fsp.readFile(path.resolve(options['args-file']), 'utf8');
+  }
+  if(options.local&&command!=='clients')throw new CliError('INVALID_ARGUMENT','--local is only supported for clients.');
+  if(command==='clients'){
+    if(options.local&&options.device)throw new CliError('INVALID_ARGUMENT','--local and --device cannot be combined.');
+    const local=require('./local-clients');
+    if(options.local||(!options.device&&await local.localServerInstalled()))return {options,result:await local.manageLocalClients(words,{timeoutMs:numberOption(options['request-timeout'],10000,'--request-timeout',1)})};
   }
   const dir = await resolveConfigDir(options);
   const config = await readConfig(dir);

@@ -28,6 +28,8 @@ class Bridge {
  save(t){t.deviceId=normalizeDeviceId(t.deviceId);atomic(path.join(this.dir,'tasks',t.id,'task.json'),t);this.taskEvents.publish(t);}
  audit(event){fs.appendFileSync(path.join(this.dir,'audit.jsonl'),JSON.stringify({...event,deviceId:this.config.deviceId,time:new Date().toISOString()})+'\n');}
  persistClients(){atomic(path.join(this.dir,'clients.json'),this.clients);}
+ listClients(){return {clients:this.clients.map(({tokenHash,...c})=>({...c,remembered:c.remembered!==false,authorized:!c.revokedAt&&this.isApproved(c)}))};}
+ revokeClient(id){const c=this.clients.find(c=>c.id===id);if(!c)throw fail('CLIENT_NOT_FOUND','Client not found',404);c.revokedAt=new Date().toISOString();this.persistClients();this.temporaryClients.delete(id);this.streams.disconnect(id,'UNAUTHORIZED');this.taskEvents.disconnect(id);this.leases.delete(id);for(const t of this.tasks.values())if(t.clientId===id)this.cancel(t,'AUTHORIZATION_REVOKED');for(const socket of this.clientSockets.get(id)||[])socket.destroy();return {revoked:id};}
  identify(req){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const c=this.clients.find(c=>!c.revokedAt&&equal(c.tokenHash,sha(token)));if(!c)throw fail('UNAUTHORIZED','Valid paired client token required',401);return c;}
  isApproved(c){return c.remembered!==false||Date.now()-(this.temporaryClients.get(c.id)||0)<(this.options.temporaryIdleMs||TEMPORARY_IDLE_MS);}
  approve(c,remember){c.remembered=remember;c.approvedAt=new Date().toISOString();if(remember)this.temporaryClients.delete(c.id);else this.temporaryClients.set(c.id,Date.now());this.persistClients();}
@@ -70,6 +72,17 @@ class Bridge {
   const respond=(data,status='succeeded',http=200)=>send(res,http,envelope(this.config.deviceId,data,status,null,requestId,started));
   try{
    const u=new URL(req.url,'https://localhost');
+   if(u.pathname==='/v1/local/clients'||u.pathname.startsWith('/v1/local/clients/')){
+    const address=req.socket.remoteAddress,localAddress=req.socket.localAddress;
+    const local=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(address)||address===localAddress;
+    if(!local||!equal(req.headers.authorization||'','Bearer '+this.helperSecret))throw fail('UNAUTHORIZED','Protected local management credentials required',401);
+    if(u.pathname==='/v1/local/clients'&&req.method==='GET')return respond(this.listClients());
+    const id=u.pathname.slice('/v1/local/clients/'.length);
+    if(req.method==='DELETE'&&/^[a-f0-9-]{36}$/i.test(id)){
+     const result=this.revokeClient(id);this.audit({requestId,op:'clients.revoke',clientId:id,actor:'local-server-manager',status:'succeeded'});return respond(result);
+    }
+    throw fail('INVALID_ARGUMENT','Unsupported local management operation');
+   }
    if(u.pathname==='/v1/pair'&&req.method==='POST'){
     const ip=req.socket.remoteAddress,attempt=this.pairAttempts.get(ip)||{count:0,until:Date.now()+60000};if(Date.now()>attempt.until){attempt.count=0;attempt.until=Date.now()+60000;}attempt.count++;this.pairAttempts.set(ip,attempt);if(attempt.count>10)throw fail('RATE_LIMITED','Pairing attempt limit reached; retry after one minute',429);
     // Local consent is the authorization gate. Legacy pairingCode fields are ignored.
