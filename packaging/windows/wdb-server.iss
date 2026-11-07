@@ -79,7 +79,7 @@ begin
   if (DesktopAccount = '') and not WizardSilent then DesktopAccount := ConsoleAccount();
   AccountPage.Values[0] := DesktopAccount;
 #if RuntimeMode == "external-node"
-  AccountPage.Add('System Node.exe path (>=18.17.0):', False);
+  AccountPage.Add('System Node.exe path (>=22.0.0):', False);
   if ExternalNode = '' then ExternalNode := ExpandConstant('{autopf}\nodejs\node.exe');
   AccountPage.Values[1] := ExternalNode;
 #endif

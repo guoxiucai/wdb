@@ -5,6 +5,6 @@
   "description": "WDB command-line client for Windows servers",
   "type": "commonjs",
   "bin": { "wdb": "bin/wdb.js" },
-  "engines": { "node": ">=18.17.0" },
+  "engines": { "node": ">=22.0.0" },
   "files": ["bin/wdb.js", "src", "docs", "skills", "BUILD-INFO.json", "README.md", "LICENSE"]
 }

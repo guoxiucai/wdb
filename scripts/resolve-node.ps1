@@ -29,7 +29,7 @@ function Resolve-WdbNode {
     elseif (!$NodePath) { $NodePath=Join-Path $env:ProgramFiles 'nodejs\node.exe' }
     if (![IO.Path]::IsPathRooted($NodePath) -or $NodePath.StartsWith('\\')) { throw 'Supply an absolute local Node path.' }
     $NodePath=[IO.Path]::GetFullPath($NodePath)
-    if (!(Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw "Node runtime not found: $NodePath. Install system-wide Node >=18.17.0 from https://nodejs.org/ or use the with-node installer." }
+    if (!(Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw "Node runtime not found: $NodePath. Install system-wide Node >=22.0.0 from https://nodejs.org/ or use the with-node installer." }
     if (!$BuildPayload) { $null=Assert-WdbProtectedPath -Path $NodePath }
     $signature=Get-AuthenticodeSignature -LiteralPath $NodePath
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=OpenJS Foundation(?:,|$)') { throw 'Node must carry a valid OpenJS Foundation signature.' }
@@ -38,8 +38,8 @@ function Resolve-WdbNode {
     $runtime=$probe | ConvertFrom-Json
     if ($runtime.path -ine $NodePath -or $runtime.platform -ne 'win32' -or $runtime.arch -ne 'x64') { throw 'Node must be the actual Windows x64 runtime, not a shim.' }
     $version=[version]$runtime.version
-    if ($version -lt [version]'18.17.0') { throw "Unsupported Node $version. Required >=18.17.0." }
-    [pscustomobject][ordered]@{runtimeMode=$RuntimeMode;path=$NodePath;version=$runtime.version;architecture=$runtime.arch;sha256=(Get-FileHash -LiteralPath $NodePath -Algorithm SHA256).Hash.ToLowerInvariant();verifiedAt=[DateTime]::UtcNow.ToString('o');requiredVersion='>=18.17.0'}
+    if ($version -lt [version]'22.0.0') { throw "Unsupported Node $version. Required >=22.0.0." }
+    [pscustomobject][ordered]@{runtimeMode=$RuntimeMode;path=$NodePath;version=$runtime.version;architecture=$runtime.arch;sha256=(Get-FileHash -LiteralPath $NodePath -Algorithm SHA256).Hash.ToLowerInvariant();verifiedAt=[DateTime]::UtcNow.ToString('o');requiredVersion='>=22.0.0'}
 }
 function Get-WdbRuntimeBinding {
     param([string]$InstallDirectory="$env:ProgramFiles\wdb")

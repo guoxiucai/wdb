@@ -1,8 +1,8 @@
 # 纯 JavaScript npm 客户端
 
-最低版本为 **18.17.0**，不是 18.0：服务端调试链路使用的 `AbortSignal.any` 从 18.17 提供；Electron/Flutter WebSocket 使用现有 `ws`，不再依赖新版 Node 的全局 WebSocket。CLI 和服务端使用同一最低版本约束，不设置只接受 Node 24 的上限。Windows 已分别验证 Node 18.17.0 与 24.15.0；这不代表所有中间版本和 Mac 实机均已验证。Node 18 已停止上游维护，兼容下限不等于推荐版本；自带运行时的 EXE 继续使用固定 Node 24。
+最低版本统一为 **Node 22.0.0**，CLI 与服务端拒绝 Node 18 / 20，不设置只接受 Node 24 的上限。推荐使用 Node 24 LTS 的受维护补丁版本；自带运行时的 EXE 继续使用固定 Node 24。Electron/Flutter WebSocket 使用已锁定的 `ws`。跨平台共享代码不等于所有 Node 版本或 Mac 实机均已验证。
 
-Windows/macOS 共用一个 tarball，支持 Node `>=18.17.0`。唯一第三方运行依赖为固定版本的纯 JavaScript `ws@8.22.1`（MIT）；无原生程序、服务端代码或 install/postinstall hook，不下载 Node 或自动复制 Skill。安装时可使用 `--omit=optional --ignore-scripts`，无需 ws 的可选原生加速模块。仓库根包仍为 private。交互式 shell 与转发用法见 [CLI 手册](CLI.md)。
+Windows/macOS 共用一个 tarball，支持 Node `>=22.0.0`。唯一第三方运行依赖为固定版本的纯 JavaScript `ws@8.22.1`（MIT）；无原生程序、服务端代码或 install/postinstall hook，不下载 Node 或自动复制 Skill。安装时可使用 `--omit=optional --ignore-scripts`，无需 ws 的可选原生加速模块。仓库根包仍为 private。交互式 shell 与转发用法见 [CLI 手册](CLI.md)。
 
 ```powershell
 # 新目录，不覆盖已有构建；仅本地开发包

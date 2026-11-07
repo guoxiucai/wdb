@@ -37,6 +37,6 @@ else{throw 'Manual release preparation requires LicenseFile'}
 # Final PowerShell encoding is fixed before signature generation.
 Get-ChildItem -LiteralPath $output -Recurse -Filter '*.ps1' | ForEach-Object {$text=[IO.File]::ReadAllText($_.FullName);$text=$text -replace '\r?\n',"`r`n";[IO.File]::WriteAllText($_.FullName,$text,(New-Object Text.UTF8Encoding($true)))}
 $version=(Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
-$metadata=[ordered]@{product='wdb';version=$version;protocolVersion=1;buildId=$BuildId;sourceCommit=(& git -C $root rev-parse HEAD).Trim();sourceDirty=[bool](& git -C $root status --porcelain);builtAt=[DateTime]::UtcNow.ToString('o');signingMode=$SigningMode;runtimeMode='common';nodeVersion=$lock.node.version;nodeRange='>=18.17.0';architecture='x64';platform='win32';development=$SigningMode -eq 'Development'}
+$metadata=[ordered]@{product='wdb';version=$version;protocolVersion=1;buildId=$BuildId;sourceCommit=(& git -C $root rev-parse HEAD).Trim();sourceDirty=[bool](& git -C $root status --porcelain);builtAt=[DateTime]::UtcNow.ToString('o');signingMode=$SigningMode;runtimeMode='common';nodeVersion=$lock.node.version;nodeRange='>=22.0.0';architecture='x64';platform='win32';development=$SigningMode -eq 'Development'}
 $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'BUILD-INFO.json') -Encoding UTF8
 $metadata | ConvertTo-Json

@@ -1,5 +1,5 @@
 'use strict';
-const { test, before, after } = require('node:test');
+const { test, before, after, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -10,6 +10,7 @@ const { execFileSync } = require('node:child_process');
 const { main, api, parseArgv, normalizeTarget, selectDevice } = require('../src/cli');
 const {discoverFingerprint}=require('../src/client-transport');
 
+describe('CLI HTTPS integration', () => {
 let temporary, server, target, fingerprint, requestCount = 0, protocolVersion = 1;
 let approvalRequired=false,approvalDelay=0,revoked=false,lastPairBody;
 const requests=[];
@@ -79,8 +80,6 @@ before(async () => {
   });
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  // Node 18 runs the root after hook at beforeExit; the fixture must not keep it alive.
-  server.unref();
   target = `https://127.0.0.1:${server.address().port}`;
 });
 after(async () => {
@@ -263,4 +262,5 @@ test('a sent approval request timing out keeps its uncertain-outcome error',asyn
  const r=await cli(['connect',target,'--name','slow-me','--approval-timeout','1000'],'approval-timeout');
  assert.equal(r.code,1);assert.equal(r.result.status,'timed_out');assert.equal(r.result.data.state,'timeout');assert.equal(r.result.error.code,'REQUEST_OUTCOME_UNKNOWN');
  await assert.rejects(fs.stat(path.join(temporary,'approval-timeout/devices.json')),{code:'ENOENT'});
+});
 });

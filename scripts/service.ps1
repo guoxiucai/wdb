@@ -17,7 +17,7 @@ $result = [ordered]@{
 if ($Action -eq 'diagnose') {
     . (Join-Path $PSScriptRoot 'resolve-node.ps1')
     try { $result['runtime'] = Get-WdbRuntimeBinding -InstallDirectory "$env:ProgramFiles\wdb" }
-    catch { $result['runtime'] = @{status='invalid';error=$_.Exception.Message;requiredVersion='>=18.17.0';repair='Run the matching Setup.exe or repair-service.ps1 -NodePath <system Node>'} }
+    catch { $result['runtime'] = @{status='invalid';error=$_.Exception.Message;requiredVersion='>=22.0.0';repair='Run the matching Setup.exe or repair-service.ps1 -NodePath <system Node>'} }
     $result['os'] = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture
     $result['listeners'] = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object LocalPort -in @(18766,18767) | Select-Object LocalAddress,LocalPort,OwningProcess)
     $result['logs'] = @{}

@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="版本 0.1.0" />
   <img src="https://img.shields.io/badge/server-Windows-0078D4" alt="Windows 服务端" />
   <img src="https://img.shields.io/badge/CLI-Windows%20%7C%20macOS-333333" alt="Windows 与 macOS CLI" />
-  <img src="https://img.shields.io/badge/Node.js-18.17%2B-43853D" alt="Node.js 18.17 及以上" />
+  <img src="https://img.shields.io/badge/Node.js-22%2B-43853D" alt="Node.js 22 及以上" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT 许可证" /></a>
 </p>
 
@@ -50,8 +50,8 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 | 组件 | 当前范围 |
 | --- | --- |
 | Windows 服务端 | x64；安装预检要求桌面版 build 19045+、.NET Framework 4.8、Windows PowerShell 5.1 |
-| Windows CLI | Node.js `>=18.17.0`；纯 JavaScript npm 客户端 |
-| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=18.17.0`。交互 shell / 转发的真实终端兼容性尚未确认 |
+| Windows CLI | Node.js `>=22.0.0`；纯 JavaScript npm 客户端 |
+| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=22.0.0`。交互 shell / 转发的真实终端兼容性尚未确认 |
 
 桌面操作需要目标用户已登录且解锁。Flutter Inspector 依赖应用提供相应调试服务。
 
@@ -82,9 +82,9 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 ### 2. 安装 CLI
 
-Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=18.17.0`**。当前先安装本地开发包：
+Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=22.0.0`**。当前先安装本地开发包：
 
-Node 18.17 是兼容下限；Node 18 已停止上游维护，推荐使用仍获维护的 LTS。自带运行时的服务端安装包仍使用固定的 Node 24，不要求用户另外安装 Node。Electron/Flutter 调试的 WebSocket 使用已锁定的 `ws` 依赖。
+最低版本为 Node 22.0.0；Node 18 / 20 已停止上游维护，不再支持。推荐使用 Node 24 LTS 的受维护补丁版本。自带运行时的服务端安装包仍使用固定的 Node 24，不要求用户另外安装 Node。Electron/Flutter 调试的 WebSocket 使用已锁定的 `ws` 依赖。
 
 ```sh
 npm install -g ./wdb-cli-local-test-0.1.0.tgz --omit=optional --ignore-scripts
@@ -193,7 +193,7 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 
 ## 本地开发与构建
 
-开发前阅读 [AGENTS.md](AGENTS.md)。Windows 开发环境需要 Node.js `>=18.17.0`；原生与安装器构建另需 .NET Framework 编译器、Windows PowerShell 和 Inno Setup 6.7.1。
+开发前阅读 [AGENTS.md](AGENTS.md)。Windows 开发环境需要 Node.js `>=22.0.0`；原生与安装器构建另需 .NET Framework 编译器、Windows PowerShell 和 Inno Setup 6.7.1。
 
 ```powershell
 git clone https://github.com/guoxiucai/wdb.git
