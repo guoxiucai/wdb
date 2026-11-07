@@ -1,11 +1,14 @@
 'use strict';
-const net=require('node:net');const {EventEmitter}=require('node:events');
+const net=require('node:net');const {EventEmitter,setMaxListeners}=require('node:events');
 const {error,check,parseEndpoint}=require('./stream-protocol');
 const {openStream,capability,maintainLease,streamOptions}=require('./client-stream');
 const {connectTcp,listenTcp,attachTcp}=require('./stream-tcp');
 async function createForward(device,kind,listen,target,options={}){
  check(['forward','reverse'].includes(kind),'Invalid forwarding direction');await capability(device,kind==='forward'?'tcpForward':'tcpReverse',options.timeoutMs);
  const abort=new AbortController(),resources=new Set(),pending=new Set(),events=new EventEmitter();events.on('connection_error',()=>{});let listener,control,stopped=false,active=false,stopLease,closePromise;
+ // At most 16 channels plus 16 pending target dials share this rule's signal.
+ // Keep a finite warning threshold for Node 18, which warns at 11 by default.
+ setMaxListeners(32,abort.signal);
  async function cleanup(){if(stopped)return;stopped=true;abort.abort();stopLease?.();for(const socket of pending)socket.destroy();pending.clear();for(const r of resources){r.channel?.close();r.adapter?.close();r.socket?.destroy();}resources.clear();if(listener)await new Promise(r=>listener.close(()=>r()));}
  const close=async(reason='client_close')=>{if(closePromise)return closePromise;closePromise=(async()=>{await cleanup();if(control&&!control.closed){try{await control.request('close',{reason},'closed');}catch{}control.close();}})();return closePromise;};
  async function connection(socket,connectionId){
