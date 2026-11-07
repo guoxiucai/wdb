@@ -83,6 +83,7 @@ test('launcher runs bundled Node from arbitrary cwd, Unicode paths, and relative
   await fs.copyFile(path.join(__dirname, '../bin/wdb'), path.join(root, 'bin/wdb'));
   await fs.chmod(path.join(root, 'bin/wdb'), 0o755);
   await fs.copyFile(process.execPath, path.join(root, 'runtime/node'));
+  await fs.copyFile(path.join(__dirname, '../package.json'), path.join(root, 'package.json'));
   for (const file of ['cli.js', 'client-transport.js', 'device-id.js']) await fs.copyFile(path.join(__dirname, '../src', file), path.join(root, 'src', file));
   await fs.mkdir(links);
   await fs.symlink('../安装 包/bin/wdb', path.join(links, 'relative'));
