@@ -35,8 +35,9 @@ if (!$HostOnly) {
         $desktopBin = Join-Path $outputRoot 'native\bin'
         New-Item -ItemType Directory -Path $desktopBin -Force | Out-Null
         $framework = Split-Path $compiler -Parent
-        & $compiler /nologo /target:exe /platform:x64 /optimize+ "/out:$(Join-Path $desktopBin 'DesktopBridge.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$framework\WPF\UIAutomationClient.dll" "/r:$framework\WPF\UIAutomationTypes.dll" "/r:$framework\WPF\WindowsBase.dll" $desktopSource
+        & $compiler /nologo /target:exe /platform:x64 /optimize+ "/win32manifest:$(Join-Path $sourceRoot 'native\DesktopBridge.manifest')" "/out:$(Join-Path $desktopBin 'DesktopBridge.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$framework\WPF\UIAutomationClient.dll" "/r:$framework\WPF\UIAutomationTypes.dll" "/r:$framework\WPF\WindowsBase.dll" $desktopSource
         if ($LASTEXITCODE -ne 0) { throw "Desktop adapter compiler failed: $LASTEXITCODE" }
+        Copy-Item -LiteralPath (Join-Path $sourceRoot 'native\DesktopBridge.exe.config') -Destination (Join-Path $desktopBin 'DesktopBridge.exe.config') -Force
     }
     $nodeLicense = Join-Path (Split-Path $nodePath -Parent) 'LICENSE'
     if (!(Test-Path -LiteralPath $nodeLicense)) { $nodeLicense = Join-Path $sourceRoot '.runtime\NODE-LICENSE.txt' }
