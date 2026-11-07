@@ -73,7 +73,7 @@ function Preflight {
  $script:runtime=Resolve-WdbNode -RuntimeMode $script:RuntimeMode -InstallDirectory $SourceDirectory -NodePath $NodePath -BuildPayload:($script:RuntimeMode -eq 'with-node')
  $oldFile=Join-Path $DataDirectory 'installation.json'
  if(Test-Path -LiteralPath $oldFile){$previous=Get-Content -LiteralPath $oldFile -Raw | ConvertFrom-Json;if(!$ListenAddress){$script:ListenAddress=$previous.listenAddress};$script:Port=[int]$previous.port;$script:HelperPort=[int]$previous.helperPort}
- if(!$ListenAddress){$script:ListenAddress='127.0.0.1'}
+ if(!$ListenAddress){$script:ListenAddress='0.0.0.0'}
  $parsed=$null;if(![Net.IPAddress]::TryParse($script:ListenAddress,[ref]$parsed)){throw 'ListenAddress must be a numeric IP address'}
  $required=([int64]((Get-WdbPayloadFiles $SourceDirectory | Measure-Object Length -Sum).Sum)*3)+100MB
  $drive=Get-CimInstance Win32_LogicalDisk -Filter ("DeviceID='{0}'" -f [IO.Path]::GetPathRoot($InstallDirectory).TrimEnd('\'))

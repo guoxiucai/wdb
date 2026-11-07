@@ -6,7 +6,7 @@
 
 ## 构建
 
-构建机需要 Windows x64、Node/npm 24.15+（<25）、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。
+构建机需要 Windows x64、Node/npm 18.17+、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。
 
 ```powershell
 .\scripts\build-release.ps1 -Phase Prepare -SigningMode Development -BuildId my-build
@@ -32,9 +32,9 @@ Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-Development-setup.ex
 
 目前预检最低为 Windows 桌面 build 19045、x64、.NET Framework 4.8、Windows PowerShell 5.1 与 UI Automation 组件；实际验证平台单列在验收报告，未宣称完整 Windows 10/11 矩阵已通过。安装到 `C:\Program Files\wdb`，数据保留在 `C:\ProgramData\wdb`。客户机器不需要 npm、Git、Inno 或编译器；正式运行不会现场编译桌面桥。
 
-外部 Node 必须是签名有效的 OpenJS Windows x64 Node `>=24.15.0 <25`，文件和父目录仅受 SYSTEM/管理员控制。拒绝用户目录、nvm/fnm/Volta、临时目录、UNC、重解析跳转和普通用户可写目录；在信任位置与签名通过后才运行探测。绑定记录在受保护的 `runtime-binding.json`，服务与助手均使用同一绝对路径，不按 PATH 自动换 Node。删除/移动/不支持版本通过 `scripts/service.ps1 diagnose` 明确报告；SCM Running 本身不等于健康。
+外部 Node 必须是签名有效的 OpenJS Windows x64 Node `>=18.17.0`，文件和父目录仅受 SYSTEM/管理员控制。拒绝用户目录、nvm/fnm/Volta、临时目录、UNC、重解析跳转和普通用户可写目录；在信任位置与签名通过后才运行探测。绑定记录在受保护的 `runtime-binding.json`，服务与助手均使用同一绝对路径，不按 PATH 自动换 Node。删除/移动/不支持版本通过 `scripts/service.ps1 diagnose` 明确报告；SCM Running 本身不等于健康。
 
-首次安装默认 localhost。升级延续已有监听、端口和 LAN 来源范围。需要 LAN 时，在服务器管理员终端显式运行安装目录内的 `scripts/set-network.ps1 -Mode Lan -LocalAddress <本机IPv4>`；默认仅 LocalSubnet，并绑定实际 Node 路径。模式切换会同步更新防火墙应用路径。helper 端口不开放到 LAN。
+首次安装默认监听所有 IPv4（0.0.0.0），自动创建绑定实际 Node 路径、仅允许 LocalSubnet 访问服务端口的防火墙规则，无需手动启用 LAN。升级延续已有监听、端口和 LAN 来源范围。可选执行 `scripts/set-network.ps1 -Mode Lan -LocalAddress <本机IPv4>` 收窄网卡，或 `-Mode Localhost` 关闭 LAN。模式切换会同步更新防火墙应用路径。helper 端口不开放到 LAN。
 
 ## 升级、修复与卸载
 

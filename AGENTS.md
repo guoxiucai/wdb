@@ -4,7 +4,7 @@
 
 ## 技术栈与运行边界
 
-- Node.js `>=24.15.0 <25`，JavaScript CommonJS；使用 Node 内置 HTTP(S)、TLS、文件、进程和 `node:test` API。
+- Node.js `>=18.17.0`，JavaScript CommonJS；使用 Node 内置 HTTP(S)、TLS、文件、进程和 `node:test` API。
 - WebSocket 使用纯 JavaScript `ws`，版本由 `package.json` 和 `package-lock.json` 精确锁定；发行构建的依赖清单另在 `packaging/windows/dependencies.json`。
 - Windows 原生适配使用 C# / .NET Framework 4.8：服务宿主、UI Automation / 输入 / 截图和 ConPTY / Job。在构建机编译，安装后的服务不能现场编译程序。
 - 安装、生命周期及构建脚本使用 PowerShell；安装器涉及的脚本必须兼容 Windows PowerShell 5.1。EXE 分发使用固定版本 Inno Setup。
@@ -12,6 +12,8 @@
 - 服务为 SYSTEM；桌面 helper 为已登录普通用户。默认 shell 走 helper，只有显式 `--admin` 才走 SYSTEM，不能静默回退或提升权限。
 
 ## 目录与职责
+
+后续开发分析、实施计划和本机验证记录优先放在本地 `dev_doc/`（Git 忽略）。`docs/` 用于需要 Git 跟踪共享的用户指南、协议和交接文档。
 
 | 位置 | 职责 |
 | --- | --- |

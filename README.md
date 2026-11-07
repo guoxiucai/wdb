@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="版本 0.1.0" />
   <img src="https://img.shields.io/badge/server-Windows-0078D4" alt="Windows 服务端" />
   <img src="https://img.shields.io/badge/CLI-Windows%20%7C%20macOS-333333" alt="Windows 与 macOS CLI" />
-  <img src="https://img.shields.io/badge/Node.js-24.15%2B%20%28%3C25%29-43853D" alt="Node.js 24.15 及以上、小于 25" />
+  <img src="https://img.shields.io/badge/Node.js-18.17%2B-43853D" alt="Node.js 18.17 及以上" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT 许可证" /></a>
 </p>
 
@@ -50,8 +50,8 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 | 组件 | 当前范围 |
 | --- | --- |
 | Windows 服务端 | x64；安装预检要求桌面版 build 19045+、.NET Framework 4.8、Windows PowerShell 5.1 |
-| Windows CLI | Node.js `>=24.15.0 <25`；纯 JavaScript npm 客户端 |
-| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=24.15.0 <25`。交互 shell / 转发的真实终端兼容性尚未确认 |
+| Windows CLI | Node.js `>=18.17.0`；纯 JavaScript npm 客户端 |
+| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=18.17.0`。交互 shell / 转发的真实终端兼容性尚未确认 |
 
 桌面操作需要目标用户已登录且解锁。Flutter Inspector 依赖应用提供相应调试服务。
 
@@ -70,7 +70,9 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
 
-首次安装默认监听 `127.0.0.1:18766`。本机使用可以直接连接 `localhost`。需要另一台电脑连接时，在**服务器本机的管理员 PowerShell** 中运行以下命令，将示例 IP 换成服务器实际 IPv4：
+首次安装默认监听所有 IPv4 地址 `0.0.0.0:18766`，自动创建只允许本地子网访问的防火墙规则。本机直接连接 `localhost`，局域网客户端直接连接服务器 IP，无需额外网络配置。升级保留已有监听与来源限制。
+
+如需将访问限制到指定网卡，可在**服务器本机的管理员 PowerShell** 中运行以下可选命令，将示例 IP 换成服务器实际 IPv4：
 
 ```powershell
 & 'C:\Program Files\wdb\scripts\set-network.ps1' -Mode Lan -LocalAddress 192.168.1.10
@@ -80,7 +82,9 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 ### 2. 安装 CLI
 
-Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=24.15.0 <25`**。当前先安装本地开发包：
+Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=18.17.0`**。当前先安装本地开发包：
+
+Node 18.17 是兼容下限；Node 18 已停止上游维护，推荐使用仍获维护的 LTS。自带运行时的服务端安装包仍使用固定的 Node 24，不要求用户另外安装 Node。Electron/Flutter 调试的 WebSocket 使用已锁定的 `ws` 依赖。
 
 ```sh
 npm install -g ./wdb-cli-local-test-0.1.0.tgz --omit=optional --ignore-scripts
@@ -180,7 +184,7 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 
 - 首次连接必须由目标设备上的用户同意；后续校验证书及客户端凭据。首次保存指纹采用首次使用信任；需要预先核对身份时，使用 `--fingerprint` 指定可信指纹。
 - WDB 提供执行脚本、文件和桌面操作能力；只授权可信客户端。记住的客户端可用 `clients revoke` 撤销；`disconnect` 仅断开，不撤销持久授权。
-- 默认仅 localhost；LAN 模式显式启用并限制防火墙来源。helper、CDP 和 VM Service 调试端点保持本机访问，不直接暴露公网。
+- 首次安装默认监听全部 IPv4，并由防火墙限制为本地子网；helper、CDP 和 VM Service 调试端点保持本机访问，不直接暴露公网。需要仅本机时运行 `set-network.ps1 -Mode Localhost`。
 - UIA 和应用调试接口取决于应用自身实现。Electron 的 CDP 与可访问性是两条通路；Flutter 的具体构建要求见 [Flutter 指南](docs/FLUTTER.md)。
 - 错误或超时不保证操作尚未发生。批处理任务应按任务 ID 查询状态；交互 shell 与转发断线后结束，不重放输入。安全问题报告方式见 [SECURITY.md](SECURITY.md)。
 
@@ -189,7 +193,7 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 
 ## 本地开发与构建
 
-开发前阅读 [AGENTS.md](AGENTS.md)。Windows 开发环境需要 Node.js `>=24.15.0 <25`；原生与安装器构建另需 .NET Framework 编译器、Windows PowerShell 和 Inno Setup 6.7.1。
+开发前阅读 [AGENTS.md](AGENTS.md)。Windows 开发环境需要 Node.js `>=18.17.0`；原生与安装器构建另需 .NET Framework 编译器、Windows PowerShell 和 Inno Setup 6.7.1。
 
 ```powershell
 git clone https://github.com/guoxiucai/wdb.git

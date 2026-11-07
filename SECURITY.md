@@ -14,7 +14,7 @@ WDB 提供远端脚本执行、文件传输与桌面控制能力。当前为开�
 
 - 首次连接要求服务器桌面同意；默认自动保存首次看到的证书指纹，后续变化拒绝。对首次信任要求更高时，通过可信渠道核对并使用 `--fingerprint`；详见 [连接授权](docs/CONNECTION-APPROVAL.md)。
 - 服务运行于 SYSTEM，普通 shell 和 GUI 走普通用户 helper；显式 `--admin` 的能力很强。仅授权可信客户端，失去信任后使用 `clients revoke <clientId>`；本地 `disconnect` 不撤销持久授权。
-- 默认只监听 localhost，LAN 配置限制来源；不要直接向公网开放 WDB、helper、CDP 或 Dart VM Service。
+- 首次安装默认监听所有 IPv4，防火墙默认只允许本地子网访问；不要直接向公网开放 WDB、helper、CDP 或 Dart VM Service。
 - 不在问题报告或 Git 中存放 `devices.json`、TLS 私钥、helper-secret、密码或真实桌面截图。授权数据和业务数据可能在卸载后保留，卸载程序不等同于凭据撤销或数据清除。
 - 安装程序与运行时只能从可信来源取得并核对校验值。当前 Development 产物未签名，不能当作正式签名发行版。
 

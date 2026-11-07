@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$InstallDirectory,[Parameter(Mandatory=$true)][string]$DataDirectory,[Parameter(Mandatory=$true)][string]$DesktopUser,[int]$Port=18766,[int]$HelperPort=18767,[string]$ListenAddress='127.0.0.1',[Parameter(Mandatory=$true)]$Runtime)
+param([Parameter(Mandatory=$true)][string]$InstallDirectory,[Parameter(Mandatory=$true)][string]$DataDirectory,[Parameter(Mandatory=$true)][string]$DesktopUser,[int]$Port=18766,[int]$HelperPort=18767,[string]$ListenAddress='0.0.0.0',[Parameter(Mandatory=$true)]$Runtime)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'service-config.ps1')
 $desktopSid=(New-Object Security.Principal.NTAccount($DesktopUser)).Translate([Security.Principal.SecurityIdentifier]).Value
@@ -25,15 +25,7 @@ $settings=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoing
 Register-ScheduledTask -TaskName WdbDesktopHelper -Action $action -Principal $principal -Trigger $trigger -Settings $settings -Description 'WDB interactive desktop helper; limited user' -Force | Out-Null
 $Runtime | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $InstallDirectory 'runtime-binding.json') -Encoding UTF8
 [ordered]@{installedAt=[DateTime]::UtcNow.ToString('o');installDirectory=$InstallDirectory;dataDirectory=$DataDirectory;serverRoot=$InstallDirectory;desktopUser=$DesktopUser;port=$Port;helperPort=$HelperPort;development=$false;listenAddress=$ListenAddress;runtimeMode=$Runtime.runtimeMode;nodePath=$Runtime.path} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $DataDirectory 'installation.json') -Encoding UTF8
-# Preserve the selected LAN scope while rebinding its executable after a switch.
-$networkFile=Join-Path $DataDirectory 'network.json'
-if(Test-Path -LiteralPath $networkFile){
- $network=Get-Content -LiteralPath $networkFile -Raw | ConvertFrom-Json
- Get-NetFirewallRule -Name 'WdbService-LAN' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
- if($network.mode -eq 'Lan'){
-  New-NetFirewallRule -Name 'WdbService-LAN' -DisplayName 'WDB HTTPS from selected LAN' -Direction Inbound -Action Allow -Enabled True -Profile Any -Protocol TCP -LocalPort $Port -LocalAddress $network.localAddress -RemoteAddress $network.remoteAddress -InterfaceAlias $network.interfaceAlias -Program $Runtime.path -EdgeTraversalPolicy Block | Out-Null
- }
-}
+Set-WdbInstallationFirewall -DataDirectory $DataDirectory -ListenAddress $ListenAddress -Port $Port -NodePath $Runtime.path
 Start-Service WdbService
 Start-ScheduledTask -TaskName WdbDesktopHelper
 $diagnostic=$null

@@ -1,4 +1,11 @@
 $ErrorActionPreference = 'Stop'
+$script:firewallCreated=$null
+function Get-NetFirewallRule { param($Name,$ErrorAction) }
+function Remove-NetFirewallRule { param([Parameter(ValueFromPipeline=$true)]$InputObject) }
+function New-NetFirewallRule {
+ param($Name,$DisplayName,$Direction,$Action,$Enabled,$Profile,$Protocol,$LocalPort,$LocalAddress,$RemoteAddress,$Program,$EdgeTraversalPolicy,$InterfaceAlias)
+ $script:firewallCreated=$PSBoundParameters
+}
 $root = Split-Path $PSScriptRoot -Parent
 foreach ($file in (Get-ChildItem (Join-Path $root 'scripts') -Filter '*.ps1')) {
     $tokens = $null; $parseErrors = $null
@@ -6,6 +13,21 @@ foreach ($file in (Get-ChildItem (Join-Path $root 'scripts') -Filter '*.ps1')) {
     if ($parseErrors.Count) { throw "Invalid PowerShell syntax in $($file.Name): $parseErrors" }
 }
 . (Join-Path $root 'scripts\service-config.ps1')
+$networkTest=Join-Path ([IO.Path]::GetTempPath()) ('wdb-network-'+[guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $networkTest | Out-Null
+try {
+ Set-WdbInstallationFirewall -DataDirectory $networkTest -ListenAddress '0.0.0.0' -Port 18766 -NodePath 'C:\Program Files\wdb\runtime\node.exe'
+ if($script:firewallCreated.LocalAddress -ne 'Any' -or $script:firewallCreated.RemoteAddress -ne 'LocalSubnet' -or $script:firewallCreated.LocalPort -ne 18766 -or $script:firewallCreated.EdgeTraversalPolicy -ne 'Block'){throw 'Fresh installation must expose only the service port to LocalSubnet'}
+ $script:firewallCreated=$null
+ Set-WdbInstallationFirewall -DataDirectory $networkTest -ListenAddress '127.0.0.1' -Port 18766 -NodePath 'node.exe'
+ if($script:firewallCreated){throw 'Localhost must not create an inbound rule'}
+ @{mode='Lan';localAddress='192.168.1.10';remoteAddress=@('192.168.1.20');interfaceAlias='Ethernet'} | ConvertTo-Json | Set-Content (Join-Path $networkTest 'network.json')
+ Set-WdbInstallationFirewall -DataDirectory $networkTest -ListenAddress '0.0.0.0' -Port 18766 -NodePath 'C:\Program Files\nodejs\node.exe'
+ if($script:firewallCreated.LocalAddress -ne '192.168.1.10' -or $script:firewallCreated.RemoteAddress[0] -ne '192.168.1.20' -or $script:firewallCreated.Program -ne 'C:\Program Files\nodejs\node.exe' -or $script:firewallCreated.InterfaceAlias -ne 'Ethernet'){throw 'Upgrade must preserve scope while rebinding runtime'}
+} finally {
+ Remove-Item -LiteralPath (Join-Path $networkTest 'network.json') -ErrorAction SilentlyContinue
+ Remove-Item -LiteralPath $networkTest
+}
 $script:wdbTestPath = 'old-path'
 $script:wdbTestResult = 0
 $script:wdbTestMismatch = $false
