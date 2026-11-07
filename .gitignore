@@ -15,5 +15,6 @@ native/bin/
 dev_doc
 
 /release-signing/
+/release/
 /wdb-server-*-windows-x64-*-setup.exe
 /wdb-server-0.1.0-SHA256SUMS.txt
