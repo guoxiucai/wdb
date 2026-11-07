@@ -9,3 +9,16 @@ function channel(){const c=new EventEmitter();Object.assign(c,{transport:{buffer
 test('slow destination withholds credit until completed writes and rejects forged credit',async()=>{const c=channel(),source=new PassThrough();let complete;const sink=new Writable({write(b,e,cb){complete=cb;}}),flow=new Flow(c,source,sink);flow.activate();c.emit('data',Buffer.alloc(65536));assert.equal(flow.consumed,0);assert.equal(c.controls.length,0);complete();assert.equal(flow.consumed,65536);assert.equal(c.controls[0].consumed,65536);c.emit('control',{type:'credit',consumed:1});assert.equal(c.failure.code,'FLOW_CONTROL_ERROR');flow.stop();source.destroy();sink.destroy();});
 test('send window pauses sources and FIN follows bytes while reverse direction survives',async()=>{const c=channel(),source=new PassThrough(),sink=new PassThrough();sink.resume();const f=new Flow(c,source,sink,{tcp:true});f.activate();f.queue(Buffer.alloc(LIMITS.windowBytes+65536));assert.equal(f.sent,LIMITS.windowBytes);assert.equal(source.isPaused(),true);f.localFin=true;f.pump();assert.equal(c.controls.some(m=>m.type==='fin'),false);c.emit('control',{type:'credit',consumed:65536});assert.equal(f.sent,LIMITS.windowBytes+65536);assert.equal(c.controls.at(-1).type,'fin');c.emit('data',Buffer.from('response'));assert.equal(f.received,8);f.stop();source.destroy();sink.destroy();});
 test('receiver enforces aggregate window even across fragmented messages',()=>{const c=channel(),source=new PassThrough(),sink=new Writable({write(){}}),f=new Flow(c,source,sink);f.activate();for(let i=0;i<5;i++)c.emit('data',Buffer.alloc(65536));assert.equal(c.failure.code,'FLOW_CONTROL_ERROR');f.stop();source.destroy();sink.destroy();});
+
+test('delayed credit does not send after the peer starts the close handshake',async()=>{
+ const c=channel(),source=new PassThrough(),sink=new PassThrough();sink.resume();
+ c.transport.readyState=1;
+ const send=c.control;c.control=function(m){if(this.transport.readyState!==1)throw Error('WebSocket is closing');send.call(this,m);};
+ const flow=new Flow(c,source,sink,{tcp:true});flow.activate();
+ c.emit('data',Buffer.from('response after FIN'));
+ assert.equal(flow.consumed,18);assert.equal(c.controls.length,0);
+ c.transport.readyState=2;
+ await new Promise(resolve=>setTimeout(resolve,40));
+ assert.equal(c.failure,undefined);assert.equal(c.controls.length,0);
+ c.emit('closed');source.destroy();sink.destroy();
+});
