@@ -217,6 +217,18 @@ npm run test:client
 node scripts/build-cli-npm.js --development true --license MIT --license-file LICENSE --output dist/npm/local-dev-01
 ```
 
+仅构建服务端双 EXE，生成未签名的 Development 安装包：
+
+```powershell
+npm run build:server
+# 可选：指定新的 BuildId
+npm run build:server -- -BuildId server-dev-example
+# 检查失败原因后，使用相同 BuildId 串行续跑
+npm run build:server -- -BuildId server-dev-example -Resume
+```
+
+产物在 `dist/server-builds/<BuildId>/output/0.1.0/`，不覆盖已有发布包；构建参数及续跑方法见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
+
 构建包含 CLI 与两个 Windows EXE 的开发分发：
 
 ```powershell

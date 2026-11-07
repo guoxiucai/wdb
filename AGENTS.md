@@ -76,6 +76,17 @@ node --test tests/stream-protocol.test.js tests/stream-transport.test.js tests/s
 
 生产安装使用双 EXE：with-node 和 external-node，共用一个服务身份及数据目录。三阶段构建 `Prepare → Package → Finalize` 的 BuildId 和冻结内容不可复写；修改源码后使用新 BuildId。详见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
 
+在 Windows 项目根目录构建未签名的 Development 服务端双 EXE：
+
+```powershell
+npm run build:server
+# 可指定新的 BuildId；检查失败原因后，使用同一 BuildId 串行续跑。
+npm run build:server -- -BuildId server-dev-example
+npm run build:server -- -BuildId server-dev-example -Resume
+```
+
+产物位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含 with-node、external-node 两个安装器和 `SHA256SUMS.txt`。此命令只编译和校验产物，不安装或重启服务。
+
 安装、重启、真实桌面操作和故障注入在本次授权范围内执行；需要用户本人操作的系统授权及时说明，不能绕过 UAC 或首次连接同意窗口。先用临时目录、测试窗口和 loopback 验证；不要干扰无关进程或真实网卡。
 
 会重启或卸载 WDB 的验证必须从独立进程/任务计划启动，不能让它成为将被终止的 WDB shell 的子进程。结束后检查安装状态、数据保留和服务健康，不能只根据 SCM `Running` 判断成功。
@@ -89,4 +100,4 @@ node --test tests/stream-protocol.test.js tests/stream-transport.test.js tests/s
 3. 提交标题沿用 `feat(scope): ...`、`fix(scope): ...`、`test(scope): ...`、`docs: ...` 等形式，说明具体行为。提交前检查 diff、意外文件、凭据和换行问题。
 4. 新命令/行为同步 CLI 帮助、用户文档、Skill、协议与打包清单中受影响的部分。协议变化更新两端共享夹具和 Mac 交接说明。
 5. 报告实际运行的检查、源码 SHA、安装包 hash、平台/版本和 pass/fail/not-run 边界。产物源码 SHA 与后续文档提交不同应明确说明。
-6. 推送或发布遵循用户已给定的范围；不 force-push 共享分支。交付时说明结果、使用入口及尚未验证的实质范围。
+6. 只有用户在当前任务中明确要求推送时才执行 `git push`；历史任务的推送授权不延续到后续任务。发布同样遵循用户明确给定的范围，不 force-push 共享分支。交付时说明结果、使用入口及尚未验证的实质范围。

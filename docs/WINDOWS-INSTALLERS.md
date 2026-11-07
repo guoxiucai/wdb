@@ -6,6 +6,25 @@
 
 ## 构建
 
+一键构建服务端双版本（默认不签名、不访问签名服务、不构建 npm）：
+
+```powershell
+npm run build:server
+# 或 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-server.ps1
+```
+
+该入口只生成未签名的 Development 包，不提供自动签名参数，不调用签名服务。可指定 BuildId，并在检查失败原因后串行续跑：
+
+```powershell
+npm run build:server -- -BuildId server-dev-example
+# 失败后检查构建日志，再使用相同参数续跑：
+npm run build:server -- -BuildId server-dev-example -Resume
+```
+
+该入口沿用 Prepare → Package → Finalize，构建 with-node 和 external-node 两个 Setup.exe，校验冻结内容及最终哈希。默认输出位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含双 EXE 和 SHA256SUMS.txt；不会覆盖既有 `release/0.1.0`。`-OutputRoot` 可指定构建工作目录，`-OutputDirectory` 可指定产物目录，已有不同内容文件会拒绝覆盖。构建不会安装程序或重启服务。
+
+同一 BuildId 按串行方式执行；前一个构建进程退出后再使用 Resume。仅可续跑此入口创建的 Development 服务端构建；源码或版本修改后使用新 BuildId。通用的人工签名阶段见下文，具体组织的签名服务及配置不属于公开构建流程。
+
 构建机需要 Windows x64、Node/npm 22+、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。
 
 ```powershell
