@@ -55,6 +55,10 @@ Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通
 | 日志与录屏 | Windows 事件 / 文件日志、跟踪输出、MP4 录制及产物下载 |
 | AI Agent | 同一套 CLI 与 Skill；先观察、再操作、后验证，无需在服务端配置模型密钥 |
 
+## 与其他方案的区别
+
+WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Electron CDP、Flutter Inspector、交互终端和 TCP 转发统一到一套 CLI。与 MCP 桌面工具、WinApp CLI 或 VNC + SSH 组合相比，重点是设备连接与调试闭环；MCP 接入、Windows 开发工具链和实时远程桌面则各有更适合的方案。详见 [能力差异、优势与选型对比](docs/COMPETITIVE-ANALYSIS.md)。
+
 ## 系统要求
 
 | 组件 | 当前范围 |
