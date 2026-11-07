@@ -1,5 +1,6 @@
 {
   "name": "windows-debug-bridge",
+  "license": "MIT",
   "version": "0.1.0",
   "private": true,
   "description": "Windows Debug Bridge server and portable CLI",

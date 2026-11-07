@@ -29,7 +29,7 @@ function build(options={}) {
       }
     }
   }
-  for(const file of ['bin/wdb.js',...['cli','client-transport','device-id','client-stream','stream-channel','stream-flow','stream-protocol','stream-tcp','forward-client','terminal-client'].map(n=>'src/'+n+'.js'),'docs/CLI.md','docs/WINDOWS-CLI-VALIDATION.md','docs/MACOS-CLIENT.md','docs/STREAMING.md'])copy(file);
+  for(const file of ['bin/wdb.js',...['cli','client-transport','device-id','client-stream','stream-channel','stream-flow','stream-protocol','stream-tcp','forward-client','terminal-client'].map(n=>'src/'+n+'.js'),'docs/CLI.md','docs/NPM-CLIENT.md','docs/WINDOWS-CLIENT.md'])copy(file);
   for(const entry of fs.readdirSync(path.join(root,'skills/wdb'),{recursive:true,withFileTypes:true})) {
     if(entry.isFile())copy(path.relative(root,path.join(entry.parentPath,entry.name)));
   }

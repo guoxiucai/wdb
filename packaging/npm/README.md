@@ -12,8 +12,8 @@ wdb info
 wdb disconnect <Windows服务器IP>
 ```
 
-首次连接由 Windows 桌面的授权窗口确认。详见 [CLI](docs/CLI.md)、[Windows 验证](docs/WINDOWS-CLI-VALIDATION.md)、[Mac 使用](docs/MACOS-CLIENT.md)。Agent Skill 位于 [skills/wdb/SKILL.md](skills/wdb/SKILL.md)，不自动复制到其他应用。
+首次连接由 Windows 桌面的授权窗口确认。详见 [CLI](docs/CLI.md)、[npm 安装与配置](docs/NPM-CLIENT.md)。Agent Skill 位于 [skills/wdb/SKILL.md](skills/wdb/SKILL.md)，不自动复制到其他应用。
 
 凭据继续保存在 Windows `%LOCALAPPDATA%\wdb\client` / Mac `~/Library/Application Support/wdb/client`；更新或卸载 npm 包不会删除这些数据。用 `where.exe wdb` / `command -v wdb` 核实入口，避免旧 portable 包遮挡命令；不要删除旧凭据。
 
-开发包的 `UNLICENSED` 仅表示尚未配置项目发行许可，不自动授予开源许可。正式发行需维护者提供 LICENSE 和包名。
+WDB 采用 [MIT 许可证](LICENSE)。第三方依赖遵循各自许可。正式 npm 包名另行公布。

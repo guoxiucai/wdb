@@ -1,5 +1,6 @@
 {
   "name": "wdb-cli-local-test",
+  "license": "MIT",
   "version": "0.0.0",
   "description": "WDB command-line client for Windows servers",
   "type": "commonjs",
