@@ -70,6 +70,8 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
 
+安装器会将 `C:\Program Files\wdb\bin` 加入系统 PATH。重新打开 PowerShell 后可直接运行 `wdb --help` 或 `wdb connect localhost:18766`；服务器本机无需再单独安装 npm CLI。该入口使用服务绑定的 Node，以当前用户权限执行。其他电脑上的客户端仍按下节安装 CLI。
+
 首次安装默认监听所有 IPv4 地址 `0.0.0.0:18766`，自动创建只允许本地子网访问的防火墙规则。本机直接连接 `localhost`，局域网客户端直接连接服务器 IP，无需额外网络配置。升级保留已有监听与来源限制。
 
 如需将访问限制到指定网卡，可在**服务器本机的管理员 PowerShell** 中运行以下可选命令，将示例 IP 换成服务器实际 IPv4：

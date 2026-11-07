@@ -13,6 +13,7 @@ if(!$SourceDirectory){$SourceDirectory=Split-Path $PSScriptRoot -Parent}
 . (Join-Path $PSScriptRoot 'payload-common.ps1')
 . (Join-Path $PSScriptRoot 'resolve-node.ps1')
 . (Join-Path $PSScriptRoot 'service-config.ps1')
+. (Join-Path $PSScriptRoot 'machine-path.ps1')
 $admin=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if(!$admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'Run the installer with normal Windows administrator consent.'}
 $InstallDirectory=[IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\')
@@ -118,6 +119,11 @@ function Commit-Install {
  foreach($line in Get-Content -LiteralPath (Join-Path $InstallDirectory 'PAYLOAD-SHA256SUMS.txt')){if($line -match '^([a-f0-9]{64})  (.+)$'){$file=[IO.Path]::GetFullPath((Join-Path $InstallDirectory $matches[2]));if(!$file.StartsWith($InstallDirectory+'\',[StringComparison]::OrdinalIgnoreCase) -or (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ine $matches[1]){throw 'Installed payload integrity mismatch'}}}
  $runtime=Resolve-WdbNode -RuntimeMode $state.runtimeMode -InstallDirectory $InstallDirectory -NodePath $state.nodePath
  & (Join-Path $InstallDirectory 'scripts\register-service.ps1') -InstallDirectory $InstallDirectory -DataDirectory $DataDirectory -DesktopUser $state.desktopUser -Port $state.port -HelperPort $state.helperPort -ListenAddress $state.listenAddress -Runtime $runtime
+ $entry=Join-Path $InstallDirectory 'bin'
+ if(!(Test-WdbMachinePath $entry)){
+  $state | Add-Member -NotePropertyName pathAdded -NotePropertyValue $true -Force;Save-State $state
+  Update-WdbMachinePath $entry
+ }
  foreach($relative in $state.oldFiles){
   if($relative.Replace('/','\') -in @($state.newFiles | ForEach-Object {$_.Replace('/','\')})){continue}
   $file=[IO.Path]::GetFullPath((Join-Path $InstallDirectory $relative));if(!$file.StartsWith($InstallDirectory+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe old ownership manifest'}
@@ -131,6 +137,7 @@ function Commit-Install {
 function Rollback-Install {
  if(!(Test-Path -LiteralPath $stateFile)){return}
  $state=Read-State;if($state.phase -in @('finished','rolled-back')){return}
+ if($state.pathAdded){Update-WdbMachinePath (Join-Path $InstallDirectory 'bin') -Remove}
  Stop-Wdb
  if($state.phase -ne 'prepared'){
   foreach($relative in @($state.newFiles)+@('runtime-binding.json','installation-health.json')){
@@ -160,7 +167,7 @@ try {
    Begin-Install
    try{if($SourceDirectory -ine $InstallDirectory){foreach($file in Get-ChildItem -LiteralPath $SourceDirectory -Recurse -File){$relative=$file.FullName.Substring($SourceDirectory.Length+1);$dest=Join-Path $InstallDirectory $relative;New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null;Copy-Item -LiteralPath $file.FullName -Destination $dest -Force}};Commit-Install;$state=Read-State;$state.phase='finished';Save-State $state}catch{Rollback-Install;throw}
   }
-  'Uninstall' {Stop-Wdb;& (Join-Path $PSScriptRoot 'uninstall-service.ps1') -DataDirectory $DataDirectory}
+  'Uninstall' {Stop-Wdb;& (Join-Path $PSScriptRoot 'uninstall-service.ps1') -DataDirectory $DataDirectory;Update-WdbMachinePath (Join-Path $InstallDirectory 'bin') -Remove}
  }
  [IO.File]::AppendAllText($installerLog,([DateTime]::UtcNow.ToString('o')+" $Action succeeded`r`n"))
 } catch { $message="WDB installer ${Action}: $($_.Exception.Message)";[IO.File]::AppendAllText($installerLog,([DateTime]::UtcNow.ToString('o')+' '+$message+"`r`n"+$_.ScriptStackTrace+"`r`n"));Write-Error $message -ErrorAction Continue;exit 1 }

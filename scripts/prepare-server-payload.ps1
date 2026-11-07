@@ -12,10 +12,12 @@ foreach($check in @(@{file=(Join-Path $NodeCache 'node.exe');hash=$lock.node.sha
 . (Join-Path $PSScriptRoot 'resolve-node.ps1')
 $null=Resolve-WdbNode -RuntimeMode external-node -NodePath (Join-Path $NodeCache 'node.exe') -BuildPayload
 foreach($file in $lock.ffmpeg.files){$source=Join-Path $root ('.runtime\ffmpeg\'+$file.name);if(!(Test-Path -LiteralPath $source) -or (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ine $file.sha256){throw "FFmpeg cache differs from lock: $($file.name)"}}
-foreach($folder in @('src','native\bin','runtime','scripts','docs')){New-Item -ItemType Directory -Path (Join-Path $output $folder) -Force | Out-Null}
+foreach($folder in @('bin','src','native\bin','runtime','scripts','docs')){New-Item -ItemType Directory -Path (Join-Path $output $folder) -Force | Out-Null}
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe';$framework=Split-Path $compiler
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ /r:System.ServiceProcess.dll "/out:$(Join-Path $output 'native\WdbServiceHost.exe')" (Join-Path $root 'native\ServiceHost.cs')
 if($LASTEXITCODE -ne 0){throw 'ServiceHost compilation failed'}
+& $compiler /nologo /target:exe /platform:x64 /optimize+ /r:System.Web.Extensions.dll "/out:$(Join-Path $output 'bin\wdb.exe')" (Join-Path $root 'native\CliLauncher.cs')
+if($LASTEXITCODE -ne 0){throw 'CLI launcher compilation failed'}
 & $compiler /nologo /target:exe /platform:x64 /optimize+ "/win32manifest:$(Join-Path $root 'native\DesktopBridge.manifest')" "/out:$(Join-Path $output 'native\bin\DesktopBridge.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll "/r:$framework\WPF\UIAutomationClient.dll" "/r:$framework\WPF\UIAutomationTypes.dll" "/r:$framework\WPF\WindowsBase.dll" (Join-Path $root 'native\DesktopBridge.cs')
 if($LASTEXITCODE -ne 0){throw 'DesktopBridge compilation failed'}
 Copy-Item -LiteralPath (Join-Path $root 'native\DesktopBridge.exe.config') -Destination (Join-Path $output 'native\bin\DesktopBridge.exe.config')
@@ -23,7 +25,7 @@ Copy-Item -LiteralPath (Join-Path $root 'native\DesktopBridge.exe.config') -Dest
 & node.exe (Join-Path $PSScriptRoot 'copy-ws.js') $output | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Locked WebSocket production dependency staging failed'}
 Get-ChildItem -LiteralPath (Join-Path $root 'src') -File -Filter '*.js' | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $output 'src')}
-$scripts=@('installer-action.ps1','install-service.ps1','register-service.ps1','repair-service.ps1','uninstall-service.ps1','service-config.ps1','service.ps1','set-network.ps1','init-data.ps1','resolve-node.ps1','payload-common.ps1','installer-health.js')
+$scripts=@('installer-action.ps1','machine-path.ps1','install-service.ps1','register-service.ps1','repair-service.ps1','uninstall-service.ps1','service-config.ps1','service.ps1','set-network.ps1','init-data.ps1','resolve-node.ps1','payload-common.ps1','installer-health.js')
 foreach($file in $scripts){Copy-Item -LiteralPath (Join-Path $root "scripts\$file") -Destination (Join-Path $output 'scripts')}
 Copy-Item -LiteralPath (Join-Path $root 'native\desktop.ps1') -Destination (Join-Path $output 'native')
 Copy-Item -LiteralPath (Join-Path $root 'package.json') -Destination $output

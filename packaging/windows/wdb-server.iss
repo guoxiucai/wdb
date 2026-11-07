@@ -24,6 +24,7 @@ SolidCompression=yes
 DiskSpanning=no
 CloseApplications=no
 RestartApplications=no
+ChangesEnvironment=yes
 UninstallDisplayIcon={app}\native\WdbServiceHost.exe
 VersionInfoDescription=WDB Server {#RuntimeMode} ({#SigningMode})
 #if SigningMode == "Manual"
