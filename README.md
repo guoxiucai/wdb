@@ -28,7 +28,7 @@ WDB (Windows Debug Bridge) 由 Windows 后台服务、跨平台 CLI 和 Agent Sk
 
 WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截图与录屏用于观察和取证，目前不提供实时远程桌面视频串流。
 
-当前版本为 **0.1.0**，采用 [MIT 许可证](LICENSE)。正式 npm 包与 GitHub Release 尚未发布；目前可从源码构建 CLI 和 Windows 安装器。
+当前版本为 **0.1.0**，采用 [MIT 许可证](LICENSE)。CLI 通过 npm 分发，Windows 服务端安装器及 CLI tarball 通过 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 分发。
 
 ## 核心能力
 
@@ -61,12 +61,12 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 ### 1. 安装 Windows 服务端
 
-使用本地构建的以下一种安装器；[GitHub Releases](https://github.com/guoxiucai/wdb/releases) 作为后续正式下载入口，当前未发布正式产物。
+从 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 下载以下一种安装器，并按同页 SHA-256 清单核对下载文件。
 
 | 安装器 | 适用场景 |
 | --- | --- |
-| `wdb-server-0.1.0-windows-x64-with-node-Development-setup.exe` | 自带固定版本 Node，目标机器无需安装 Node、npm、Git 或编译器 |
-| `wdb-server-0.1.0-windows-x64-external-node-Development-setup.exe` | 使用系统已安装的合格 Node；要求受保护的安装路径、有效签名和匹配版本 |
+| `wdb-server-0.1.0-windows-x64-with-node-setup.exe` | 自带固定版本 Node，目标机器无需安装 Node、npm、Git 或编译器 |
+| `wdb-server-0.1.0-windows-x64-external-node-setup.exe` | 使用系统已安装的合格 Node；要求受保护的安装路径、有效签名和匹配版本 |
 
 双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
 
@@ -84,19 +84,19 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 ### 2. 安装 CLI
 
-Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=22.0.0`**。当前先安装本地开发包：
+Windows 与 macOS 共用一个 npm tarball，需要 **Node.js `>=22.0.0`**。安装正式 CLI：
 
 最低版本为 Node 22.0.0；Node 18 / 20 已停止上游维护，不再支持。推荐使用 Node 24 LTS 的受维护补丁版本。自带运行时的服务端安装包仍使用固定的 Node 24，不要求用户另外安装 Node。Electron/Flutter 调试的 WebSocket 使用已锁定的 `ws` 依赖。
 
 ```sh
-npm install -g ./wdb-cli-local-test-0.1.0.tgz --omit=optional --ignore-scripts
+npm install -g @tsingwill/wdb@0.1.0 --omit=optional --ignore-scripts
 wdb --version
 wdb --help
 ```
 
 Windows PowerShell 如限制 npm 生成的 `.ps1` 启动器，可使用 `wdb.cmd`。安装不包含服务端、不下载 Node、不执行安装 hook；Agent Skill 单独安装。
 
-正式包名和 registry 安装命令将在发布后提供。源码构建方法见下方[本地开发与构建](#development)，安装与配置见 [npm CLI 指南](docs/NPM-CLIENT.md)。
+npm 包名为 `@tsingwill/wdb`，安装后的命令为 `wdb`。源码构建方法见下方[本地开发与构建](#development)，安装与配置见 [npm CLI 指南](docs/NPM-CLIENT.md)。
 
 ### 3. 连接设备
 
@@ -247,7 +247,7 @@ AGENTS.md      项目开发、验证、提交与交付规范
 
 - 完善 Mac 终端兼容性与使用体验。
 - 扩展 Windows 版本兼容性，改善跨主机连接稳定性。
-- 发布正式 npm 包和签名 Windows 安装器。
+- 持续完善 npm 与 Windows 安装器的发布和升级体验。
 
 ## 贡献与反馈
 
