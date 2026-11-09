@@ -29,7 +29,7 @@ connection to 172.20.115.75:18766 timed out (PAIRING_TIMEOUT)
 
 首次连接自动获取证书 SHA-256，服务端弹窗同意后保存指纹及凭据；所有 HTTP 请求均先匹配本次/已保存的指纹。以后证书变化则失败，不自动接受。可选 `--fingerprint <SHA256>` 预先指定可信证书；旧 `--pairing-code` 参数不再参与授权。首次信任的边界见 [连接授权](CONNECTION-APPROVAL.md)。后续 `connect localhost:18766` 复用已保存的凭据。Windows 凭据保存在 `%LOCALAPPDATA%\wdb\client\devices.json`；Mac 默认 `~/Library/Application Support/wdb/client/devices.json`，目录/文件权限为 0700/0600。优先级为 `--config <目录>` > `WDB_CONFIG` > 平台默认，可选择独立客户端身份。Mac 入口和旧配置迁移见 [MACOS-CLIENT.md](MACOS-CLIENT.md)。请把自定义配置目录放在当前用户私有目录中，不加入 Git。
 
-`disconnect` 禁用本地连接并尝试通知服务端，保留配对凭据，不撤销授权；服务离线也能主动断开。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
+`disconnect` 移除本地设备记录（包括地址、证书指纹和配对凭据）并尝试通知服务端，设备不再出现在 `devices`；服务离线也能主动断开。不撤销服务端保存的授权；再次 `connect` 将重新发起配对并由 Windows 操作者确认。`clients list` 查看授权；`clients revoke <clientId>` 撤销指定客户端。多设备已连接时必须加 `--device <地址、deviceId或唯一设备名>`；不自动选择首个设备。单机可用不同服务端端口和不同 `--config` 目录验证多客户端和多设备路由。
 
 Windows 服务端本机安装后，`wdb clients list` / `wdb clients revoke <clientId>` 默认管理本机服务，无需先 connect，也不读取本地 CLI 设备记录。可加 `--local` 明确选择本机；`--local` 与 `--device` 互斥。指定 `--device` 则保留远端已配对管理流程。未安装本机服务的 CLI 按原设备选择规则执行。
 

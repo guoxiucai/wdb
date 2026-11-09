@@ -48,7 +48,7 @@ function setSession(device,options={},io,configDir){
  const number=(key,fallback,min)=>{const value=options[key]===undefined?fallback:Number(options[key]);if(!Number.isFinite(value)||value<min)throw new CliError('INVALID_ARGUMENT',`--${key} must be >= ${min}.`);return value;};
  sessions.set(device,{reconnectMs:number('reconnect-timeout',60000,0),requestMs:number('request-timeout',10000,1),io,configDir});
 }
-async function ensureEnabled(device){const dir=sessions.get(device)?.configDir;if(!dir)return;let config;try{config=JSON.parse(await fs.readFile(path.join(dir,'devices.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return;throw e;}if(config.devices?.find(d=>d.url===device.url)?.connected===false)throw new CliError('CLIENT_DISCONNECTED','This device was explicitly disconnected; use connect to enable it again.');}
+async function ensureEnabled(device){const dir=sessions.get(device)?.configDir;if(!dir)return;let config;try{config=JSON.parse(await fs.readFile(path.join(dir,'devices.json'),'utf8'));}catch(e){if(e.code==='ENOENT')throw new CliError('CLIENT_DISCONNECTED','Device configuration was removed; connect again.');throw e;}const saved=config.devices?.find(d=>d.url===device.url);if(!saved||saved.connected===false)throw new CliError('CLIENT_DISCONNECTED','This device was explicitly disconnected; use connect to enable it again.');}
 function openRequest(device,method,pathname,headers={},timeoutMs=30000,signal){
  return new Promise((resolve,reject)=>{
   const expected=normalizeFingerprint(device.fingerprint);

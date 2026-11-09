@@ -169,7 +169,8 @@ async function deviceSnapshot(dir,options,io,blocked,visibility){
   for(const entry of entries){const saved=latest.devices.find(d=>d.url===entry.url&&d.deviceId===entry.deviceId);if(!saved)continue;if(saved.connected===false){entry.enabled=false;entry.connected=false;entry.connectionState='disconnected';}
     if(entry.hostname&&saved.hostname!==entry.hostname){saved.hostname=entry.hostname;changed=true;}
   }
-  if(changed)await saveConfig(dir,latest);return visibility?visibility.filter(entries):entries;
+  const currentEntries=entries.filter(entry=>latest.devices.some(d=>d.url===entry.url&&d.deviceId===entry.deviceId));
+  if(changed)await saveConfig(dir,latest);return visibility?visibility.filter(currentEntries):currentEntries;
 }
 async function watchDevices(dir,options,io,visibility){
   const duration=numberOption(options.duration,Infinity,'--duration',1),interval=numberOption(options['poll-ms'],1000,'--poll-ms',50);let stopped=false,previous='',changes=0;const start=Date.now(),blocked=new Map();
@@ -271,7 +272,8 @@ async function followLogs(device, op, args, options, io, configDir) {
   try {
     while (!stopped && Date.now() - started < duration) {
       const currentConfig = await readConfig(configDir);
-      if (currentConfig.devices.find(entry => entry.url === device.url)?.connected === false) break;
+      const savedDevice=currentConfig.devices.find(entry => entry.url === device.url);
+      if (!savedDevice || savedDevice.connected === false) break;
       const response = await runTask(device, op, { ...args, ...(op === 'logs.file' ? { lines: undefined } : {}) }, { ...options, follow: false, detach: false }, io);
       const task = taskFrom(response);
       if (FAILED.has(task?.status) || task?.error) return response;
@@ -436,6 +438,7 @@ const HELP = `wdb — Windows Debug Bridge
     Optional trusted pin: --fingerprint <SHA256>; --approval-timeout <ms> defaults to 150000.
   wdb devices [--watch] [--duration <ms>] | disconnect [address] | info
     Offline rows: current terminal only, hidden after 10 minutes; pairing is retained.
+    Explicit disconnect removes local device information and credentials; connect pairs again.
   wdb clients list | clients revoke <clientId>
     Installed Windows server: local management by default; --local forces local,
     --device <server> explicitly manages a paired remote server.
@@ -537,9 +540,10 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   if(command==='forward'||command==='reverse')return {options,streamExit:await require('./forward-client').runForward(device,command,words,options,io)};
   let result;
   if (command === 'disconnect') {
-    device.connected = false; await saveConfig(dir, config);
+    config.devices=config.devices.filter(entry=>entry.url!==device.url);await saveConfig(dir,config);
     try{result=await api(device,'DELETE','/v1/connection',undefined,2000,{reconnectMs:0});}
-    catch(e){result=makeEnvelope({disconnected:true,credentialsRetained:true,remoteNotified:false,notificationError:{code:e.code,message:e.message}},{deviceId:device.deviceId});}
+    catch(e){result=makeEnvelope({disconnected:true,remoteNotified:false,notificationError:{code:e.code,message:e.message}},{deviceId:device.deviceId});}
+    result.data={...result.data,credentialsRetained:false};
   } else if (command === 'info') {
     result = await api(device, 'GET', '/v1/info');
     result.data.connection = { url: device.url, clientId: device.clientId, fingerprint: device.fingerprint, remembered: device.remembered !== false, lastConnected: device.lastConnected };

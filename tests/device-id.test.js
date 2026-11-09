@@ -18,7 +18,7 @@ test('legacy device IDs migrate without changing credentials, task IDs or task r
   const saved=JSON.parse(fs.readFileSync(path.join(config,'devices.json'))).devices[0];assert.equal(saved.deviceId,id);assert.equal(saved.clientId,clientId);assert.equal(saved.token,token);assert.equal(saved.fingerprint,fingerprint);assert.equal(selectDevice({devices:[saved]},legacy).deviceId,id);
   const task=await cli(config,['task','get',taskId,'--device',id]);assert.equal(task.code,0);assert.equal(task.result.data.deviceId,id);assert.equal(task.result.data.data.stdout,'preserved');assert.equal(task.result.data.data.deviceId,legacy);
   const different={...saved,deviceId:normalizeDeviceId(crypto.randomUUID())};await assert.rejects(api(different,'GET','/v1/health'),{code:'DEVICE_ID_MISMATCH'});
-  assert.equal((await cli(config,['disconnect',id])).code,0);assert.equal(JSON.parse(fs.readFileSync(path.join(config,'devices.json'))).devices[0].connected,false);
+  assert.equal((await cli(config,['disconnect',id])).code,0);assert.deepEqual(JSON.parse(fs.readFileSync(path.join(config,'devices.json'))).devices,[]);
   // The updated client also tolerates the exact corresponding old wire ID during rolling upgrades.
   bridge.route=async(req,res)=>{req.resume();res.end(JSON.stringify({deviceId:legacy,data:{deviceId:legacy,protocolVersion:1}}));};const old=await api(saved,'GET','/v1/health');assert.equal(old.deviceId,id);assert.equal(old.data.deviceId,id);
  }finally{await bridge?.close();fs.rmSync(dir,{recursive:true,force:true});}

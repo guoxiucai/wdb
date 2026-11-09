@@ -181,7 +181,7 @@ test('event wait deadline and explicit local disconnect stop waiting without can
  await until(() => f.bridge.taskEvents.subscribers.size === 0);
  const pending = f.cli(['task', 'wait', task.id]);
  await until(() => f.bridge.taskEvents.subscribers.has(task.id));
- await saveConfig(f.config, { devices: [{ ...f.device, connected: false }] });
+ await saveConfig(f.config, { devices: [] });
  assert.equal((await pending).result.error.code, 'CLIENT_DISCONNECTED');
  assert.equal(task.status, 'running'); assert.ok(!f.requests.some(url => url.endsWith('/cancel')));
 });
