@@ -63,4 +63,4 @@ wdb connect 172.20.115.75
 wdb devices --watch
 ```
 
-`disconnect` 删除本地设备记录和凭据，设备不再出现在 `devices`；服务离线也可断开。再次 `connect` 会重新配对并请求 Windows 端同意。服务端已有授权记录通过 `clients revoke <clientId>` 撤销。多台设备时每次明确 `--device`。Electron/Flutter 的 `127.0.0.1` 调试地址属于远端服务器，客户端不需要额外打通调试端口。
+`disconnect` 隐藏设备条目，保留客户端凭据和服务端授权；再次 `connect` 在已记住授权仍有效时直接连接；`clients revoke <clientId>` 才是撤销授权。多台设备时每次明确 `--device`。Electron/Flutter 的 `127.0.0.1` 调试地址属于远端服务器，客户端不需要额外打通调试端口。

@@ -14,6 +14,17 @@ test('lost task acceptance response recovers the same persisted task without rep
  f.bridge.route=async(req,res)=>{if(req.url==='/v1/tasks'&&req.method==='POST'){posts++;if(posts===1){res.end=()=>{res.destroy();return res;};}}return original(req,res);};
  const r=await f.cli(['call','logs.file','--args',JSON.stringify({path:path.join(f.dir,'pairing-code')})]);assert.equal(r.code,0,JSON.stringify(r.result));assert.equal(posts,2);assert.equal(f.bridge.tasks.size,1);assert.equal(r.result.data.id,[...f.bridge.tasks.keys()][0]);assert.match(r.stderr,/Connection restored/);
 });
+
+test('disconnect hides a device while remembered authorization reconnects without pairing',async t=>{
+ const f=await setup(t),before=fs.readFileSync(path.join(f.dir,'clients.json')),original=f.bridge.route.bind(f.bridge);let pairs=0;
+ f.bridge.route=async(req,res)=>{if(req.url==='/v1/pair')pairs++;return original(req,res);};
+ assert.equal((await f.cli(['disconnect',f.device.url])).code,0);
+ assert.deepEqual((await f.cli(['devices'])).result.data,[]);
+ assert.deepEqual(fs.readFileSync(path.join(f.dir,'clients.json')),before);
+ const result=await f.cli(['connect',f.device.url]);assert.equal(result.code,0);assert.equal(result.result.data.state,'connected');assert.equal(pairs,0);
+ const saved=JSON.parse(fs.readFileSync(path.join(f.configDir,'devices.json'))).devices[0];assert.equal(saved.token,f.device.token);assert.equal(saved.clientId,f.device.clientId);
+ assert.equal((await f.cli(['devices'])).result.data.length,1);
+});
 test('transient loss reconnects, while revoked credentials and device identity changes do not retry',async t=>{
  const f=await setup(t),original=f.bridge.route.bind(f.bridge);let mode='drop',requests=0;
  f.bridge.route=async(req,res)=>{requests++;if(mode==='drop'&&requests<=2){req.socket.destroy();return;}if(mode==='identity'){res.end(JSON.stringify({deviceId:'wrong-device',data:{protocolVersion:1}}));return;}return original(req,res);};
@@ -25,7 +36,7 @@ test('transient loss reconnects, while revoked credentials and device identity c
 test('blackholed TLS connection has a bounded recovery deadline; explicit disconnect works offline',async t=>{
  const f=await setup(t),sockets=new Set(),blackhole=net.createServer(s=>{sockets.add(s);s.on('close',()=>sockets.delete(s));});await new Promise(r=>blackhole.listen(0,'127.0.0.1',r));t.after(async()=>{for(const s of sockets)s.destroy();await new Promise(r=>blackhole.close(r));});
  const device={...f.device,url:'https://127.0.0.1:'+blackhole.address().port};setSession(device,{'reconnect-timeout':500,'request-timeout':100});const start=Date.now();await assert.rejects(api(device,'GET','/v1/health'),{code:'RECONNECT_TIMEOUT'});assert.ok(Date.now()-start<1400);
- fs.writeFileSync(path.join(f.configDir,'devices.json'),JSON.stringify({devices:[device]}));const disconnected=await f.cli(['disconnect',device.url]);assert.equal(disconnected.code,0);assert.equal(disconnected.result.data.remoteNotified,false);assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.configDir,'devices.json'))).devices,[]);assert.equal((await f.cli(['info'])).result.error.code,'NO_DEVICE');
+ fs.writeFileSync(path.join(f.configDir,'devices.json'),JSON.stringify({devices:[device]}));const disconnected=await f.cli(['disconnect',device.url]);assert.equal(disconnected.code,0);assert.equal(disconnected.result.data.remoteNotified,false);assert.equal(JSON.parse(fs.readFileSync(path.join(f.configDir,'devices.json'))).devices[0].connected,false);assert.equal((await f.cli(['info'])).result.error.code,'NO_DEVICE');
 });
 test('non-idempotent requests with uncertain outcomes are not replayed',async t=>{
  const f=await setup(t);let requests=0;f.bridge.route=async(req)=>{requests++;for await(const chunk of req){}req.socket.destroy();};setSession(f.device,{'reconnect-timeout':1000,'request-timeout':100});await assert.rejects(api(f.device,'POST','/v1/pair',{pairingCode:'unused'}),{code:'REQUEST_OUTCOME_UNKNOWN'});assert.equal(requests,1);
@@ -50,7 +61,7 @@ test('devices watches real online/offline recovery and displays hostname, URL an
 });
 test('devices does not reconnect explicitly disconnected entries or repeatedly probe revoked authorization',async t=>{
  const f=await setup(t),original=f.bridge.route.bind(f.bridge);let requests=0;f.bridge.route=(req,res)=>{requests++;return original(req,res);};
- const file=path.join(f.configDir,'devices.json');fs.writeFileSync(file,JSON.stringify({devices:[{...f.device,connected:false}]}));const off=await f.cli(['devices']);assert.equal(off.result.data[0].connectionState,'disconnected');assert.equal(requests,0);
+ const file=path.join(f.configDir,'devices.json');fs.writeFileSync(file,JSON.stringify({devices:[{...f.device,connected:false}]}));const off=await f.cli(['devices']);assert.deepEqual(off.result.data,[]);assert.equal(requests,0);
  fs.writeFileSync(file,JSON.stringify({devices:[f.device]}));f.bridge.clients[0].revokedAt=new Date().toISOString();let output='';
  await main(['devices','--watch','--duration','350','--poll-ms','50','--config',f.configDir,'--json'],{stdout:{write:s=>output+=s},stderr:{write(){}}});assert.equal(requests,1);assert.equal(JSON.parse(output.trim().split('\n')[0]).data[0].connectionState,'unauthorized');
 });

@@ -141,27 +141,27 @@ test('pair, shell, file/recursive transfers, disconnect, and reconnect', async (
   assert.equal((await cli(['push', folder, 'C:/tree'])).code, 0);
   assert.equal((await cli(['pull', 'C:/tree', path.join(temporary, 'download-dir'), '--recursive'])).code, 0);
   assert.equal(await fs.readFile(path.join(temporary, 'download-dir/子目录/文件.txt'), 'utf8'), '你好世界');
-  const disconnected=await cli(['disconnect', target]);assert.equal(disconnected.code,0);assert.equal(disconnected.result.data.credentialsRetained,false);
+  const disconnected=await cli(['disconnect', target]);assert.equal(disconnected.code,0);assert.equal(disconnected.result.data.credentialsRetained,true);
   assert.deepEqual((await cli(['devices'])).result.data,[]);
   assert.equal((await cli(['info'])).result.error.code, 'NO_DEVICE');
-  assert.deepEqual(JSON.parse(await fs.readFile(path.join(temporary,'client','devices.json'))).devices,[]);
+  const originalCredentials=JSON.parse(await fs.readFile(path.join(temporary,'client','devices.json'))).devices[0];assert.equal(originalCredentials.connected,false);
   const pairCount=requests.filter(r=>r==='POST /v1/pair').length;
   const resumed = await cli(['connect', target]);
   assert.equal(resumed.code, 0); assert.equal(resumed.result.data.state, 'connected');
   const reusedCredentials = JSON.parse(await fs.readFile(path.join(temporary, 'client', 'devices.json'))).devices[0];
-  assert.ok(reusedCredentials.token);
-  assert.equal(requests.filter(r=>r==='POST /v1/pair').length,pairCount+1);
+  assert.equal(reusedCredentials.token,originalCredentials.token);assert.equal(reusedCredentials.clientId,originalCredentials.clientId);
+  assert.equal(requests.filter(r=>r==='POST /v1/pair').length,pairCount);
   assert.equal((await cli(['info'])).result.data.version, '0.1.0');
 });
 
-test('offline disconnect removes only the selected device and its credentials',async()=>{
+test('offline disconnect hides only the selected device and retains credentials',async()=>{
  const net=require('node:net'),listener=net.createServer();await new Promise(r=>listener.listen(0,'127.0.0.1',r));
  const offline=`https://127.0.0.1:${listener.address().port}`;await new Promise(r=>listener.close(r));
  const dir=path.join(temporary,'offline-disconnect');await fs.mkdir(dir);
  const other={url:target,deviceId:'other-device',connected:false,token:'other-token',fingerprint};
  await fs.writeFile(path.join(dir,'devices.json'),JSON.stringify({devices:[{url:offline,deviceId:'offline-device',connected:true,token:'forgotten-token',fingerprint},other]}));
- const result=await cli(['disconnect',offline],'offline-disconnect');assert.equal(result.code,0);assert.equal(result.result.data.credentialsRetained,false);assert.equal(result.result.data.remoteNotified,false);
- assert.deepEqual(JSON.parse(await fs.readFile(path.join(dir,'devices.json'),'utf8')).devices,[other]);
+ const result=await cli(['disconnect',offline],'offline-disconnect');assert.equal(result.code,0);assert.equal(result.result.data.credentialsRetained,true);assert.equal(result.result.data.remoteNotified,false);
+ const saved=JSON.parse(await fs.readFile(path.join(dir,'devices.json'),'utf8')).devices;assert.equal(saved.length,2);assert.equal(saved[0].connected,false);assert.equal(saved[0].token,'forgotten-token');assert.deepEqual(saved[1],other);assert.deepEqual((await cli(['devices'],'offline-disconnect')).result.data,[]);
  assert.ok((await cli(['devices'],'offline-disconnect')).result.data.every(d=>d.url!==offline));
 });
 

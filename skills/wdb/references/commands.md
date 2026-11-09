@@ -7,7 +7,7 @@ All remote examples use `wdb --device <server> ...`; `<server>` is the supplied 
 | Goal | Command family | Operational choice |
 | --- | --- | --- |
 | Install / inspect CLI | `npm install -g @tsingwill/wdb`; `wdb --version`; `wdb --help` | Install if absent; inspect the actual executable before changing an existing installation. |
-| Connect / select | `connect <address>`; `devices [--watch]`; `info`; `disconnect [address]` | Connect awaits Windows consent. Disconnect removes the local device and credentials; reconnect starts pairing and requires Windows consent. |
+| Connect / select | `connect <address>`; `devices [--watch]`; `info`; `disconnect [address]` | Connect awaits Windows consent. Disconnect hides the device but retains credentials and remembered server authorization; connect reuses them without a new approval when still valid. |
 | Manage authorization | `clients list`; `clients revoke <clientId>` | Explicit `--device` targets remote Windows; default can manage a local installed service. Revocation is distinct from disconnect and should be within the requested task. |
 | Run scripts | `shell --script <PowerShell>`; `shell --script-file <local.ps1>` | Noninteractive automation; optional `--cwd`, `--env`, `--timeout`, `--detach`. Default logged-in user; explicit `--admin` requests SYSTEM. |
 | Track / cancel work | `task list`; `task get\|wait\|output\|cancel\|delete <id>` | Use returned task IDs. `--follow` streams output; query uncertain outcomes before retrying. Cancel explicitly; deleting a record is not cancelling work. |
