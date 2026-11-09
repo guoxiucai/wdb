@@ -1,30 +1,30 @@
 {
   "version": 1,
-  "sourceCommit": "0b7aee38072b85c82f603c50020d3a5b687a9413",
+  "sourceCommit": "1f7d8f453dda2b5b08ac9dbff7743ca741a5eab1",
   "files": [
     {
       "path": "SKILL.md",
       "mode": "100644",
-      "bytes": 13952,
-      "sha256": "4cde356ed0a7e63eacad56615016ff68450ee1ec1a047f9a6cbf60a08d243bd9"
+      "bytes": 13883,
+      "sha256": "69c9096dd73da59b808facdd30924e25161ea0b45065fb727ff00e3fe69a490b"
     },
     {
       "path": "references/cli.md",
       "mode": "100644",
-      "bytes": 14762,
-      "sha256": "8faa567585b709dc9f37608653e043c943524a08b5bdcc2a130cae7089b5b2cc"
+      "bytes": 14719,
+      "sha256": "50faaa135b12b9cca2cfc52da8b63aa1298f74d75d6ac16993461c52b8e32424"
     },
     {
       "path": "references/commands.md",
       "mode": "100644",
-      "bytes": 5990,
-      "sha256": "0f489348c79c2020a69876e1be9a7a449f34d1f96dd55cd09ba73e12518806e5"
+      "bytes": 6032,
+      "sha256": "0e09e6241d9b8e1a9ad0b88ffc008e43c76b1d1c0ede55dfdd7f03050415863f"
     },
     {
       "path": "references/connection.md",
       "mode": "100644",
-      "bytes": 5903,
-      "sha256": "b92a6e651dbb91ed2f4415f073e5dd7bb174200e3ea510f2053d3bf465f896fa"
+      "bytes": 5811,
+      "sha256": "01b91a438c1671390580fe863a3055376f4d31e02e9213162033229ae7de2812"
     },
     {
       "path": "references/electron.md",
