@@ -29,7 +29,13 @@ public class DesktopFixture : Form {
     [STAThread] public static void Main(string[] args){Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);Application.Run(new DesktopFixture(args[0]));}
     class InkPanel:Panel {
         string log; Bitmap image;Dictionary<uint,Point> last=new Dictionary<uint,Point>();
-        public InkPanel(string path){log=path;DoubleBuffered=true;image=new Bitmap(680,390);using(var g=Graphics.FromImage(image))g.Clear(Color.White);}
+        public InkPanel(string path){log=path;DoubleBuffered=true;TabStop=true;image=new Bitmap(680,390);using(var g=Graphics.FromImage(image))g.Clear(Color.White);
+            MouseDown+=(s,e)=>{Focus();File.AppendAllText(log,"MOUSE down "+e.X+" "+e.Y+Environment.NewLine);};
+            MouseUp+=(s,e)=>File.AppendAllText(log,"MOUSE up "+e.X+" "+e.Y+Environment.NewLine);
+            MouseDoubleClick+=(s,e)=>File.AppendAllText(log,"MOUSE double"+Environment.NewLine);
+            MouseWheel+=(s,e)=>File.AppendAllText(log,"MOUSE wheel "+e.Delta+Environment.NewLine);
+            MouseMove+=(s,e)=>{if(e.Button!=MouseButtons.None)File.AppendAllText(log,"MOUSE drag "+e.X+" "+e.Y+Environment.NewLine);};
+        }
         protected override void OnHandleCreated(EventArgs e){base.OnHandleCreated(e);ConfigureGestures(Handle);File.AppendAllText(log,"REGISTER "+RegisterTouchWindow(Handle,3)+Environment.NewLine);}
         protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);e.Graphics.DrawImageUnscaled(image,0,0);}
         public void Save(string path){image.Save(path,System.Drawing.Imaging.ImageFormat.Png);}

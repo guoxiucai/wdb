@@ -227,6 +227,8 @@ npm run test:client
 
 测试使用独立数据目录；流协议测试还需要 OpenSSL。桌面实机、安装和故障注入有额外环境要求，不能用默认单元测试通过代替。初始化脚本默认写入忽略于 Git 的 `.runtime/server`。
 
+Windows 的 CLI 功能自验证见 [localhost 验证指南](docs/CLI-LOCALHOST-VALIDATION.md)：使用已获授权的专用 loopback 配置，核对真实文件、任务、应用事件、录屏解码和端口回收，并逐项生成验证报告。
+
 仅构建 CLI 开发包：
 
 ```sh
