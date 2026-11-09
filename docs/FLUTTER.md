@@ -99,6 +99,12 @@ action默认auto先走UIA，仅对明确未执行的控件缺失、引用过期�
 
 协议/路由测试：`node --test tests/flutter-vm.test.js tests/flutter.test.js`。
 
-实际Debug实例：`node scripts/validate-flutter.js --session <本地会话JSON> --output artifacts/flutter-live`。脚本验证查询、属性、等待、PID拒绝、内存、无VM降级及日志。为了产生确定事件，它读取并重设相同的Inspector显示开关，确认值未变，不改应用源码。UI动作按新观察另行闭环，见 [鸿镜验证](FLUTTER-VERIFICATION.md)。
+实际 Debug 实例（已有人工同意并记住的专用客户端配置）：
+
+```powershell
+node scripts/validate-flutter.js --session <本地会话JSON> --config <客户端配置目录> --output artifacts/flutter-live
+```
+
+脚本直接运行 `flutter` CLI 子命令，验证 info/isolates/tree/find/properties/wait、PID 拒绝、memory、observe 三通道、无 VM 降级、screenshot 和 logs。`--config` 同时传给普通命令与日志子进程；省略时沿用 CLI 的配置优先级。为了产生确定事件，它读取并重设相同的 Inspector 显示开关，确认值未变，不改应用源码。UI 动作须按新观察另行闭环并恢复初始状态，方法见上文“UIA 与视觉闭环”。真实会话地址和实机证据保存在本地忽略目录。
 
 参考：[VM协议](https://github.com/dart-lang/sdk/blob/main/runtime/vm/service/service.md)、[Inspector](https://docs.flutter.dev/tools/devtools/inspector)、[构建模式](https://docs.flutter.dev/testing/build-modes)、[Windows可访问性](https://github.com/flutter/flutter/blob/master/docs/platforms/desktop/windows/Accessibility-on-Windows.md)、[ensureSemantics](https://api.flutter.dev/flutter/semantics/SemanticsBinding/ensureSemantics.html)。
