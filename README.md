@@ -15,8 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="#how-it-works">工作原理</a> ·
   <a href="#quick-start">快速开始</a> ·
+  <a href="#how-it-works">工作原理</a> ·
   <a href="#commands">核心命令</a> ·
   <a href="#agent-skill">Agent Skill</a> ·
   <a href="#development">参与开发</a>
@@ -30,48 +30,9 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 当前版本为 **0.1.0**，采用 [MIT 许可证](LICENSE)。CLI 通过 npm 分发，Windows 服务端安装器及 CLI tarball 通过 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 分发。
 
-<a id="how-it-works"></a>
-
-## 二、工作原理
-
-![WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理](docs/assets/wdb-architecture.svg)
-
-CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：HTTPS 处理命令、任务和文件，SSE 推送任务状态 / 输出，WSS 承载交互终端与 TCP 双向字节流。无需额外开放交互服务端口。
-
-Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通用户 helper 执行。只有显式 `--admin` 才请求 SYSTEM shell。
-
-## 三、核心能力
-
-| 能力 | 用途 |
-| --- | --- |
-| 设备连接与授权 | 仅用地址发起连接；服务端弹窗同意 / 拒绝，可记住客户端；查看状态、断开和撤销授权 |
-| 任务与脚本 | PowerShell 批处理、任务查询 / 取消、SSE 输出与按任务 ID 恢复 |
-| 交互式 shell | Windows ConPTY；PowerShell / cmd / 已安装的 pwsh；中文、窗口尺寸、Ctrl+C 和终端恢复 |
-| TCP 转发 | `forward` / `reverse`；传输 TCP 字节，支持半关闭；监听和目标均限制为 loopback |
-| 文件与应用部署 | 文件 / 目录推拉、SHA-256 校验、显式覆盖、安装 / 更新 / 卸载 |
-| 桌面与输入 | 窗口管理、UI Automation、截图、键鼠 / Unicode 输入、Windows 触摸注入 |
-| Electron 调试 | CDP + UIA + 视觉观察与操作；目标发现、DOM 查询、脚本和 console |
-| Flutter 调试 | VM Service / Inspector + UIA + 视觉；Widget / 属性观察与操作验证 |
-| 日志与录屏 | Windows 事件 / 文件日志、跟踪输出、MP4 录制及产物下载 |
-| AI Agent | 同一套 CLI 与 Skill；先观察、再操作、后验证，无需在服务端配置模型密钥 |
-
-## 四、与其他方案的区别
-
-WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Electron CDP、Flutter Inspector、交互终端和 TCP 转发统一到一套 CLI。与 MCP 桌面工具、WinApp CLI 或 VNC + SSH 组合相比，重点是设备连接与调试闭环；MCP 接入、Windows 开发工具链和实时远程桌面则各有更适合的方案。详见 [能力差异、优势与选型对比](docs/COMPETITIVE-ANALYSIS.md)。
-
-## 五、系统要求
-
-| 组件 | 当前范围 |
-| --- | --- |
-| Windows 服务端 | x64；安装预检要求桌面版 build 19045+、.NET Framework 4.8、Windows PowerShell 5.1 |
-| Windows CLI | Node.js `>=22.0.0`；纯 JavaScript npm 客户端 |
-| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=22.0.0`。交互 shell 需要 TTY；支持前台 TCP 正向与反向转发 |
-
-桌面操作需要目标用户已登录且解锁。Flutter Inspector 依赖应用提供相应调试服务。
-
 <a id="quick-start"></a>
 
-## 六、快速开始
+## 二、快速开始
 
 <a id="agent-skill"></a>
 
@@ -173,6 +134,45 @@ wdb reverse tcp:9000 tcp:3000
 ```
 
 转发命令各自在前台运行，用 Ctrl+C 停止。端口目标需要已有程序监听。交互 shell / 转发断线即结束，**不自动重连或重放**；批处理任务的查询与恢复另按任务 ID 处理。
+
+<a id="how-it-works"></a>
+
+## 三、工作原理
+
+<img src="docs/assets/wdb-architecture.svg" width="50%" alt="WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理" />
+
+CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：HTTPS 处理命令、任务和文件，SSE 推送任务状态 / 输出，WSS 承载交互终端与 TCP 双向字节流。无需额外开放交互服务端口。
+
+Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通用户 helper 执行。只有显式 `--admin` 才请求 SYSTEM shell。
+
+## 四、核心能力
+
+| 能力 | 用途 |
+| --- | --- |
+| 设备连接与授权 | 仅用地址发起连接；服务端弹窗同意 / 拒绝，可记住客户端；查看状态、断开和撤销授权 |
+| 任务与脚本 | PowerShell 批处理、任务查询 / 取消、SSE 输出与按任务 ID 恢复 |
+| 交互式 shell | Windows ConPTY；PowerShell / cmd / 已安装的 pwsh；中文、窗口尺寸、Ctrl+C 和终端恢复 |
+| TCP 转发 | `forward` / `reverse`；传输 TCP 字节，支持半关闭；监听和目标均限制为 loopback |
+| 文件与应用部署 | 文件 / 目录推拉、SHA-256 校验、显式覆盖、安装 / 更新 / 卸载 |
+| 桌面与输入 | 窗口管理、UI Automation、截图、键鼠 / Unicode 输入、Windows 触摸注入 |
+| Electron 调试 | CDP + UIA + 视觉观察与操作；目标发现、DOM 查询、脚本和 console |
+| Flutter 调试 | VM Service / Inspector + UIA + 视觉；Widget / 属性观察与操作验证 |
+| 日志与录屏 | Windows 事件 / 文件日志、跟踪输出、MP4 录制及产物下载 |
+| AI Agent | 同一套 CLI 与 Skill；先观察、再操作、后验证，无需在服务端配置模型密钥 |
+
+## 五、与其他方案的区别
+
+WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Electron CDP、Flutter Inspector、交互终端和 TCP 转发统一到一套 CLI。与 MCP 桌面工具、WinApp CLI 或 VNC + SSH 组合相比，重点是设备连接与调试闭环；MCP 接入、Windows 开发工具链和实时远程桌面则各有更适合的方案。详见 [能力差异、优势与选型对比](docs/COMPETITIVE-ANALYSIS.md)。
+
+## 六、系统要求
+
+| 组件 | 当前范围 |
+| --- | --- |
+| Windows 服务端 | x64；安装预检要求桌面版 build 19045+、.NET Framework 4.8、Windows PowerShell 5.1 |
+| Windows CLI | Node.js `>=22.0.0`；纯 JavaScript npm 客户端 |
+| macOS CLI | macOS 14+ / Apple Silicon；Node.js `>=22.0.0`。交互 shell 需要 TTY；支持前台 TCP 正向与反向转发 |
+
+桌面操作需要目标用户已登录且解锁。Flutter Inspector 依赖应用提供相应调试服务。
 
 <a id="commands"></a>
 
