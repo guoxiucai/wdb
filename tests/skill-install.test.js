@@ -2,6 +2,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
 const {parseArgs,targets,choose,fetchSkill,download,ensureCli,installSkill}=require('../scripts/install-skill');
 const sha='a'.repeat(40);
+test('Windows PowerShell bootstrap isolates iex validation and preserves caller state',{skip:process.platform!=='win32'},()=>{
+ const {execFileSync}=require('node:child_process');
+ const shells=['powershell.exe'];
+ try{execFileSync('pwsh.exe',['-NoProfile','-Command','exit 0'],{stdio:'pipe',windowsHide:true});shells.push('pwsh.exe');}catch{}
+ for(const shell of shells)for(const mode of ['iex','scriptblock','file','invalid','failure']){
+  const result=execFileSync(shell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname,'support/skill-bootstrap.ps1'),'-BootstrapPath',path.join(__dirname,'../install.ps1'),'-ProbeMode',mode],{encoding:'utf8',windowsHide:true,timeout:15000});
+  const report=JSON.parse(result);assert.equal(report.status,'passed');assert.equal(report.mode,mode);assert.equal(report.callerPreserved,true);
+ }
+});
 function fixtureFiles(){return new Map([['SKILL.md',{bytes:Buffer.from('---\nname: wdb\ndescription: test\n---\n'),mode:0o644}],['references/说明.md',{bytes:Buffer.from('完整的参考内容'),mode:0o644}]]);}
 async function temporary(t){const root=await fs.mkdtemp(path.join(os.tmpdir(),'wdb-install-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));return root;}
 test('arguments, both agent locations, project spaces/Unicode and interactive choices',async()=>{

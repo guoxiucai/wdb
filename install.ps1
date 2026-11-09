@@ -1,11 +1,27 @@
 # Compatible with Windows PowerShell 5.1; also works via irm ... | iex.
 param(
-    [ValidateSet('codex', 'claude', 'both')][string]$Agent,
-    [ValidateSet('user', 'project')][string]$Scope,
-    [string]$Project,
-    [switch]$Yes
+    [Alias('Agent')]$WdbInstallAgent,
+    [Alias('Scope')]$WdbInstallScope,
+    [Alias('Project')]$WdbInstallProject,
+    [Alias('Yes')][switch]$WdbInstallYes
 )
+# Invoke-Expression evaluates top-level parameter attributes as variable
+# attributes in the caller's scope. Keep validation inside the child scope and
+# namespace the outer parameters so Agent/Scope variables remain untouched.
+$WdbBootstrapParameters = @{}
+foreach ($WdbParameterName in @('Agent', 'Scope', 'Project', 'Yes')) {
+    $WdbOuterName = 'WdbInstall' + $WdbParameterName
+    if ($PSBoundParameters.ContainsKey($WdbOuterName)) {
+        $WdbBootstrapParameters[$WdbParameterName] = $PSBoundParameters[$WdbOuterName]
+    }
+}
 & {
+    param(
+        [ValidateSet('codex', 'claude', 'both')][string]$Agent,
+        [ValidateSet('user', 'project')][string]$Scope,
+        [string]$Project,
+        [switch]$Yes
+    )
     $ErrorActionPreference = 'Stop'
     $temporary = $null
     $previousTls = [Net.ServicePointManager]::SecurityProtocol
@@ -29,4 +45,4 @@ param(
         [Net.ServicePointManager]::SecurityProtocol = $previousTls
         if ($temporary -and (Test-Path -LiteralPath $temporary)) { Remove-Item -LiteralPath $temporary -Recurse -Force }
     }
-}
+} @WdbBootstrapParameters
