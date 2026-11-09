@@ -22,7 +22,7 @@
   <a href="#development">参与开发</a>
 </p>
 
-## 项目介绍
+## 一、项目介绍
 
 WDB (Windows Debug Bridge) 由 Windows 后台服务、跨平台 CLI 和 Agent Skill 组成。可以在本机或局域网中执行脚本、传输文件、截屏/录屏、操作应用、采集日志，也可以进入交互终端或建立 TCP 端口转发。命令提供结构化结果，便于自动化系统查询状态、验证操作和处理失败。
 
@@ -32,7 +32,7 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 <a id="how-it-works"></a>
 
-## 工作原理
+## 二、工作原理
 
 ![WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理](docs/assets/wdb-architecture.svg)
 
@@ -40,7 +40,7 @@ CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：H
 
 Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通用户 helper 执行。只有显式 `--admin` 才请求 SYSTEM shell。
 
-## 核心能力
+## 三、核心能力
 
 | 能力 | 用途 |
 | --- | --- |
@@ -55,11 +55,11 @@ Windows 后台服务以 SYSTEM 运行；默认 shell 与桌面调试通过普通
 | 日志与录屏 | Windows 事件 / 文件日志、跟踪输出、MP4 录制及产物下载 |
 | AI Agent | 同一套 CLI 与 Skill；先观察、再操作、后验证，无需在服务端配置模型密钥 |
 
-## 与其他方案的区别
+## 四、与其他方案的区别
 
 WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Electron CDP、Flutter Inspector、交互终端和 TCP 转发统一到一套 CLI。与 MCP 桌面工具、WinApp CLI 或 VNC + SSH 组合相比，重点是设备连接与调试闭环；MCP 接入、Windows 开发工具链和实时远程桌面则各有更适合的方案。详见 [能力差异、优势与选型对比](docs/COMPETITIVE-ANALYSIS.md)。
 
-## 系统要求
+## 五、系统要求
 
 | 组件 | 当前范围 |
 | --- | --- |
@@ -71,9 +71,33 @@ WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Elec
 
 <a id="quick-start"></a>
 
-## 快速开始
+## 六、快速开始
 
-### 1. 安装 Windows 服务端
+<a id="agent-skill"></a>
+
+### 1. AI Agent 使用
+
+一键检查/安装 CLI，并选择 Claude Code 或 Codex 的用户级/项目级 Skill 安装位置（需要 Node.js 22+ 和 npm）：
+
+macOS：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guoxiucai/wdb/main/install.sh | bash
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/guoxiucai/wdb/main/install.ps1 | iex
+```
+
+脚本复用已有可运行的 CLI，安装完整 Skill；替换已有 Skill 前会询问并保留备份。目标 Windows 仍需按下一小节安装服务端；已安装的 CLI 无需重复安装。安装后新开 Agent 会话即可使用。参数、路径和手动安装见 [Skill 安装指南](docs/SKILL-INSTALLATION.md)，使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
+
+Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观察确认结果；UIA 不可用时按应用选择 CDP、Flutter Inspector 或视觉坐标。自动化脚本使用 `shell --script`，需要人类终端的交互 shell 单独使用。请求超时先查任务状态，避免重复点击、安装或输入。
+
+### 2. 安装服务端与客户端 CLI
+
+#### Windows 服务端
 
 从 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 下载以下一种安装器，并按同页 SHA-256 清单核对下载文件。
 
@@ -84,7 +108,7 @@ WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Elec
 
 双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
 
-安装器会将 `C:\Program Files\wdb\bin` 加入系统 PATH。重新打开 PowerShell 后可直接运行 `wdb --help` 或 `wdb connect localhost:18766`；服务器本机无需再单独安装 npm CLI。该入口使用服务绑定的 Node，以当前用户权限执行。其他电脑上的客户端仍按下节安装 CLI。
+安装器会将 `C:\Program Files\wdb\bin` 加入系统 PATH。重新打开 PowerShell 后可直接运行 `wdb --help` 或 `wdb connect localhost:18766`；服务器本机无需再单独安装 npm CLI。该入口使用服务绑定的 Node，以当前用户权限执行。其他电脑上的客户端按下方说明安装 CLI。
 
 首次安装默认监听所有 IPv4 地址 `0.0.0.0:18766`，自动创建只允许本地子网访问的防火墙规则。本机直接连接 `localhost`，局域网客户端直接连接服务器 IP，无需额外网络配置。升级保留已有监听与来源限制。
 
@@ -96,7 +120,7 @@ WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Elec
 
 该操作更新监听与防火墙并重启服务，默认允许本地子网；不要在将被重启的 WDB shell 内执行。桌面 helper 始终只监听本机 loopback。
 
-### 2. 安装 CLI
+#### 客户端 CLI
 
 Windows 与 macOS 共用一个 npm 包，需要 **Node.js `>=22.0.0`**：
 
@@ -152,7 +176,7 @@ wdb reverse tcp:9000 tcp:3000
 
 <a id="commands"></a>
 
-## 核心命令速查
+## 七、核心命令速查
 
 | 命令 | 说明 |
 | --- | --- |
@@ -176,29 +200,7 @@ wdb reverse tcp:9000 tcp:3000
 
 完整参数、错误语义、文件路径和操作示例请查 [CLI 手册](docs/CLI.md)，也可随时运行 `wdb --help`。
 
-<a id="agent-skill"></a>
-
-## 与 AI Agent 配合
-
-一键检查/安装 CLI，并选择 Claude Code 或 Codex 的用户级/项目级 Skill 安装位置（需要 Node.js 22+ 和 npm）：
-
-macOS：
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guoxiucai/wdb/main/install.sh | bash
-```
-
-Windows PowerShell：
-
-```powershell
-irm https://raw.githubusercontent.com/guoxiucai/wdb/main/install.ps1 | iex
-```
-
-脚本复用已有可运行的 CLI，安装完整 Skill；替换已有 Skill 前会询问并保留备份。安装后新开 Agent 会话即可使用。参数、路径和手动安装见 [Skill 安装指南](docs/SKILL-INSTALLATION.md)，使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
-
-Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观察确认结果；UIA 不可用时按应用选择 CDP、Flutter Inspector 或视觉坐标。自动化脚本使用 `shell --script`，需要人类终端的交互 shell 单独使用。请求超时先查任务状态，避免重复点击、安装或输入。
-
-## 权限与使用边界
+## 八、权限与使用边界
 
 - 首次连接必须由目标设备上的用户同意；后续校验证书及客户端凭据。首次保存指纹采用首次使用信任；需要预先核对身份时，使用 `--fingerprint` 指定可信指纹。
 - WDB 提供执行脚本、文件和桌面操作能力；只授权可信客户端。记住的客户端可用 `clients revoke` 撤销；`disconnect` 仅断开，不撤销持久授权。
@@ -208,7 +210,7 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 
 <a id="development"></a>
 
-## 本地开发与构建
+## 九、本地开发与构建
 
 开发前阅读 [AGENTS.md](AGENTS.md)。Windows 开发环境需要 Node.js `>=22.0.0`；原生与安装器构建另需 .NET Framework 编译器、Windows PowerShell 和 Inno Setup 6.7.1。
 
@@ -269,16 +271,16 @@ docs/          用户指南、协议、验证报告与图形资产
 AGENTS.md      项目开发、验证、提交与交付规范
 ```
 
-## 后续计划
+## 十、后续计划
 
 - 连接稳定性优化。
 - 扩展 Windows 操作与调试能力。
 
-## 贡献与反馈
+## 十一、贡献与反馈
 
 欢迎通过 [Issues](https://github.com/guoxiucai/wdb/issues) 报告可复现问题或讨论功能，通过 [Pull Requests](https://github.com/guoxiucai/wdb/pulls) 提交改进。请提供版本、平台、最小复现步骤和脱敏日志；开发规范、测试选择与提交要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。漏洞和凭据不要放入公开 Issue。
 
-## 许可与致谢
+## 十二、许可与致谢
 
 WDB 采用 [MIT 许可证](LICENSE)，允许使用、修改和再分发，具体条件见许可证全文。第三方依赖及随包组件仍遵循各自许可证。
 
