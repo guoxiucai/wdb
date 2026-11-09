@@ -43,9 +43,10 @@ try{
  const artifact=shot.artifacts.find(x=>x.path?.endsWith('.png'));assert.ok(artifact,'Screenshot PNG missing');
  const png=path.join(output,'desktop.png');run('pull-screenshot',['pull',artifact.path,png]);
  assert.equal(fs.readFileSync(png).subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+ const reconnectAddress=info.connection.url;
  run('disconnect',['disconnect',options.device]);
- const devices=run('devices-disconnected',['devices']);assert.ok(devices.some(x=>x.deviceId===info.deviceId&&x.connectionState==='disconnected'));
- const reconnected=run('reconnect',['connect',devices.find(x=>x.deviceId===info.deviceId&&x.connectionState==='disconnected').url]);
+ const devices=run('devices-disconnected',['devices']);assert.ok(!devices.some(x=>x.deviceId===info.deviceId),'Explicitly disconnected device must be hidden');
+ const reconnected=run('reconnect',['connect',reconnectAddress]);
  assert.equal(reconnected.state,'connected');
  assert.equal(run('info-reconnected',['info']).deviceId,info.deviceId);
  report.passed=true;

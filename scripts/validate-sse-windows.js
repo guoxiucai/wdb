@@ -63,13 +63,17 @@ const taskOf=r=>r.result.data;
   for(const admin of [false,true]) await check(admin?'SYSTEM shell pushes output':'interactive helper pushes output',async()=>{
     const expected='开始 中文 🌍\r\n中间 中文\r\n结束\r\n';
     const id=await submit("[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); [Console]::WriteLine('开始 中文 🌍'); Start-Sleep -Milliseconds 900; [Console]::WriteLine('中间 中文'); Start-Sleep -Milliseconds 900; [Console]::WriteLine('结束')",admin);
-    const start=Date.now();let first;
-    const r=await run(['task','wait',id,'--follow','--poll-ms','10000'],{json:false,onOutput:()=>{first??=Date.now();}});
-    assert.equal(r.code,0,r.stderr);assert.equal(r.stderr,expected);assert.ok(first-start<1500,'First output was delayed until completion');
+    const start=Date.now();let first,last;
+    const r=await run(['task','wait',id,'--follow','--poll-ms','10000'],{json:false,onOutput:s=>{first??=Date.now();if(s.includes('结束'))last=Date.now();}});
+    assert.equal(r.code,0,r.stderr);assert.equal(r.stderr,expected);
+    // Process creation/PowerShell initialization is not SSE transport latency.
+    // The two deliberate sleeps must remain observable, rather than one batch
+    // arriving when the task completes. Keep startup timing as a metric.
+    assert.ok(Number.isFinite(first)&&Number.isFinite(last)&&last-first>=1000,'Expected incremental output before the final marker');
     assert.equal(r.requests.filter(x=>x.path.includes('/events')).length,1);assert.ok(!r.requests.some(x=>x.path.endsWith('/output')));
     assert.equal(r.requests.filter(x=>x.path===`/v1/tasks/${id}`).length,1);
     const final=taskOf(await run(['task','get',id]));assert.equal(final.status,'succeeded');assert.equal(final.data.isElevated,admin);
-    return {taskId:id,firstOutputMs:first-start,events:1,pollingRequests:1,isElevated:final.data.isElevated};
+    return {taskId:id,firstOutputMs:first-start,streamingSpanMs:last-first,events:1,pollingRequests:1,isElevated:final.data.isElevated};
   });
   await check('TCP stream interruption resumes byte offsets without duplicate output',async()=>{
     const id=await submit("[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); 1..6 | ForEach-Object { [Console]::WriteLine(('第{0}行 中文 🌍' -f $_)); Start-Sleep -Milliseconds 400 }");
