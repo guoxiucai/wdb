@@ -85,3 +85,5 @@ wdb --version
 ## 维护安装清单
 
 维护者修改 `skills/wdb/` 后，先提交 Skill 变更，再运行 `node scripts/build-skill-manifest.js`，提交更新后的 `scripts/skill-install-manifest.json`。清单固定到已经存在的源码提交，使用 Git 中的文件内容计算哈希，不受 Windows checkout 的 CRLF 转换影响。它不需要在仅修改安装器或其他文档时重建。新增 Skill 资源也必须更新清单。
+
+安装器回归：`node --test tests/skill-install.test.js tests/npm-package.test.js`。macOS 的管道交互退出回归使用 Python 3 标准库分配 PTY；Python 仅用于开发测试，安装器本身只依赖 Node/npm。Windows PowerShell 5.1 入口还需在 Windows 原生环境单独验收。

@@ -33,12 +33,12 @@ function terminalPrompt(){
  const readline=require('node:readline');let input=process.stdin,output=process.stdout,owned=false;
  if(!input.isTTY){
   if(process.platform==='win32')throw Error('No interactive terminal. Supply --agent and --scope.');
-  try{input=syncFs.createReadStream('/dev/tty');output=syncFs.createWriteStream('/dev/tty');owned=true;}catch{throw Error('No terminal. Supply --agent and --scope.');}
+  try{const tty=require('node:tty');input=new tty.ReadStream(syncFs.openSync('/dev/tty','r'));output=new tty.WriteStream(syncFs.openSync('/dev/tty','w'));owned=true;}catch{throw Error('No terminal. Supply --agent and --scope.');}
  }
  // Prevent an unavailable /dev/tty from turning into an unhandled stream error.
  const rl=readline.createInterface({input,terminal:false}),lines=rl[Symbol.asyncIterator]();
  let failure;input.on('error',e=>{failure=e;rl.close();});if(owned)output.on('error',e=>{failure=e;rl.close();});
- return {async ask(message){output.write(message);const next=await lines.next();if(failure||next.done)throw Error('No terminal input. Supply --agent and --scope (and --yes to replace an existing Skill).');return next.value.trim();},close(){rl.close();if(owned){input.destroy();output.end();}}};
+ return {async ask(message){output.write(message);const next=await lines.next();if(failure||next.done)throw Error('No terminal input. Supply --agent and --scope (and --yes to replace an existing Skill).');return next.value.trim();},close(){rl.close();if(owned){input.destroy();output.destroy();}}};
 }
 async function choose(options,ask){
  const o={...options},promptedScope=!options.scope;

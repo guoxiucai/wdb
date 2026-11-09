@@ -77,6 +77,45 @@ test('download-and-run bootstrap installs through npm and copies resources witho
  assert.equal(child.status,0,child.stderr||child.error?.message);assert.equal(await fs.readFile(path.join(bin,'installed'),'utf8'),'yes');
  for(const target of targets({agent:'both',scope:'project',project}))assert.equal(await fs.readFile(path.join(target.directory,'references/说明.md'),'utf8'),'完整的参考内容');
  assert.ok(child.stdout.includes('Done.'));
+ if(process.platform==='darwin'){
+  const quote=value=>"'"+value.replace(/'/g,"'\\''")+"'";
+  const command='cat '+quote(path.resolve(__dirname,'../install.sh'))+' | bash -s -- --project '+quote(project)+' --yes';
+  const driver=path.join(root,'pty-check.py');
+  await fs.writeFile(driver,`import os, pty, subprocess, fcntl, termios, select, time, signal, sys
+master, slave = pty.openpty()
+def setup():
+    os.setsid()
+    fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+p = subprocess.Popen(['/bin/bash', '-c', sys.argv[1]], stdin=slave, stdout=slave, stderr=slave, preexec_fn=setup)
+os.close(slave)
+output = b''
+sent = False
+try:
+    deadline = time.monotonic() + 10
+    while p.poll() is None:
+        if time.monotonic() > deadline:
+            raise RuntimeError('Installer did not exit after completing terminal prompts')
+        if select.select([master], [], [], 0.05)[0]:
+            try:
+                output += os.read(master, 65536)
+            except OSError:
+                break
+        if not sent and b'Install Skill for' in output:
+            os.write(master, bytes([51, 10, 50, 10]))
+            sent = True
+    p.wait(timeout=2)
+    print(output.decode('utf-8', errors='replace'))
+    sys.exit(p.returncode)
+finally:
+    if p.poll() is None:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.wait()
+    os.close(master)
+`);
+  const interactive=spawnSync('python3',[driver,command],{env,cwd:root,encoding:'utf8',timeout:15000});
+  assert.equal(interactive.status,0,interactive.stderr||interactive.stdout||interactive.error?.message);
+  assert.ok(interactive.stdout.includes('Done.'));
+ }
 });
 
 test('checked-in manifest includes every committed Skill resource with canonical Git hashes',()=>{
