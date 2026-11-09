@@ -180,7 +180,21 @@ wdb reverse tcp:9000 tcp:3000
 
 ## 与 AI Agent 配合
 
-将整个 [`skills/wdb`](skills/wdb) 目录放入所用 Agent 的 Skill 搜索目录。Agent 在需要调试 Windows 设备时可自动使用此 Skill；缺少 CLI 时会指导或执行 npm 安装。具体使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
+一键检查/安装 CLI，并选择 Claude Code 或 Codex 的用户级/项目级 Skill 安装位置（需要 Node.js 22+ 和 npm）：
+
+macOS：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guoxiucai/wdb/main/install.sh | bash
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/guoxiucai/wdb/main/install.ps1 | iex
+```
+
+脚本复用已有可运行的 CLI，安装完整 Skill；替换已有 Skill 前会询问并保留备份。安装后新开 Agent 会话即可使用。参数、路径和手动安装见 [Skill 安装指南](docs/SKILL-INSTALLATION.md)，使用规则见 [SKILL.md](skills/wdb/SKILL.md)。
 
 Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观察确认结果；UIA 不可用时按应用选择 CDP、Flutter Inspector 或视觉坐标。自动化脚本使用 `shell --script`，需要人类终端的交互 shell 单独使用。请求超时先查任务状态，避免重复点击、安装或输入。
 

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "sourceCommit": "0507a06b00756ee942caaffbed39aa03b530daad",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "mode": "100644",
+      "bytes": 13828,
+      "sha256": "5e995b59a1742dbf5261e9b15809c2090e440ad86983ce60eff6e06cc200df75"
+    },
+    {
+      "path": "references/cli.md",
+      "mode": "100644",
+      "bytes": 14606,
+      "sha256": "66045cf462786f0bf813a44fb6d24f900dbd0064520ef1fbd340c8997161fea4"
+    },
+    {
+      "path": "references/commands.md",
+      "mode": "100644",
+      "bytes": 5979,
+      "sha256": "8e8e9276d99a814da5071f44b3cae1bc490a71fc39f19c1672eeff2bbc663aa2"
+    },
+    {
+      "path": "references/connection.md",
+      "mode": "100644",
+      "bytes": 5811,
+      "sha256": "01b91a438c1671390580fe863a3055376f4d31e02e9213162033229ae7de2812"
+    },
+    {
+      "path": "references/electron.md",
+      "mode": "100644",
+      "bytes": 7903,
+      "sha256": "0910088b5ce207ba85d68c656f0f0deae2b737d2236c93e26fcd1a9e48c7b1ae"
+    },
+    {
+      "path": "references/flutter.md",
+      "mode": "100644",
+      "bytes": 6353,
+      "sha256": "fe8e545a52d76c5821b5f3751edaef2bf816fbe3972eebbb0d4e08df25ae591c"
+    },
+    {
+      "path": "references/streaming.md",
+      "mode": "100644",
+      "bytes": 3109,
+      "sha256": "7dbef6ec02b0489d712d6d1bd4591c889034b88a42e16254365f614f86c2cd9f"
+    }
+  ]
+}
