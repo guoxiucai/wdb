@@ -1,24 +1,24 @@
 {
   "version": 1,
-  "sourceCommit": "1f7d8f453dda2b5b08ac9dbff7743ca741a5eab1",
+  "sourceCommit": "9831ee714f6265d430d8538b63aafeb044d6bbcd",
   "files": [
     {
       "path": "SKILL.md",
       "mode": "100644",
-      "bytes": 13883,
-      "sha256": "69c9096dd73da59b808facdd30924e25161ea0b45065fb727ff00e3fe69a490b"
+      "bytes": 14236,
+      "sha256": "31951eb6aa8289d1f5d2c617738a813b979834636ae446bffeb34085bd609403"
     },
     {
       "path": "references/cli.md",
       "mode": "100644",
-      "bytes": 14719,
-      "sha256": "50faaa135b12b9cca2cfc52da8b63aa1298f74d75d6ac16993461c52b8e32424"
+      "bytes": 15021,
+      "sha256": "22a2baa89f652f4a19545fddd5cd950a785033f9105e3afb4366bf38eaa02edb"
     },
     {
       "path": "references/commands.md",
       "mode": "100644",
-      "bytes": 6032,
-      "sha256": "0e09e6241d9b8e1a9ad0b88ffc008e43c76b1d1c0ede55dfdd7f03050415863f"
+      "bytes": 6283,
+      "sha256": "2c3251dcbdb45e8cbf004c36ad32658c1562f1504462e05d24bbe92cd3875ff0"
     },
     {
       "path": "references/connection.md",
@@ -43,6 +43,12 @@
       "mode": "100644",
       "bytes": 3109,
       "sha256": "7dbef6ec02b0489d712d6d1bd4591c889034b88a42e16254365f614f86c2cd9f"
+    },
+    {
+      "path": "references/update.md",
+      "mode": "100644",
+      "bytes": 2093,
+      "sha256": "8b7a0d756aaf29a7eb8a6b9728ee13bf62122c3b054a0e9db00f01ce84e10611"
     }
   ]
 }
