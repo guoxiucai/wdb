@@ -3,6 +3,12 @@ const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cryp
 const {error}=require('./npm-client');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 function dataDirectory(options={}){return path.resolve(options.config||process.env.WDB_CONFIG||(process.platform==='win32'?path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'AppData/Local'),'wdb/client'):process.platform==='darwin'?path.join(os.homedir(),'Library/Application Support/wdb/client'):path.join(os.homedir(),'.config/wdb/client')));}
+function canonical(file){let current=path.resolve(file),suffix=[];while(!fs.existsSync(current)){const parent=path.dirname(current);if(parent===current)break;suffix.unshift(path.basename(current));current=parent;}return path.join(fs.realpathSync(current),...suffix);}
+function inside(file,base){const relative=path.relative(base,file);return !relative||!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep);}
+function assertExternal(root,dir){
+ root=canonical(root);if(inside(canonical(dir),root))throw error('UPDATE_TARGET_UNSAFE','Move client configuration outside the npm program directory before updating.');
+ for(const row of read(dir).installations)if(typeof row.directory==='string'){const target=canonical(row.directory);if(inside(target,root)||inside(root,target))throw error('UPDATE_TARGET_UNSAFE','A registered Skill overlaps the npm program directory. Move/register it outside the program before updating.');}
+}
 function safeRelative(p){return typeof p==='string'&&!/[\\:\x00-\x1f]/.test(p)&&p.split('/').every(s=>s&&s!=='.'&&s!=='..'&&!/[. ]$/.test(s)&&!/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(s));}
 function snapshot(dir){
  if(!fs.existsSync(dir))return null;const rows=[];let bytes=0;
@@ -17,7 +23,7 @@ function bundle(root){
 }
 function makeManifest(root,info){const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));return {schema:1,package:pkg.name,version:pkg.version,sourceCommit:info.sourceCommit,files:snapshot(path.join(root,'skills/wdb'))};}
 function receiptFile(dir){return path.join(dir,'skill-installs.json');}
-function read(dir){const file=receiptFile(dir);if(!fs.existsSync(file))return {schema:1,installations:[]};if(fs.statSync(file).size>2*1024*1024)throw error('UPDATE_SKILL_INVALID','Skill installation registry too large.');const r=JSON.parse(fs.readFileSync(file,'utf8'));if(r.schema!==1||!Array.isArray(r.installations)||r.installations.length>256)throw error('UPDATE_SKILL_INVALID','Invalid Skill installation registry.');return r;}
+function read(dir){const file=receiptFile(dir);if(!fs.existsSync(file))return {schema:1,installations:[]};if(fs.lstatSync(file).isSymbolicLink()||fs.lstatSync(dir).isSymbolicLink())throw error('UPDATE_SKILL_UNSAFE','Linked Skill installation registry.');if(fs.statSync(file).size>2*1024*1024)throw error('UPDATE_SKILL_INVALID','Skill installation registry too large.');const r=JSON.parse(fs.readFileSync(file,'utf8'));if(r.schema!==1||!Array.isArray(r.installations)||r.installations.length>256)throw error('UPDATE_SKILL_INVALID','Invalid Skill installation registry.');return r;}
 function write(dir,value){fs.mkdirSync(dir,{recursive:true,mode:0o700});if(fs.lstatSync(dir).isSymbolicLink()||fs.existsSync(receiptFile(dir))&&fs.lstatSync(receiptFile(dir)).isSymbolicLink())throw error('UPDATE_SKILL_UNSAFE','Linked update registry.');const temp=path.join(dir,'.skill-registry-'+crypto.randomUUID()+'.tmp');try{fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});fs.renameSync(temp,receiptFile(dir));}finally{fs.rmSync(temp,{force:true});}}
 function lock(dir){try{fs.mkdirSync(dir,{mode:0o700});}catch(e){if(e.code==='EEXIST')throw error('UPDATE_IN_PROGRESS','An update/install lock exists. Inspect the owning process before retrying.');throw e;}try{fs.writeFileSync(path.join(dir,'owner.json'),JSON.stringify({pid:process.pid,startedAt:new Date().toISOString()}),{flag:'wx',mode:0o600});}catch(e){fs.rmdirSync(dir);throw e;}return ()=>{fs.unlinkSync(path.join(dir,'owner.json'));fs.rmdirSync(dir);};}
 function target(record){
@@ -63,4 +69,4 @@ function synchronize(root,dir,plans){
  }finally{release();}
  return results;
 }
-module.exports={sha,dataDirectory,safeRelative,snapshot,sameFiles,bundle,makeManifest,read,write,lock,target,preview,synchronize};
+module.exports={sha,dataDirectory,canonical,inside,assertExternal,safeRelative,snapshot,sameFiles,bundle,makeManifest,read,write,lock,target,preview,synchronize};

@@ -28,6 +28,10 @@ Mac 对同一个 `.tgz` 执行 `npm install -g --prefix "$HOME/wdb-test" <tarbal
 
 客户端凭据位置保持不变。`npm uninstall -g --prefix <prefix> <包名>` 只卸载程序；旧 portable PATH 请操作者自行调整，用 `where.exe wdb` 或 `command -v wdb` 确认当前入口。
 
+## 检查与更新
+
+`wdb update` 检查 npm 发布版本，展示当前版本、候选版本、安装和 Skill 目录，默认取消；确认后才更新。`wdb update --check --json` 只检查，`--yes` 是显式同意，`--no-skill` 只更新 CLI。客户端与 Skill 从同一个精确版本包更新；本地 Skill 修改会保留并报告冲突。旧服务端附带入口不通过 npm 改写，已安装的 Node/服务和配对凭据不受影响。详细安装归属、登记、备份、退出码和失败恢复见[更新指南](UPDATING.md)。
+
 Mac arm64 支持从 npm tarball 安装，交互 shell 需要 TTY，forward/reverse 在前台运行。安装产物不携带 Node，更新或卸载保留客户端配置。具体包体大小以该次构建报告为准；发行包通过 npm registry 与 GitHub Release 分发。
 
 `devices` 在 Windows/macOS 采用相同规则：在线设备正常显示；历史配对记录在新终端中不会显示为 `offline`。仅在当前终端通过 `connect` 或 `devices` 观察到在线的设备，随后探测离线时才保留离线条目，从首次发现离线起最多显示 10 分钟；重复探测不延长时间。恢复在线后重新显示。该过滤同时适用于文本、JSON 和 `--watch`，不删除配对凭据，也不改变显式 `--device` 的使用。授权/证书错误仍显示。会话按终端标识及父 shell 进程识别（Windows 跳过 npm 的临时 cmd /c 启动层）；无法识别时仅保留当前 CLI 调用内的观察，不继承历史离线条目。

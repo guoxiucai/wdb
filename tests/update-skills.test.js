@@ -15,3 +15,6 @@ test('unregistered Skills are discovered but never replaced without adoption',t=
 test('bundle tampering and concurrent update locks fail closed',t=>{
  const f=setup(t);assert.equal(s.bundle(f.root).version,'0.2.0');fs.appendFileSync(path.join(f.root,'skills/wdb/SKILL.md'),'changed');assert.throws(()=>s.bundle(f.root),{code:'UPDATE_SKILL_INVALID'});const file=path.join(f.dir,'lock'),release=s.lock(file);assert.throws(()=>s.lock(file),{code:'UPDATE_IN_PROGRESS'});release();assert.equal(fs.existsSync(file),false);
 });
+test('directory junctions/symlinks cannot redirect Skill updates outside the registered base',t=>{
+ const f=setup(t),outside=path.join(f.dir,'outside');fs.mkdirSync(outside);fs.writeFileSync(path.join(outside,'keep.txt'),'keep');fs.symlinkSync(outside,path.join(f.base,'.agents'),process.platform==='win32'?'junction':'dir');const record={agent:'codex',scope:'project',base:f.base,directory:path.join(f.base,'.agents/skills/wdb'),files:null,observedFiles:null};const result=s.synchronize(f.root,f.data,[{...record,adopt:true}]);assert.equal(result[0].error.code,'UPDATE_SKILL_UNSAFE');assert.equal(fs.readFileSync(path.join(outside,'keep.txt'),'utf8'),'keep');assert.equal(fs.existsSync(path.join(outside,'skills')),false);
+});

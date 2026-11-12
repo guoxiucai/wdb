@@ -95,6 +95,8 @@ Windows PowerShell 如限制 npm 生成的 `.ps1` 启动器，可使用 `wdb.cmd
 
 npm 包名为 `@tsingwill/wdb`，安装后的命令为 `wdb`。源码构建方法见下方[本地开发与构建](#development)，安装与配置见 [npm CLI 指南](docs/NPM-CLIENT.md)。
 
+带更新功能的 npm 客户端可执行 `wdb update`：检查发布版本、展示目标，确认后更新 CLI 及已登记的对应 Skill；只检查用 `wdb update --check --json`。不会更新 Windows 服务或 Node，详见[更新指南](docs/UPDATING.md)。
+
 ### 3. 连接设备
 
 ```sh

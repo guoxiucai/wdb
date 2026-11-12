@@ -12,12 +12,14 @@ function inspect(tarball) {
     if(!Number.isSafeInteger(size)||size<0||offset+512+size>tar.length)throw Error('Invalid tar size');
     if(!name.startsWith('package/')||name.includes('..')||name.includes('\\')||files.has(name)||!['0',''].includes(type))throw Error('Unsafe npm tar entry: '+name);
     const relative=name.slice(8);
-    if(!/^(?:package\.json|README\.md|LICENSE|BUILD-INFO\.json|bin\/wdb\.js|src\/(?:cli|client-update|npm-client|client-transport|local-clients|device-id|device-visibility|client-stream|stream-channel|stream-flow|stream-protocol|stream-tcp|forward-client|terminal-client)\.js|docs\/[A-Za-z0-9_.-]+\.md|skills\/wdb\/[A-Za-z0-9_./-]+\.md)$/.test(relative))throw Error('Unexpected npm file: '+name);
+    if(!/^(?:package\.json|README\.md|LICENSE|BUILD-INFO\.json|SKILL-MANIFEST\.json|bin\/wdb\.js|src\/(?:cli|client-update|npm-client|update-skills|update-package|update-worker|client-transport|local-clients|device-id|device-visibility|client-stream|stream-channel|stream-flow|stream-protocol|stream-tcp|forward-client|terminal-client)\.js|docs\/[A-Za-z0-9_.-]+\.md|skills\/wdb\/[A-Za-z0-9_./-]+\.md)$/.test(relative))throw Error('Unexpected npm file: '+name);
     files.set(name,tar.subarray(offset+512,offset+512+size));offset+=512+Math.ceil(size/512)*512;
   }
   const pkg=JSON.parse(files.get('package/package.json'));
   assert.deepEqual(pkg.bin,{wdb:'bin/wdb.js'});assert.ok(!pkg.scripts&&!pkg.optionalDependencies);assert.deepEqual(pkg.dependencies,{ws:'8.22.1'});
-  for(const name of ['bin/wdb.js','src/cli.js','src/client-transport.js','src/local-clients.js','src/device-id.js','src/device-visibility.js','skills/wdb/SKILL.md','LICENSE','BUILD-INFO.json'])assert.ok(files.has('package/'+name),name+' missing');
+  for(const name of ['bin/wdb.js','src/cli.js','src/client-update.js','src/npm-client.js','src/update-worker.js','src/update-skills.js','src/update-package.js','SKILL-MANIFEST.json','src/client-transport.js','src/local-clients.js','src/device-id.js','src/device-visibility.js','skills/wdb/SKILL.md','LICENSE','BUILD-INFO.json'])assert.ok(files.has('package/'+name),name+' missing');
+  const manifest=JSON.parse(files.get('package/SKILL-MANIFEST.json'));assert.equal(manifest.schema,1);assert.equal(manifest.package,pkg.name);assert.equal(manifest.version,pkg.version);
+  assert.equal(manifest.files.length,[...files.keys()].filter(f=>f.startsWith('package/skills/wdb/')).length);for(const entry of manifest.files){const content=files.get('package/skills/wdb/'+entry.path);assert.ok(content,'Missing Skill resource');assert.equal(content.length,entry.bytes);assert.equal(crypto.createHash('sha256').update(content).digest('hex'),entry.sha256);}
   const unpackedBytes=[...files.values()].reduce((sum,b)=>sum+b.length,0);assert.ok(bytes.length<1024*1024&&unpackedBytes<1024*1024);
   return {pkg,files,bytes:bytes.length,unpackedBytes,sha256:crypto.createHash('sha256').update(bytes).digest('hex')};
 }

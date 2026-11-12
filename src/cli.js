@@ -606,6 +606,13 @@ function printResult(result, options, io) {
       : `failed to connect${address ? ` to ${address}` : ''}${code}`;
     io.stdout.write(text + (result.error?.code === 'REQUEST_OUTCOME_UNKNOWN' ? '; check server state before retrying' : '') + '\n');
   }
+  else if(options.command==='update'&&result.data){
+    const d=result.data;io.stdout.write(`WDB update: ${d.state} (${d.currentVersion||'unknown'}${d.updated?' -> '+d.latestVersion:''})\n`);
+    if(d.reason)io.stderr.write(d.reason+'\n');if(d.pathShadowed)io.stderr.write('PATH resolves another wdb entry; use the updated installation explicitly.\n');
+    for(const skill of d.skills||[])io.stdout.write(`Skill ${skill.state}${skill.reason?' ('+skill.reason+')':''}: ${skill.directory}\n`);
+    if(result.error)io.stderr.write(result.error.code+': '+result.error.message+'\n');
+    if(d.skills?.some(s=>s.state==='updated'))io.stderr.write('Skill files updated. Start a new Agent session.\n');
+  }
   else if(Array.isArray(result.data)&&result.data.every(d=>d.connectionState)){
     io.stdout.write('STATE              HOSTNAME             ADDRESS                          DEVICE ID\n');
     for(const d of result.data)io.stdout.write(`${d.connectionState.padEnd(18)} ${(d.hostname||'(unknown)').padEnd(20)} ${new URL(d.url).host.padEnd(32)} ${d.deviceId}\n`);

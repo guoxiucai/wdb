@@ -4,6 +4,8 @@ Windows x64 的 localhost 已验证，LAN 交付包与本机 LAN IP 自检已完
 
 ## 配对和选择设备
 
+客户端本身的维护不需要连接设备：`wdb update --check --json` 只检查 npm CLI 和 Skill 状态；`wdb update` 先展示目标再确认更新，默认取消。`--yes` 显式授权，`--no-skill` 仅更新 CLI；不更新 Windows 服务、Node 或配对信息。来源识别、Skill 冲突和失败恢复见[更新指南](UPDATING.md)。
+
 新客户端配对需要服务器本机操作者在弹窗中同意。默认临时授权；勾选记住后持久授权。CLI默认等待150秒（`--approval-timeout`），拒绝/关闭/超时不授权。临时许可结束时运行connect重新确认，详见 [连接授权](CONNECTION-APPROVAL.md)。
 
 直接连接服务器地址，无需手工提供指纹和配对码：

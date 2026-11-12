@@ -29,7 +29,7 @@ function build(options={}) {
       }
     }
   }
-  for(const file of ['bin/wdb.js',...['cli','client-update','npm-client','client-transport','local-clients','device-id','device-visibility','client-stream','stream-channel','stream-flow','stream-protocol','stream-tcp','forward-client','terminal-client'].map(n=>'src/'+n+'.js'),'docs/CLI.md','docs/NPM-CLIENT.md','docs/WINDOWS-CLIENT.md'])copy(file);
+  for(const file of ['bin/wdb.js',...['cli','client-update','npm-client','update-skills','update-package','update-worker','client-transport','local-clients','device-id','device-visibility','client-stream','stream-channel','stream-flow','stream-protocol','stream-tcp','forward-client','terminal-client'].map(n=>'src/'+n+'.js'),'docs/CLI.md','docs/NPM-CLIENT.md','docs/WINDOWS-CLIENT.md'])copy(file);
   for(const entry of fs.readdirSync(path.join(root,'skills/wdb'),{recursive:true,withFileTypes:true})) {
     if(entry.isFile())copy(path.relative(root,path.join((entry.parentPath || entry.path),entry.name)));
   }
@@ -42,6 +42,7 @@ function build(options={}) {
   const git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',windowsHide:true}).trim();
   const info={version:pkg.version,buildId:options['build-id']||path.basename(output),sourceCommit:git(['rev-parse','HEAD']),sourceDirty:!!git(['status','--porcelain']),builtAt:new Date().toISOString(),nodeRange:pkg.engines.node,development};
   fs.writeFileSync(path.join(stage,'BUILD-INFO.json'),JSON.stringify(info,null,2)+'\n');fs.chmodSync(path.join(stage,'bin/wdb.js'),0o755);
+  fs.writeFileSync(path.join(stage,'SKILL-MANIFEST.json'),JSON.stringify(require('../src/update-skills').makeManifest(stage,info),null,2)+'\n');copied.add('SKILL-MANIFEST.json');
   const dry=JSON.parse(npm(['pack','--dry-run','--json','--ignore-scripts'],{cwd:stage}))[0];
   const allowed=new Set([...copied,'README.md','LICENSE','package.json','BUILD-INFO.json']);
   for(const file of dry.files)if(!allowed.has(file.path))throw Error('Unexpected npm file: '+file.path);

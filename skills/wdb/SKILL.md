@@ -21,6 +21,8 @@ Use Node >=22.0.0; recommend Node 24 LTS. The npm package is shared by Windows/m
 
 If global npm installation is denied, use a writable prefix (`npm install -g --prefix <local-prefix> @tsingwill/wdb`) and invoke `<local-prefix>/bin/wdb` on macOS or `<local-prefix>\wdb.cmd` on Windows. Do not silently use sudo, change execution policy or install a system-wide Node runtime. If Node/npm is missing, explain the prerequisite and use the user's environment setup method.
 
+When the user requests CLI/Skill maintenance, use `wdb update --check --json` to inspect the actual npm installation. `--yes` requires the user's update authorization; do not add it just to bypass a prompt or as a debugging prerequisite. Version-matched Skill sync, conflicts and recovery are described in [references/update.md](references/update.md).
+
 Read [references/commands.md](references/commands.md) to choose a command family and [references/cli.md](references/cli.md) for arguments, examples and result semantics. Connection guidance is in [references/connection.md](references/connection.md). Electron, Flutter and streaming details are bundled alongside these references and loaded only when relevant. All paths are relative to this Skill directory; no source checkout or npm-package documentation lookup is required. Compare commands with the installed `wdb --help` and target capabilities before use.
 
 ## Connect and choose the task path

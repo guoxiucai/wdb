@@ -64,12 +64,12 @@ PowerShell 可将下载内容作为带参数的脚本块执行：
 
 ## 下载、更新与失败处理
 
-- 两个入口下载本仓库 `main` 上的共享安装程序及文件清单，再从清单固定的提交下载完整 Skill，并按 SHA-256 校验。无需 GitHub API、账号或 token，不下载整个仓库或大体积 server EXE。
+- 两个入口下载本仓库 `main` 上的共享安装程序。可定位新版 npm CLI 时，优先使用该包内的 Skill 和 hash 清单；否则使用仓库清单固定的 Git 提交并提示兼容性未与 CLI 版本绑定。显式 --ref 使用所选仓库资源。无需 GitHub API、账号或 token，不下载整个仓库或大体积 server EXE。
 - `raw.githubusercontent.com` 必须可达。网络错误、缺少资源或哈希不符时失败，不写入不完整 Skill；已有 CLI 的安装与 Skill 写入是独立步骤。
 - 单个 Skill 先写临时目录，再切换目标目录。拒绝替换符号链接或非目录目标。并发安装锁存在时不要强制删除；先确认没有其他安装进程。
 - 已有 `wdb` Skill 时询问是否替换。确认后，旧目录保存在对应 Agent 目录下的 `wdb-skill-backups/wdb-<时间>-<标识>/`，**不在 `skills/` 搜索目录里**，避免重复发现。`--yes` / `-Yes` 仍会保留备份。
 - 两个 Agent 的目录分别安装；若其中一个失败，查看输出，已完成的安装会保留，修复原因后重试。不会清空其他 Skill，也不修改 WDB 配对凭据。
-- 更新 Skill 时重跑脚本并确认替换即可。CLI 的显式升级可单独执行 `npm install -g @tsingwill/wdb`。
+- 安装成功后在客户端配置目录的 skill-installs.json 登记目标及 hash（WDB_CONFIG 可指定独立目录）。支持该功能的客户端可用 `wdb update` 一次确认更新 CLI 与已登记 Skill；`--check --json` 只检查。Skill 本地修改、未登记目录及备份规则见[更新指南](UPDATING.md)。也可重跑本安装脚本，明确确认替换并保留备份；npm 手动升级本身不会同步已复制的 Skill。
 
 ## 手动安装
 

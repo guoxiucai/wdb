@@ -4,6 +4,8 @@
 
 ## 配对和选择设备
 
+客户端维护：`wdb update --check --json` 只检查版本和 Skill 状态；用户明确授权后才执行 `wdb update` 或自动化的 `--yes`。`--no-skill` 仅更新 CLI；不更新服务、Node 或凭据。安装归属、版本对应、冲突和部分失败处理见 [update.md](update.md)。
+
 新客户端配对需要服务器本机操作者在弹窗中同意。默认临时授权；勾选记住后持久授权。CLI默认等待150秒（`--approval-timeout`），拒绝/关闭/超时不授权。临时许可结束时运行connect重新确认，详见 [连接授权](connection.md)。
 
 直接连接服务器地址，无需手工提供指纹和配对码：

@@ -77,7 +77,7 @@ test('download-and-run bootstrap installs through npm and copies resources witho
   const file=path.join(bin,name+(process.platform==='win32'?'.cmd':''));
   await fs.writeFile(file,process.platform==='win32'?`@echo off\r\n"${process.execPath}" "${stub}" %*\r\n`:`#!/bin/sh\nexec '${process.execPath.replace(/'/g,"'\\''")}' '${stub.replace(/'/g,"'\\''")}' "$@"\n`,{mode:0o755});
  }
- const env={...process.env,PATH:bin+path.delimiter+process.env.PATH,NODE_OPTIONS:`--require ${JSON.stringify(preload)}`};
+ const env={...process.env,WDB_CONFIG:path.join(root,'client-config'),PATH:bin+path.delimiter+process.env.PATH,NODE_OPTIONS:`--require ${JSON.stringify(preload)}`};
  let child;
  if(process.platform==='win32'){
   // Windows exercises the common entry without executing a remote bootstrap.

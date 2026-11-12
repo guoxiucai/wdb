@@ -4,6 +4,8 @@ Windows/macOS 共享的纯 JavaScript 客户端。需要先安装 Node **>=22.0.
 
 安装：`npm install -g @tsingwill/wdb`。安装后运行 `wdb --version`。
 
+维护：`wdb update --check --json` 只检查；`wdb update` 展示候选版本和 Skill 路径，确认后才更新。同步使用该精确 npm 包内的 Skill，不静默覆盖本地修改；详见[更新指南](docs/UPDATING.md)。服务端、Node 和已保存授权不随 CLI 更新。
+
 本地验证：`npm install -g --prefix <测试目录> <包文件.tgz>`；Windows 使用 `<测试目录>\wdb.cmd`，Mac 使用 `<测试目录>/bin/wdb`。正式包名为 `@tsingwill/wdb`；本地开发包不用于 npm 发布。
 
 ```text

@@ -101,6 +101,34 @@ function ensureCli({find=locate,run=invoke,log=console.log}={}){
  log('WDB CLI ready: '+cli);return cli;
 }
 async function stat(file){try{return await fs.lstat(file);}catch(e){if(e.code==='ENOENT')return null;throw e;}}
+async function packagedSkill(cli){
+ const roots=[];try{const real=await fs.realpath(cli);if(/\.js$/i.test(real))roots.push(path.resolve(path.dirname(real),'..'));if(/\.cmd$/i.test(cli)){const text=await fs.readFile(cli,'utf8');if(text.includes('node_modules\\@tsingwill\\wdb\\bin\\wdb.js'))roots.push(path.join(path.dirname(cli),'node_modules','@tsingwill','wdb'));}}catch{return null;}
+ for(const root of roots){
+  let pkg;try{pkg=JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8'));}catch{continue;}if(pkg.name!==PACKAGE)continue;
+  const manifestFile=path.join(root,'SKILL-MANIFEST.json');if(!syncFs.existsSync(manifestFile))continue;
+  const m=JSON.parse(await fs.readFile(manifestFile,'utf8'));if(m.schema!==1||m.package!==PACKAGE||m.version!==pkg.version||!Array.isArray(m.files)||!m.files.length||m.files.length>256)throw Error('Invalid packaged Skill manifest');
+  for(const dir of [root,path.join(root,'skills'),path.join(root,'skills/wdb')])if((await fs.lstat(dir)).isSymbolicLink())throw Error('Linked packaged Skill directory');
+  const files=new Map();let total=0;
+  for(const entry of m.files){const relative=entry.path;if(typeof relative!=='string'||/[\\:\x00-\x1f]/.test(relative)||relative.split('/').some(p=>!p||p==='.'||p==='..'||/[. ]$/.test(p)||/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p))||[...files.keys()].some(p=>p.toLowerCase()===relative.toLowerCase()))throw Error('Unsafe packaged Skill path');
+   let file=path.join(root,'skills','wdb');for(const part of relative.split('/')){file=path.join(file,part);if((await fs.lstat(file)).isSymbolicLink())throw Error('Linked packaged Skill resource');}
+   const bytes=await fs.readFile(file);total+=bytes.length;if(total>MAX_BYTES||bytes.length!==entry.bytes||crypto.createHash('sha256').update(bytes).digest('hex')!==entry.sha256)throw Error('Packaged Skill integrity failed');files.set(relative,{bytes,mode:0o644});
+  }
+  if(!files.get('SKILL.md')?.bytes.toString().startsWith('---'))throw Error('Packaged Skill entry point missing');return {sha:m.sourceCommit,version:m.version,files,packageRoot:await fs.realpath(root)};
+ }
+ return null;
+}
+function registrationDirectory(){return path.resolve(process.env.WDB_CONFIG||(process.platform==='win32'?path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'AppData/Local'),'wdb/client'):process.platform==='darwin'?path.join(os.homedir(),'Library/Application Support/wdb/client'):path.join(os.homedir(),'.config/wdb/client')));}
+async function registerSkill(target,scope,skill,result,directory=registrationDirectory()){
+ await fs.mkdir(directory,{recursive:true,mode:0o700});if((await fs.lstat(directory)).isSymbolicLink())throw Error('Linked Skill registry directory');const file=path.join(directory,'skill-installs.json'),lock=path.join(directory,'.skill-installs.lock');await fs.mkdir(lock);
+ const temp=path.join(directory,'.skill-registry-'+crypto.randomUUID()+'.tmp');
+ try{
+  await fs.writeFile(path.join(lock,'owner.json'),JSON.stringify({pid:process.pid,startedAt:new Date().toISOString()}),{mode:0o600});let registry={schema:1,installations:[]};
+  try{if((await fs.lstat(file)).isSymbolicLink())throw Error('Linked Skill registry');const text=await fs.readFile(file,'utf8');if(Buffer.byteLength(text)>2*1024*1024)throw Error('Skill registry exceeds limit');registry=JSON.parse(text);}catch(e){if(e.code!=='ENOENT')throw e;}
+  if(registry.schema!==1||!Array.isArray(registry.installations)||registry.installations.length>256)throw Error('Invalid/full Skill registry');
+  const row={agent:target.agent,scope,base:await fs.realpath(target.base),directory:result.destination,version:skill.version||null,sourceCommit:skill.sha,files:[...skill.files].map(([path,{bytes}])=>({path,bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex')})),updatedAt:new Date().toISOString()};
+  registry.installations=registry.installations.filter(r=>r.directory!==row.directory).concat(row);if(registry.installations.length>256)throw Error('Skill registry is full');await fs.writeFile(temp,JSON.stringify(registry,null,2)+'\n',{flag:'wx',mode:0o600});await fs.rename(temp,file);
+ }finally{await fs.rm(temp,{force:true});await fs.rm(path.join(lock,'owner.json'),{force:true});await fs.rmdir(lock);}
+}
 async function installSkill(target,skill,{yes=false,ask,log=console.log}={}){
  const base=await fs.realpath(target.base);if(!(await fs.stat(base)).isDirectory())throw Error('Not a directory: '+target.base);
  const relative=path.relative(target.base,target.directory);if(relative.startsWith('..')||path.isAbsolute(relative))throw Error('Invalid installation target');
@@ -131,13 +159,13 @@ async function main(argv=process.argv.slice(2)){
  try{
   const chosen=await choose(options,ask),plan=targets(chosen);
   console.log('WDB Skill installation targets:');for(const target of plan){await fs.realpath(target.base);console.log('  '+target.agent+': '+target.directory);}
-  const skill=await fetchSkill(chosen.ref);console.log('Skill source: '+REPO+' @ '+skill.sha);
-  ensureCli();
-  for(const target of plan)await installSkill(target,skill,{yes:chosen.yes,ask});
+  const cli=ensureCli(),bundled=chosen.ref==='main'?await packagedSkill(cli):null,skill=bundled||await fetchSkill(chosen.ref);console.log('Skill source: '+(bundled?PACKAGE+' @ '+skill.version:REPO+' @ '+skill.sha));
+  if(!bundled)console.log('CLI has no packaged Skill manifest; repository Skill compatibility is not version-pinned to this CLI.');
+  for(const target of plan){if(bundled){const base=await fs.realpath(target.base),destination=path.join(base,target.agent==='codex'?'.agents':'.claude','skills','wdb'),relative=path.relative(bundled.packageRoot,destination),reverse=path.relative(destination,bundled.packageRoot);if(!relative||!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)||!reverse||!reverse.startsWith('..'+path.sep)&&reverse!=='..'&&!path.isAbsolute(reverse))throw Error('Skill target overlaps the CLI package; choose another project.');}const installed=await installSkill(target,skill,{yes:chosen.yes,ask});try{await registerSkill(target,chosen.scope,skill,installed);}catch{throw Error('Skill installed at '+installed.destination+', but update registration failed. Check the client config permissions/lock and rerun.');}}
   console.log('Done. Start a new Claude Code / Codex session in the target project.');
   console.log('Ask the Agent to debug your Windows device and provide its address. First connection needs approval on Windows.');
   console.log('Windows server is installed separately: https://github.com/guoxiucai/wdb/releases/latest');
  }finally{prompt?.close();}
 }
 if(require.main===module)main().catch(e=>{console.error('WDB installation failed: '+e.message);process.exitCode=1;});
-module.exports={parseArgs,targets,choose,fetchSkill,download,ensureCli,installSkill,main};
+module.exports={parseArgs,targets,choose,fetchSkill,download,ensureCli,installSkill,main,packagedSkill,registerSkill};
