@@ -7,7 +7,7 @@
 <p align="center"><strong>用一套 CLI 连接、操作和调试 Windows，让开发者与 AI Agent 共用同一条调试通路。</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="版本 0.1.0" />
+  <img src="https://img.shields.io/badge/CLI-0.1.1-blue" alt="CLI 版本 0.1.1" />
   <img src="https://img.shields.io/badge/server-Windows-0078D4" alt="Windows 服务端" />
   <img src="https://img.shields.io/badge/CLI-Windows%20%7C%20macOS-333333" alt="Windows 与 macOS CLI" />
   <img src="https://img.shields.io/badge/Node.js-22%2B-43853D" alt="Node.js 22 及以上" />
@@ -28,7 +28,7 @@ WDB (Windows Debug Bridge) 由 Windows 后台服务、跨平台 CLI 和 Agent Sk
 
 WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截图与录屏用于观察和取证，目前不提供实时远程桌面视频串流。
 
-当前版本为 **0.1.0**，采用 [MIT 许可证](LICENSE)。CLI 通过 npm 分发，Windows 服务端安装器及 CLI tarball 通过 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 分发。
+CLI 当前版本为 **0.1.1**，通过 npm 分发；Windows 服务端 **0.1.0** 安装器见 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0)。项目采用 [MIT 许可证](LICENSE)。
 
 <a id="quick-start"></a>
 
@@ -95,7 +95,7 @@ Windows PowerShell 如限制 npm 生成的 `.ps1` 启动器，可使用 `wdb.cmd
 
 npm 包名为 `@tsingwill/wdb`，安装后的命令为 `wdb`。源码构建方法见下方[本地开发与构建](#development)，安装与配置见 [npm CLI 指南](docs/NPM-CLIENT.md)。
 
-带更新功能的 npm 客户端可执行 `wdb update`：检查发布版本、展示目标，确认后更新 CLI 及已登记的对应 Skill；只检查用 `wdb update --check --json`。不会更新 Windows 服务或 Node，详见[更新指南](docs/UPDATING.md)。
+从 CLI **0.1.1** 起可执行 `wdb update`：检查发布版本、展示目标，确认后更新 CLI 及已登记的对应 Skill；只检查用 `wdb update --check --json`。旧 **0.1.0** 尚无此命令，先执行上面的 npm 安装命令升级一次。更新不需要连接设备，也不会更新 Windows 服务或 Node，详见[更新指南](docs/UPDATING.md)。
 
 ### 3. 连接设备
 
@@ -182,6 +182,7 @@ WDB 面向跨主机 Windows 应用调试，将脚本、文件部署、UIA、Elec
 
 | 命令 | 说明 |
 | --- | --- |
+| `update` / `update --check --json` | 检查 npm 新版本；确认后更新 CLI 及对应 Skill |
 | `connect` / `devices` / `info` / `disconnect` | 连接、实时设备列表、详情、主动断开 |
 | `clients list` / `clients revoke <clientId>` | 查询与撤销客户端授权 |
 | `shell --script '...'` / `shell --script-file ...` | 一次性 PowerShell 任务；默认普通用户 |
@@ -247,7 +248,7 @@ npm run build:server -- -BuildId server-dev-example
 npm run build:server -- -BuildId server-dev-example -Resume
 ```
 
-产物在 `dist/server-builds/<BuildId>/output/0.1.0/`，不覆盖已有发布包；构建参数及续跑方法见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
+产物在 `dist/server-builds/<BuildId>/output/<版本>/`，不覆盖已有发布包；构建参数及续跑方法见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
 
 构建包含 CLI 与两个 Windows EXE 的开发分发：
 

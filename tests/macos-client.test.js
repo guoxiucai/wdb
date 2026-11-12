@@ -91,7 +91,7 @@ test('launcher runs bundled Node from arbitrary cwd, Unicode paths, and relative
   const env = { ...process.env, PATH: '/usr/bin:/bin' };
   for (const entry of [path.join(root, 'bin/wdb'), path.join(links, 'absolute')]) {
     const result = execFileSync(entry, ['--version', '--json'], { cwd: '/', env, encoding: 'utf8' });
-    assert.equal(JSON.parse(result).data.version, '0.1.0');
+    assert.equal(JSON.parse(result).data.version, require('../package.json').version);
   }
   const byPath = execFileSync('/bin/sh', ['-c', 'absolute --version --json'], { cwd: '/', env: { ...env, PATH: links + ':' + env.PATH }, encoding: 'utf8' });
   assert.equal(JSON.parse(byPath).status, 'succeeded');

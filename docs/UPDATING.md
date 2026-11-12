@@ -1,6 +1,8 @@
 # 更新 CLI 和对应 Skill
 
-在包含更新命令的 npm 客户端版本中执行：
+**CLI 0.1.1 及以上**的正式 npm 全局客户端支持此命令。旧 0.1.0 没有 `update`，先执行 `npm install -g @tsingwill/wdb` 升级一次。Windows/macOS 均适用；不需要连接设备。
+
+升级后执行：
 
 ```sh
 wdb update
@@ -52,3 +54,5 @@ CLI 与多个 Skill 不是一个原子事务。若 CLI 成功但某个 Skill 失
 同一安装有更新锁，不能因为看到锁就强删；检查 owner.json 对应进程和运行记录。更新在包目录之外的执行器中完成，预取精确 tarball 并核对 integrity，安装 hook/可选原生依赖禁用，最后实际启动新入口核验。失败证据目录只保存在本机，避免公开带个人路径的记录。
 
 开发验证：`node --test tests/client-update.test.js tests/npm-client.test.js tests/update-skills.test.js tests/update-package.test.js`。Windows 完整闭环：`node scripts/validate-update-windows.js <新的输出目录>`，使用自建 HTTPS registry、隔离 prefix 和真实 ConPTY，不发布任何包；需要预编译的 native/bin/PtyHost.exe。Windows 通过不等于 Mac 实机已通过。
+
+Mac 实机闭环：`node scripts/validate-update-macos.js <新的输出目录>`。使用隔离 prefix、自建 HTTPS registry、真实 npm 和 macOS PTY；需要 OpenSSL 与 Python 3（仅用于验证）。覆盖确认/取消、真实入口自更新、Skill 同步与本地冲突、版本/Node 要求、锁及失败结果；不发布测试包，不操作真实客户端配置。

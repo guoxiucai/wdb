@@ -7,7 +7,9 @@ npm install -g @tsingwill/wdb
 wdb --version
 ```
 
-离线 tarball 下载入口：[GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0)。
+CLI 0.1.1 通过 npm 分发；需要离线 tarball 时运行 `npm pack @tsingwill/wdb@0.1.1`。Windows 服务端安装器仍见 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0)。
+
+CLI 0.1.1 起支持 `wdb update`（确认后更新）与 `wdb update --check --json`（只检查）。旧 0.1.0 用户先运行上面的 npm 安装命令升级，完整行为见 [更新指南](UPDATING.md)。
 
 最低版本统一为 **Node 22.0.0**，CLI 与服务端拒绝 Node 18 / 20，不设置只接受 Node 24 的上限。推荐使用 Node 24 LTS 的受维护补丁版本；自带运行时的 EXE 继续使用固定 Node 24。Electron/Flutter WebSocket 使用已锁定的 `ws`。跨平台共享代码不等于所有 Node 版本或 Mac 实机均已验证。
 
