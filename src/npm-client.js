@@ -10,14 +10,13 @@ function npmCommand(){
  const near=path.dirname(process.execPath),candidates=[process.env.npm_execpath,path.join(near,'node_modules/npm/bin/npm-cli.js'),path.join(near,'../lib/node_modules/npm/bin/npm-cli.js')];
  const found=locate('npm');if(found){try{const real=fs.realpathSync(found);if(real.endsWith('.js'))candidates.push(real);if(/\.(cmd|bat)$/i.test(found))candidates.push(path.join(path.dirname(found),'node_modules/npm/bin/npm-cli.js'));}catch{}}
  for(const file of candidates)if(file&&file.endsWith('.js')&&fs.existsSync(file))return {file:process.execPath,args:[fs.realpathSync(file)]};
- // Native npm launchers can be executed with an argument array; never shell
- // interpolate .cmd paths or user-controlled prefixes/tarball names.
- if(found&&!/\.(cmd|bat)$/i.test(found))return {file:found,args:[]};
+ // Run npm in the current Node process tree, not through an opaque launcher
+ // whose descendants could keep installing after a cancellation/timeout.
  throw error('UPDATE_NPM_UNAVAILABLE','Cannot locate npm beside this Node runtime. Install Node/npm together.');
 }
 function execute(file,args,{cwd,signal,timeout=180000,env=process.env}={}){
- return new Promise((resolve,reject)=>execFile(file,args,{cwd,signal,timeout,env,encoding:'utf8',windowsHide:true,maxBuffer:2*1024*1024},(e,stdout)=>{
-  if(e){const code=e.name==='AbortError'?'UPDATE_CANCELLED':e.killed?'UPDATE_NPM_TIMEOUT':/EBADENGINE/.test(String(e.stderr))?'UPDATE_NODE_INCOMPATIBLE':'UPDATE_NPM_FAILED';reject(error(code,code==='UPDATE_NODE_INCOMPATIBLE'?'Candidate requires a different Node version. Update Node separately.':'npm command failed; inspect npm diagnostics locally. No automatic rollback is assumed.',{exitCode:typeof e.code==='number'?e.code:null}));}
+ return new Promise((resolve,reject)=>execFile(file,args,{cwd,signal,timeout,env,encoding:'utf8',windowsHide:true,maxBuffer:2*1024*1024},(e,stdout,stderr)=>{
+  if(e){const code=e.name==='AbortError'?'UPDATE_CANCELLED':e.killed?'UPDATE_NPM_TIMEOUT':/EBADENGINE/.test(stderr)?'UPDATE_NODE_INCOMPATIBLE':/EBUSY/.test(stderr)?'UPDATE_TARGET_BUSY':/EACCES|EPERM/.test(stderr)?'UPDATE_PERMISSION_DENIED':'UPDATE_NPM_FAILED';reject(error(code,code==='UPDATE_NODE_INCOMPATIBLE'?'Candidate requires a different Node version. Update Node separately.':'npm command failed; inspect npm diagnostics locally. No automatic rollback is assumed.',{exitCode:typeof e.code==='number'?e.code:null}));}
   else resolve(stdout);
  }));
 }
