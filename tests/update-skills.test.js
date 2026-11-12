@@ -18,3 +18,13 @@ test('bundle tampering and concurrent update locks fail closed',t=>{
 test('directory junctions/symlinks cannot redirect Skill updates outside the registered base',t=>{
  const f=setup(t),outside=path.join(f.dir,'outside');fs.mkdirSync(outside);fs.writeFileSync(path.join(outside,'keep.txt'),'keep');fs.symlinkSync(outside,path.join(f.base,'.agents'),process.platform==='win32'?'junction':'dir');const record={agent:'codex',scope:'project',base:f.base,directory:path.join(f.base,'.agents/skills/wdb'),files:null,observedFiles:null};const result=s.synchronize(f.root,f.data,[{...record,adopt:true}]);assert.equal(result[0].error.code,'UPDATE_SKILL_UNSAFE');assert.equal(fs.readFileSync(path.join(outside,'keep.txt'),'utf8'),'keep');assert.equal(fs.existsSync(path.join(outside,'skills')),false);
 });
+test('base aliases resolve consistently for discovered and previously registered Skills',t=>{
+ const f=setup(t),alias=path.join(f.dir,'project alias');fs.symlinkSync(f.base,alias,process.platform==='win32'?'junction':'dir');
+ const directory=path.join(alias,'.agents/skills/wdb');fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(path.join(directory,'SKILL.md'),'old');
+ const record={agent:'codex',scope:'project',base:alias,directory,version:'0.1.0',files:s.snapshot(directory)};
+ assert.equal(s.target(record).directory,fs.realpathSync(directory));
+ s.write(f.data,{schema:1,installations:[record]});
+ let plans=s.preview(f.data,f.m,{home:alias,cwd:alias}).map(row=>({...row,observedFiles:s.snapshot(row.directory)}));assert.equal(plans.length,1);assert.equal(plans[0].state,'pending');
+ assert.equal(s.synchronize(f.root,f.data,plans)[0].state,'updated');
+ s.write(f.data,{schema:1,installations:[]});plans=s.preview(f.data,f.m,{home:alias,cwd:alias});assert.equal(plans.length,1);assert.equal(plans[0].directory,fs.realpathSync(directory));assert.doesNotThrow(()=>s.target(plans[0]));
+});

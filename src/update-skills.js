@@ -29,14 +29,14 @@ function lock(dir){try{fs.mkdirSync(dir,{mode:0o700});}catch(e){if(e.code==='EEX
 function target(record){
  if(!['codex','claude'].includes(record.agent)||!['user','project'].includes(record.scope)||!path.isAbsolute(record.base)||!path.isAbsolute(record.directory))throw error('UPDATE_SKILL_UNSAFE','Invalid registered Skill target.');
  const base=fs.realpathSync(record.base),parts=[record.agent==='codex'?'.agents':'.claude','skills','wdb'],directory=path.join(base,...parts);
- if(path.resolve(record.directory)!==directory)throw error('UPDATE_SKILL_UNSAFE','Skill target does not match its registered base.');let current=base;
+ if(path.resolve(record.directory)!==directory&&path.resolve(record.directory)!==path.join(path.resolve(record.base),...parts))throw error('UPDATE_SKILL_UNSAFE','Skill target does not match its registered base.');let current=base;
  for(const part of parts){current=path.join(current,part);if(fs.existsSync(current)){const st=fs.lstatSync(current);if(st.isSymbolicLink()||!st.isDirectory())throw error('UPDATE_SKILL_UNSAFE','Linked/non-directory Skill target.');}}
  return {base,directory};
 }
 function preview(dir,desired,{home=os.homedir(),cwd=process.cwd()}={}){
  const rows=read(dir).installations,targets=rows.map(record=>{try{target(record);const actual=snapshot(record.directory);return {...record,state:actual&&!sameFiles(actual,record.files)?'conflict':actual&&record.version===desired.version&&sameFiles(actual,desired.files)?'current':'pending'};}catch{return {...record,state:'unavailable'};}});
- const seen=new Set(targets.map(t=>t.directory));for(const [scope,base] of [['user',home],['project',cwd]])for(const agent of ['codex','claude']){
-  const directory=path.join(base,agent==='codex'?'.agents':'.claude','skills','wdb');if(!seen.has(directory)&&fs.existsSync(directory)){targets.push({agent,scope,base:fs.realpathSync(base),directory,state:'unmanaged'});seen.add(directory);}
+ const seen=new Set(targets.flatMap(t=>{try{return [t.directory,target(t).directory];}catch{return [t.directory];}}));for(const [scope,base] of [['user',home],['project',cwd]])for(const agent of ['codex','claude']){
+  if(!fs.existsSync(base))continue;const actualBase=fs.realpathSync(base),directory=path.join(actualBase,agent==='codex'?'.agents':'.claude','skills','wdb');if(!seen.has(directory)&&fs.existsSync(directory)){targets.push({agent,scope,base:actualBase,directory,state:'unmanaged'});seen.add(directory);}
  }
  return targets;
 }

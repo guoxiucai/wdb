@@ -23,7 +23,7 @@ test('source/server/private/local installs are not npm update targets',async t=>
  const f=fixture(t);fs.writeFileSync(path.join(f.root,'package.json'),JSON.stringify({name:'windows-debug-bridge',version:'0.1.0',private:true}));assert.equal((await update({check:true},{},f)).state,'unsupported_installation');assert.equal(f.calls.length,0);
 });
 test('macOS global layout is distinct from project-local node_modules',t=>{
- const f=fixture(t),mac=path.join(f.prefix,'lib/node_modules/@tsingwill/wdb');fs.mkdirSync(path.dirname(mac),{recursive:true});fs.renameSync(f.root,mac);const {installation}=require('../src/client-update');assert.equal(installation(mac,'darwin').prefix,f.prefix);fs.writeFileSync(path.join(f.prefix,'package.json'),'{}');assert.equal(installation(mac,'darwin').supported,false);
+ const f=fixture(t),mac=path.join(f.prefix,'lib/node_modules/@tsingwill/wdb');fs.mkdirSync(path.dirname(mac),{recursive:true});fs.renameSync(f.root,mac);const {installation}=require('../src/client-update');assert.equal(installation(mac,'darwin').prefix,fs.realpathSync(f.prefix));fs.writeFileSync(path.join(f.prefix,'package.json'),'{}');assert.equal(installation(mac,'darwin').supported,false);
 });
 test('metadata, mismatched npm runtime and network errors never become up-to-date',async t=>{
  const f=fixture(t);f.candidate.name='another-package';await assert.rejects(inspect(f),{code:'UPDATE_METADATA_INVALID'});f.candidate.name='@tsingwill/wdb';f.candidate.dist.integrity='bad';await assert.rejects(inspect(f),{code:'UPDATE_METADATA_INVALID'});
@@ -61,4 +61,9 @@ test('Ctrl+C while checking aborts the owned npm request and performs no update'
  const f=fixture(t),before=process.listenerCount('SIGINT');let aborted=false;
  f.npm.run=(_args,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>{aborted=true;reject(Object.assign(Error('cancelled'),{code:'UPDATE_CANCELLED'}));},{once:true}));
  const pending=update({check:true,config:path.join(f.dir,'profile')},{},f);setImmediate(()=>process.emit('SIGINT'));const result=await pending;assert.equal(result.state,'cancelled');assert.equal(aborted,true);assert.equal(process.listenerCount('SIGINT'),before);assert.equal(fs.existsSync(path.join(f.dir,'profile')),false);
+});
+test('real external worker accepts the canonical temp plan and cleans its directory',async t=>{
+ const f=fixture(t),{runWorker}=require('../src/client-update'),s=require('../src/update-skills');
+ const root=fs.realpathSync(f.root),result=await runWorker({root,prefix:fs.realpathSync(f.prefix),packageHash:s.sha(fs.readFileSync(path.join(root,'package.json'))),data:{state:'up_to_date'},dataDir:path.join(f.dir,'profile'),installCli:false,noSkill:true,targets:[],npmCommand:{file:process.execPath,args:[]}});
+ assert.equal(result.ok,true);assert.equal(result.data.state,'up_to_date');
 });

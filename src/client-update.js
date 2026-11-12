@@ -68,7 +68,7 @@ async function updateInternal(options,io,dependencies={}){
 }
 function question(text,io){return new Promise(resolve=>{const rl=require('node:readline').createInterface({input:io.stdin,terminal:false});let settled=false;const finish=value=>{if(settled)return;settled=true;process.removeListener('SIGINT',cancel);rl.close();resolve(value);},cancel=()=>finish('');process.once('SIGINT',cancel);rl.once('close',()=>finish(''));io.stderr.write(text);rl.question('',finish);});}
 async function runWorker(plan){
- const {fork}=require('node:child_process'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'wdb-update-'));let success=false;
+ const {fork}=require('node:child_process'),temp=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'wdb-update-')));let success=false;
  try{
   for(const name of ['update-worker','update-skills','update-package','npm-client'])fs.copyFileSync(path.join(__dirname,name+'.js'),path.join(temp,name+'.js'));
   const file=path.join(temp,'plan.json');fs.writeFileSync(file,JSON.stringify(plan),{mode:0o600});
@@ -81,6 +81,6 @@ async function runWorker(plan){
    child.once('exit',code=>{cleanup();if(reply&&typeof reply.ok==='boolean')resolve(reply);else reject(error('UPDATE_OUTCOME_UNKNOWN','Updater exited without a verified result.',{recoveryDirectory:temp,exitCode:code}));});
   });
   success=result.ok;if(!success)result.data={...result.data,recoveryDirectory:temp};return result;
- }finally{if(success){if(path.dirname(temp)!==os.tmpdir()||!path.basename(temp).startsWith('wdb-update-'))throw error('UPDATE_CLEANUP_FAILED','Unexpected updater directory.');fs.rmSync(temp,{recursive:true,force:true});}}
+ }finally{if(success){if(path.dirname(temp)!==fs.realpathSync(os.tmpdir())||!path.basename(temp).startsWith('wdb-update-'))throw error('UPDATE_CLEANUP_FAILED','Unexpected updater directory.');fs.rmSync(temp,{recursive:true,force:true});}}
 }
 module.exports={PACKAGE,stable,compare,same,installation,inspect,update,question,runWorker};
