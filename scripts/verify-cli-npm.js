@@ -12,7 +12,7 @@ function inspect(tarball) {
     if(!Number.isSafeInteger(size)||size<0||offset+512+size>tar.length)throw Error('Invalid tar size');
     if(!name.startsWith('package/')||name.includes('..')||name.includes('\\')||files.has(name)||!['0',''].includes(type))throw Error('Unsafe npm tar entry: '+name);
     const relative=name.slice(8);
-    if(!/^(?:package\.json|README\.md|LICENSE|BUILD-INFO\.json|bin\/wdb\.js|src\/(?:cli|client-transport|local-clients|device-id|device-visibility|client-stream|stream-channel|stream-flow|stream-protocol|stream-tcp|forward-client|terminal-client)\.js|docs\/[A-Za-z0-9_.-]+\.md|skills\/wdb\/[A-Za-z0-9_./-]+\.md)$/.test(relative))throw Error('Unexpected npm file: '+name);
+    if(!/^(?:package\.json|README\.md|LICENSE|BUILD-INFO\.json|bin\/wdb\.js|src\/(?:cli|client-update|npm-client|client-transport|local-clients|device-id|device-visibility|client-stream|stream-channel|stream-flow|stream-protocol|stream-tcp|forward-client|terminal-client)\.js|docs\/[A-Za-z0-9_.-]+\.md|skills\/wdb\/[A-Za-z0-9_./-]+\.md)$/.test(relative))throw Error('Unexpected npm file: '+name);
     files.set(name,tar.subarray(offset+512,offset+512+size));offset+=512+Math.ceil(size/512)*512;
   }
   const pkg=JSON.parse(files.get('package/package.json'));

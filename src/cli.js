@@ -13,7 +13,7 @@ const { StringDecoder } = require('node:string_decoder');
 const DEFAULT_PORT = 18766;
 const ACTIVE = new Set(['accepted', 'queued', 'running']);
 const FAILED = new Set(['failed', 'timeout', 'timed_out', 'cancelled', 'canceled', 'needs_intervention', 'needs_manual_intervention', 'needs_attention', 'unknown', 'interrupted', 'result_unknown']);
-const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version','interactive','local']);
+const BOOL_OPTIONS = new Set(['json', 'detach', 'overwrite', 'admin', 'recursive', 'follow', 'watch', 'help', 'version','interactive','local','check','yes','no-skill']);
 const {CliError,normalizeFingerprint,discoverFingerprint,openRequest,receiveResponse,responseJson,api,setSession,ensureEnabled,discoverServer,withTransport,supportsTaskEvents,consumeTaskEvents,isTransient}=require('./client-transport');
 const {normalizeDeviceId}=require('./device-id');
 function parseArgv(argv) {
@@ -432,6 +432,9 @@ function desktopCommand(command, words, options) {
 }
 const HELP = `wdb — Windows Debug Bridge
 
+  wdb update [--check] [--json] [--yes] [--no-skill]
+    Check the npm client release; update only after explicit confirmation.
+
   wdb connect <server-IP-or-hostname>[:18766] [--name <client-name>]
     Approve on the server; no pairing code required. First certificate is saved automatically.
     Prints connected / already connected / failed / timed out. Use info for details.
@@ -478,6 +481,10 @@ async function execute(argv, io, parsed = parseArgv(argv)) {
   if (options.version) return { result: makeEnvelope({ version: require('../package.json').version }), options };
   if (options.help || !positional.length) return { help: HELP, options };
   const [command, ...words] = positional;
+  if(command==='update'){
+    if(words.length||Object.keys(options).some(k=>!['check','yes','json','no-skill','config'].includes(k)))throw new CliError('INVALID_ARGUMENT','Use update [--check] [--json] [--yes] [--no-skill] [--config <dir>].');
+    return {options,result:makeEnvelope(await require('./client-update').update(Object.fromEntries(Object.entries(options).map(([k,v])=>[k,['check','yes','json','no-skill'].includes(k)?boolOption(v):v])),io))};
+  }
   const interactive=command==='shell'&&require('./terminal-client').validateInteractive(options,words,io);
   if (options['args-file']) {
     if (options.args !== undefined) throw new CliError('INVALID_ARGUMENT', 'Use either --args or --args-file.');
