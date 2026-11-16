@@ -141,7 +141,7 @@ wdb reverse tcp:9000 tcp:3000
 
 ## 三、工作原理
 
-<img src="docs/assets/wdb-architecture.svg" width="50%" alt="WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理" />
+<img src="docs/assets/wdb-architecture.svg" width="70%" alt="WDB 从客户端到 Windows 服务、授权窗口及普通用户 helper 的工作原理" />
 
 CLI 通过 TCP 上的 TLS 加密连接到同一个端口（默认 `18766`）：HTTPS 处理命令、任务和文件，SSE 推送任务状态 / 输出，WSS 承载交互终端与 TCP 双向字节流。无需额外开放交互服务端口。
 
