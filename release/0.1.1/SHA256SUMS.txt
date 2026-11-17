@@ -1,0 +1,2 @@
+ead0ae4ab69e8ca1a01719ab75ddf759283cb1070f2f15bcce0dcd356c6be10d  wdb-server-0.1.1-windows-x64-external-node-setup.exe
+00a49cec67faf2f2222ad4d946e4162720be8e208ce78467141c907dd65833c1  wdb-server-0.1.1-windows-x64-with-node-setup.exe
