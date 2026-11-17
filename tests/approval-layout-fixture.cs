@@ -11,6 +11,7 @@ using System.Windows.Forms;
 // Read-only presentation fixture: never calls connection.approve or attaches allow handlers.
 public static class ApprovalLayoutFixture {
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr window,int attribute,out int value,int size);
     static object Rect(Rectangle r) {return new {x=r.X,y=r.Y,width=r.Width,height=r.Height};}
     [STAThread] public static int Main(string[] args) {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
@@ -48,7 +49,8 @@ public static class ApprovalLayoutFixture {
                         controls.Add(new {field=field,bounds=Rect(bounds),preferred=new {width=desired.Width,height=desired.Height},fontSize=c.Font.Size,text=c.Text});
                     }
                     if(!Screen.FromHandle(form.Handle).WorkingArea.Contains(form.Bounds))failures.Add("window outside work area");
-                    var data=new {dpi=GetDpiForWindow(form.Handle),simulatedScale=scale,window=Rect(form.Bounds),client=Rect(form.ClientRectangle),handle=form.Handle.ToInt64(),controls=controls,failures=failures};
+                    int cornerPreference;int cornerResult=DwmGetWindowAttribute(form.Handle,33,out cornerPreference,sizeof(int));
+                    var data=new {dpi=GetDpiForWindow(form.Handle),simulatedScale=scale,window=Rect(form.Bounds),client=Rect(form.ClientRectangle),handle=form.Handle.ToInt64(),customRegion=form.Region!=null,cornerResult=cornerResult,cornerPreference=cornerPreference,controls=controls,failures=failures};
                     File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(data));
                     if(++ticks>=40)form.Close();else timer.Start();
                 }catch(Exception e){File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new{error=e.ToString()}));form.Close();}

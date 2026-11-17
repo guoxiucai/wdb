@@ -103,7 +103,7 @@ public static class DesktopBridge {
         readonly TableLayoutPanel content, buttons;
         readonly ToolTip nameTip;
         readonly Font normalFont, headingFont;
-        bool fitting;
+        bool fitting, systemCorners;
         public ApprovalDialog(string name) {
             SuspendLayout();
             Text="WDB 连接授权";AutoSize=true;AutoSizeMode=AutoSizeMode.GrowAndShrink;
@@ -156,8 +156,20 @@ public static class DesktopBridge {
                 Location=new Point(Math.Max(work.Left,Math.Min(Left,work.Right-Width)),Math.Max(work.Top,Math.Min(Top,work.Bottom-Height)));
             } finally {fitting=false;}
         }
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
+        protected override void OnHandleCreated(EventArgs e) {
+            base.OnHandleCreated(e);
+            // Clear HRGN for compositor rounding; Win10 keeps its existing region.
+            var previous=Region;Region=null;if(previous!=null)previous.Dispose();
+            int preference=2; // DWMWCP_ROUND, DWMWA_WINDOW_CORNER_PREFERENCE
+            systemCorners=DwmSetWindowAttribute(Handle,33,ref preference,sizeof(int))>=0;
+            if(!systemCorners)UpdateLegacyCorners();
+        }
         protected override void OnSizeChanged(EventArgs e) {
             base.OnSizeChanged(e);
+            if(!systemCorners)UpdateLegacyCorners();
+        }
+        void UpdateLegacyCorners() {
             if(ClientSize.Width<1||ClientSize.Height<1)return;
             int diameter=Math.Min(Math.Min(ClientSize.Width,ClientSize.Height),(int)Math.Round(48*DeviceDpi/96.0));
             using(var path=new System.Drawing.Drawing2D.GraphicsPath()) {

@@ -35,17 +35,22 @@ test('approval layout and screenshot physical pixels at current Windows DPI', {s
       assert.ok(fs.existsSync(metrics),'preview must write layout evidence');
       const layout=JSON.parse(fs.readFileSync(metrics));assert.equal(layout.error,undefined);
       assert.deepEqual(layout.failures,[]);assert.equal(layout.dpi,screens.monitors[0].dpiX);
+      if(layout.cornerResult===0){assert.equal(layout.cornerPreference,2);assert.equal(layout.customRegion,false);}
+      else assert.equal(layout.customRegion,true,'unsupported DWM corners retain the existing region');
+      assert.equal(layout.customRegion,false,'binary window regions prevent compositor antialiasing');
+      if(layout.cornerResult===0)assert.equal(layout.cornerPreference,2);
       const windows=call('windows.list',{pid:proc.pid});assert.equal(windows.length,1);
       const window=windows[0].window;
       const shot=call('screenshot',{window,path:path.join(dir,`dialog-${index}.png`)});
       assert.equal(shot.width,layout.window.width);assert.equal(shot.height,layout.window.height);
+      const composed=call('screenshot',{region:layout.window,path:path.join(dir,`composed-${index}.png`)});
       const region={x:layout.window.x+30,y:layout.window.y+50,width:120,height:60};
       const crop=call('screenshot',{region,path:path.join(dir,`region-${index}.png`)});
       assert.deepEqual(crop.mapping,{scaleX:1,scaleY:1,offsetX:region.x,offsetY:region.y});
       for(const capture of [shot,crop]) {
         const png=fs.readFileSync(capture.path);assert.equal(png.readUInt32BE(16),capture.width);assert.equal(png.readUInt32BE(20),capture.height);
       }
-      results.push({layout,shot,crop});
+      results.push({layout,shot,crop,composed});
     } finally {if(proc.exitCode===null){proc.kill();await new Promise(resolve=>proc.once('exit',resolve));}}
   }
   const desktop=call('screenshot',{path:path.join(dir,'desktop.png')});
