@@ -27,7 +27,7 @@ WDB (Windows Debug Bridge) 由 Windows 后台服务、跨平台 CLI 和 Agent Sk
 
 WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截图与录屏用于观察和取证，目前不提供实时远程桌面视频串流。
 
-本文默认介绍最新发布版本。CLI 通过 npm 分发；Windows 服务端安装器见 [GitHub 最新 Release](https://github.com/guoxiucai/wdb/releases/latest)。项目采用 [MIT 许可证](LICENSE)。
+客户端 CLI 通过 npm 分发；Windows 服务端安装器见 [GitHub 最新 Release](https://github.com/guoxiucai/wdb/releases/latest)。项目采用 [MIT 许可证](LICENSE)。
 
 <a id="quick-start"></a>
 
@@ -278,7 +278,8 @@ AGENTS.md      项目开发、验证、提交与交付规范
 ## 十、后续计划
 
 - 连接稳定性优化。
-- 扩展 Windows 操作与调试能力。
+- 扩展 Windows 操作与应用调试能力。
+- Windows服务端原生音视频API（不依赖ffmpeg）
 
 ## 十一、贡献与反馈
 
