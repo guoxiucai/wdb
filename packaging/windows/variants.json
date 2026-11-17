@@ -1,0 +1,6 @@
+[
+  {"variantId":"with-node-with-ffmpeg","runtimeMode":"with-node","ffmpegMode":"with-ffmpeg"},
+  {"variantId":"with-node-no-ffmpeg","runtimeMode":"with-node","ffmpegMode":"no-ffmpeg"},
+  {"variantId":"external-node-with-ffmpeg","runtimeMode":"external-node","ffmpegMode":"with-ffmpeg"},
+  {"variantId":"external-node-no-ffmpeg","runtimeMode":"external-node","ffmpegMode":"no-ffmpeg"}
+]

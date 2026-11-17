@@ -74,9 +74,9 @@ node --test tests/stream-protocol.test.js tests/stream-transport.test.js tests/s
 
 ## 安装、打包与实机操作
 
-生产安装使用双 EXE：with-node 和 external-node，共用一个服务身份及数据目录。三阶段构建 `Prepare → Package → Finalize` 的 BuildId 和冻结内容不可复写；修改源码后使用新 BuildId。详见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
+生产安装使用四种 EXE：Node（with-node/external-node）× FFmpeg（with-ffmpeg/no-ffmpeg）四组合，共用一个服务身份及数据目录。三阶段构建 `Prepare → Package → Finalize` 的 BuildId 和冻结内容不可复写；修改源码后使用新 BuildId。详见 [安装器指南](docs/WINDOWS-INSTALLERS.md)。
 
-在 Windows 项目根目录构建未签名的 Development 服务端双 EXE：
+在 Windows 项目根目录构建未签名的 Development 服务端四种 EXE：
 
 ```powershell
 npm run build:server
@@ -85,7 +85,7 @@ npm run build:server -- -BuildId server-dev-example
 npm run build:server -- -BuildId server-dev-example -Resume
 ```
 
-产物位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含 with-node、external-node 两个安装器和 `SHA256SUMS.txt`。此命令只编译和校验产物，不安装或重启服务。
+产物位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含 Node × FFmpeg 四组合安装器和 `SHA256SUMS.txt`。此命令只编译和校验产物，不安装或重启服务。
 
 安装、重启、真实桌面操作和故障注入在本次授权范围内执行；需要用户本人操作的系统授权及时说明，不能绕过 UAC 或首次连接同意窗口。先用临时目录、测试窗口和 loopback 验证；不要干扰无关进程或真实网卡。
 

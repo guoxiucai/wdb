@@ -18,7 +18,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19045
 SetupMutex=Global\WdbServerSetup
 OutputDir={#OutputDir}
-OutputBaseFilename=wdb-server-{#ProductVersion}-windows-x64-{#RuntimeMode}-{#SigningMode}-setup
+OutputBaseFilename=wdb-server-{#ProductVersion}-windows-x64-{#VariantId}-{#SigningMode}-setup
 Compression=lzma2/fast
 SolidCompression=yes
 DiskSpanning=no
@@ -26,7 +26,7 @@ CloseApplications=no
 RestartApplications=no
 ChangesEnvironment=yes
 UninstallDisplayIcon={app}\native\WdbServiceHost.exe
-VersionInfoDescription=WDB Server {#RuntimeMode} ({#SigningMode})
+VersionInfoDescription=WDB Server {#VariantId} ({#SigningMode})
 #if SigningMode == "Manual"
 SignedUninstaller=yes
 SignedUninstallerDir={#SignedCache}
@@ -44,6 +44,7 @@ var
   AccountPage: TInputQueryWizardPage;
   TransactionStarted, TransactionFinished: Boolean;
   DesktopAccount, ExternalNode: String;
+  NodeMessage: String;
 
 function Quoted(Value: String): String;
 begin
@@ -69,6 +70,23 @@ begin
   end;
 end;
 
+function CheckNode(Discover: Boolean): Boolean;
+var Args, Report: String; Code: Integer;
+begin
+  Report := ExpandConstant('{tmp}\wdb-node-check.ini');
+  DeleteFile(Report);
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' +
+    Quoted(ExpandConstant('{tmp}\installer-node-check.ps1')) +
+    ' -ResultFile ' + Quoted(Report);
+  if ExternalNode <> '' then Args := Args + ' -NodePath ' + Quoted(ExternalNode);
+  if Discover then Args := Args + ' -Discover';
+  Code := -1;
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Args, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+  ExternalNode := GetIniString('Node', 'Path', ExternalNode, Report);
+  NodeMessage := GetIniString('Node', 'Message', 'Node validation could not run. Select a protected system-wide Node >=22 executable, or use the with-node installer.', Report);
+  Result := Result and (GetIniString('Node', 'Valid', '0', Report) = '1');
+end;
+
 procedure InitializeWizard;
 begin
   DesktopAccount := ExpandConstant('{param:DESKTOPUSER|}');
@@ -80,9 +98,24 @@ begin
   if (DesktopAccount = '') and not WizardSilent then DesktopAccount := ConsoleAccount();
   AccountPage.Values[0] := DesktopAccount;
 #if RuntimeMode == "external-node"
+  ExtractTemporaryFile('resolve-node.ps1');
+  ExtractTemporaryFile('installer-node-check.ps1');
+  CheckNode(True);
   AccountPage.Add('System Node.exe path (>=22.0.0):', False);
-  if ExternalNode = '' then ExternalNode := ExpandConstant('{autopf}\nodejs\node.exe');
   AccountPage.Values[1] := ExternalNode;
+  AccountPage.SubCaptionLabel.Caption := 'A validated system Node is selected from Program Files or installer PATH when available. You can edit this path; /NODEPATH overrides detection. The selected executable is checked before installation.';
+#endif
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+#if RuntimeMode == "external-node"
+  if CurPageID = AccountPage.ID then begin
+    ExternalNode := Trim(AccountPage.Values[1]);
+    Result := CheckNode(False);
+    if not Result then MsgBox(NodeMessage, mbError, MB_OK);
+  end;
 #endif
 end;
 
@@ -105,6 +138,7 @@ begin
   DesktopAccount := AccountPage.Values[0];
 #if RuntimeMode == "external-node"
   ExternalNode := AccountPage.Values[1];
+  if not CheckNode(False) then begin Result := NodeMessage; Exit; end;
 #endif
   if DesktopAccount = '' then begin
     Result := 'Supply /DESKTOPUSER="DOMAIN\User" in silent mode, or select the actual desktop account.'; Exit;

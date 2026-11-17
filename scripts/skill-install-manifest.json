@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sourceCommit": "9831ee714f6265d430d8538b63aafeb044d6bbcd",
+  "sourceCommit": "0d0e0f01e43cad336fd5481f4de7f2bf9dd3fd92",
   "files": [
     {
       "path": "SKILL.md",
@@ -11,8 +11,8 @@
     {
       "path": "references/cli.md",
       "mode": "100644",
-      "bytes": 15021,
-      "sha256": "22a2baa89f652f4a19545fddd5cd950a785033f9105e3afb4366bf38eaa02edb"
+      "bytes": 14961,
+      "sha256": "d7454204ef07f06f41fb9cb7d5292787bb418d70d0fcd966e55a3bf2ce13c01c"
     },
     {
       "path": "references/commands.md",

@@ -1,9 +1,13 @@
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][string]$ReleaseDirectory)
 $ErrorActionPreference='Stop'
+$builtInModules=Join-Path $PSHOME 'Modules'
+$env:PSModulePath=(@($builtInModules)+@($env:PSModulePath -split ';' | Where-Object {$_ -and $_ -ine $builtInModules})) -join ';'
 $root=[IO.Path]::GetFullPath($ReleaseDirectory).TrimEnd('\')
 $manifest=Get-Content -LiteralPath (Join-Path $root 'release-manifest.json') -Raw | ConvertFrom-Json
-if(@($manifest.artifacts | Where-Object {$_.name -like '*with-node*-setup.exe'}).Count -ne 1 -or @($manifest.artifacts | Where-Object {$_.name -like '*external-node*-setup.exe'}).Count -ne 1){throw 'Both runtime variants must be present'}
+$expected=@(foreach($node in @('with-node','external-node')){foreach($ffmpeg in @('with-ffmpeg','no-ffmpeg')){"wdb-server-$($manifest.version)-windows-x64-$node-$ffmpeg-$($manifest.signingMode)-setup.exe"}})
+$actual=@($manifest.artifacts | Where-Object {$_.name -like '*-setup.exe'} | ForEach-Object name)
+if($actual.Count -ne 4 -or @(Compare-Object ($expected | Sort-Object) ($actual | Sort-Object)).Count){throw 'Exactly four installer variants must be present'}
 if(@($manifest.artifacts | Where-Object {$_.name -like '*.tgz'}).Count -ne $(if($manifest.serverOnly){0}else{1})){throw 'One shared npm tarball is required'}
 foreach($artifact in $manifest.artifacts){
  $file=[IO.Path]::GetFullPath((Join-Path $root $artifact.name))

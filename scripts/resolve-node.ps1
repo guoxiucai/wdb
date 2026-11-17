@@ -1,5 +1,22 @@
 # Dot-source this file. Never execute a candidate until its location and signature
 # are trusted: the installer runs as SYSTEM/administrator.
+function Find-WdbNode {
+    # Resolve-WdbNode checks ownership, ACLs and signature before executing.
+    param([string]$SearchPath=$env:PATH)
+    $candidates=@(Join-Path $env:ProgramFiles 'nodejs\node.exe')
+    foreach($entry in ($SearchPath -split ';')) {
+        $directory=[Environment]::ExpandEnvironmentVariables($entry.Trim().Trim('"'))
+        if(!$directory -or $directory -notmatch '^[A-Za-z]:\\' -or $directory -match '[\r\n]'){continue}
+        try {$candidate=Join-Path $directory 'node.exe';if(Test-Path -LiteralPath $candidate -PathType Leaf){$candidates += [IO.Path]::GetFullPath($candidate)}} catch {continue}
+    }
+    $first=''
+    foreach($candidate in ($candidates | Select-Object -Unique)) {
+        if(!(Test-Path -LiteralPath $candidate -PathType Leaf)){continue}
+        if(!$first){$first=$candidate}
+        try {$null=Resolve-WdbNode -RuntimeMode external-node -NodePath $candidate;return $candidate} catch {continue}
+    }
+    return $first
+}
 function Assert-WdbProtectedPath {
     param([Parameter(Mandatory=$true)][string]$Path)
     $full = [IO.Path]::GetFullPath($Path)
@@ -26,7 +43,7 @@ function Resolve-WdbNode {
     [CmdletBinding()]
     param([ValidateSet('with-node','external-node')][string]$RuntimeMode='with-node', [string]$InstallDirectory="$env:ProgramFiles\wdb", [string]$NodePath, [switch]$BuildPayload)
     if ($RuntimeMode -eq 'with-node') { $NodePath=Join-Path $InstallDirectory 'runtime\node.exe' }
-    elseif (!$NodePath) { $NodePath=Join-Path $env:ProgramFiles 'nodejs\node.exe' }
+    elseif (!$NodePath) { $NodePath=Find-WdbNode; if(!$NodePath){throw 'No node.exe found in PATH. Install system-wide Windows x64 Node >=22 from https://nodejs.org/ or choose the with-node installer.'} }
     if (![IO.Path]::IsPathRooted($NodePath) -or $NodePath.StartsWith('\\')) { throw 'Supply an absolute local Node path.' }
     $NodePath=[IO.Path]::GetFullPath($NodePath)
     if (!(Test-Path -LiteralPath $NodePath -PathType Leaf)) { throw "Node runtime not found: $NodePath. Install system-wide Node >=22.0.0 from https://nodejs.org/ or use the with-node installer." }

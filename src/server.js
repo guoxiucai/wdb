@@ -22,7 +22,7 @@ class Bridge {
   this.temporaryClients=new Map();this.taskEvents=new TaskEvents();
   this.forwarding=new ForwardServer();
   this.streams=new ServerStreams({deviceId:this.config.deviceId,authorize:req=>{const c=req.owner||this.identify(req);if(c.revokedAt||!this.clients.includes(c))throw fail('UNAUTHORIZED','Client was revoked',401);if(!this.isApproved(c))throw fail('PAIRING_REQUIRED','Client authorization expired',401);return c;},renew:c=>{if(c.remembered===false)this.temporaryClients.set(c.id,Date.now());},audit:event=>this.audit(event),factories:options.streamFactories||{...this.forwarding.factories(),shell:shellFactory({helperPort:this.config.helperPort,helperSecret:this.helperSecret,deviceId:this.config.deviceId,desktopUser:installation.desktopUser})}});
-  for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.'))fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
+  for(const f of fs.readdirSync(path.join(this.dir,'tasks'),{withFileTypes:true})){if(!f.isDirectory())continue;const t=read(path.join(this.dir,'tasks',f.name,'task.json'),null);if(!t)continue;if(['accepted','running'].includes(t.status)){if(t.op?.startsWith('input.')||t.op==='record.start')fs.writeFileSync(path.join(this.dir,'tasks',f.name,'cancel'),'SERVICE_RESTARTED');t.status='unknown';t.error={code:'SERVICE_RESTARTED',message:'Service restarted; prior operation outcome cannot be confirmed'};t.endedAt=new Date().toISOString();}this.tasks.set(t.id,t);this.save(t);}
   this.timer=setInterval(()=>{for(const [id,a] of this.active){const t=this.tasks.get(id);if(t.op.startsWith('input.')&&Date.now()-(this.leases.get(t.clientId)||0)>10000)this.cancel(t,'CONTROL_CONNECTION_LOST');}this.cleanup();},1000);this.timer.unref();
  }
  save(t){t.deviceId=normalizeDeviceId(t.deviceId);atomic(path.join(this.dir,'tasks',t.id,'task.json'),t);this.taskEvents.publish(t);}
@@ -39,6 +39,7 @@ class Bridge {
  async submit(client,b){
   if(typeof b.op!=='string'||!b.op)throw fail('INVALID_ARGUMENT','Task operation required');
   if(b.op==='connection.approve')throw fail('INTERNAL_OPERATION','Connection approval is initiated only by the server pairing flow',403);
+  if(b.op==='record.stop'){const target=this.owned(b.args?.id,client);if(target.op!=='record.start')throw fail('INVALID_ARGUMENT','Target task is not a recording');}
   let submissionHash;
   if(b.submissionId!==undefined){
    if(typeof b.submissionId!=='string'||!/^[a-f0-9-]{36}$/i.test(b.submissionId))throw fail('INVALID_SUBMISSION_ID','submissionId must be a UUID');
@@ -58,7 +59,7 @@ class Bridge {
    t.status='running';t.startedAt=new Date().toISOString();this.save(t);this.audit({requestId:id,clientId:client.id,op:t.op,status:'running'});
    let outputBytes=0;
    try{
-    const data=await runOperation(t.op,b.args||{},{id,dir,signal:controller.signal,timeoutMs,maxOutput:this.config.maxOutputBytes,onOutput:(kind,s)=>{const available=this.config.maxOutputBytes-outputBytes;if(available>0){const buffer=Buffer.from(s).subarray(0,available);fs.appendFileSync(path.join(dir,kind+'.live'),buffer);outputBytes+=buffer.length;this.taskEvents.output(t,kind,buffer);}}},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});
+    const data=await runOperation(t.op,b.args||{},{id,dir,signal:controller.signal,timeoutMs,maxArtifactBytes:Math.max(1,this.config.maxArtifactBytes-this.artifactBytes()),maxOutput:this.config.maxOutputBytes,onOutput:(kind,s)=>{const available=this.config.maxOutputBytes-outputBytes;if(available>0){const buffer=Buffer.from(s).subarray(0,available);fs.appendFileSync(path.join(dir,kind+'.live'),buffer);outputBytes+=buffer.length;this.taskEvents.output(t,kind,buffer);}}},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});
     t.data=data;t.artifacts=data?.artifacts||[];t.status=data?.timedOut?'timed_out':data?.cancelled||controller.signal.aborted?'cancelled':data?.installerStatus||((data?.exitCode!=null&&data.exitCode!==0)?'failed':'succeeded');
     if(t.status==='failed')t.error={code:'PROCESS_FAILED',message:'Process exited with code '+data.exitCode};if(t.status==='timed_out')t.error={code:'TIMEOUT',message:'Operation timed out; inspect current state before retrying'};
    }catch(e){t.status=controller.signal.aborted||e.code==='CANCELLED'?'cancelled':e.code==='TIMEOUT'?'timed_out':'failed';t.error={code:e.code||'OPERATION_FAILED',message:e.message,...(e.details?{details:e.details}:{})};t.artifacts=e.artifacts||[];}
@@ -104,9 +105,10 @@ class Bridge {
    if(u.pathname==='/v1/info'&&req.method==='GET'){
     const dir=path.join(this.dir,'tasks','.status');fs.mkdirSync(dir,{recursive:true});let desktop;
     try{desktop=await runOperation('desktop.status',{}, {id:'status',dir,timeoutMs:5000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){desktop={available:false,error:{code:e.code,message:e.message}};}
-    const recording=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'.runtime','ffmpeg','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].some(f=>fs.existsSync(f));
+    let media;try{media=await runOperation('record.capabilities',{}, {id:'status',dir,timeoutMs:7000},{helperSecret:this.helperSecret,helperPort:this.config.helperPort});}catch(e){media={defaultBackend:'native',backends:{native:{available:false,reason:e.code||'MEDIA_UNAVAILABLE'}}};}
+    const recording=media.backends.native.available;
     const execution=await executionIdentity(); const interactiveShell=await require('./shell-sessions').helperShellStatus(this.config.helperPort,this.helperSecret);
-    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,serverProcessId:process.pid,execution,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','electron','flutter','input','touch','logs',...(execution.isElevated?['apps']:[]),...(recording?['record']:[])],streaming:this.streams.capabilities(),interactiveShell,desktop,recordingAvailable:recording,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
+    return respond({version:VERSION,protocolVersion:1,deviceId:this.config.deviceId,hostname:os.hostname(),platform:process.platform,architecture:process.arch,serverProcessId:process.pid,execution,capabilities:['shell','files','tasks','screens','screenshot','windows','ui','electron','flutter','input','touch','logs',...(execution.isElevated?['apps']:[]),...(recording?['record']:[])],streaming:this.streams.capabilities(),interactiveShell,desktop,recordingAvailable:recording,media,helperPort:this.config.helperPort,retentionHours:this.config.retentionHours,maxArtifactBytes:this.config.maxArtifactBytes});
    }
    if(u.pathname==='/v1/heartbeat'&&req.method==='POST')return respond({connected:true});
    if(u.pathname==='/v1/connection'&&req.method==='DELETE'){this.streams.disconnect(client.id);this.taskEvents.disconnect(client.id);this.leases.delete(client.id);this.temporaryClients.delete(client.id);for(const t of this.tasks.values())if(t.clientId===client.id&&t.op.startsWith('input.'))this.cancel(t,'DISCONNECTED');return respond({disconnected:true,credentialsRetained:true,reauthorizationRequired:client.remembered===false});}
@@ -142,7 +144,7 @@ class Bridge {
  listen(port=18766,host='127.0.0.1'){
   const server=https.createServer({pfx:fs.readFileSync(path.join(this.dir,'tls.pfx')),passphrase:fs.readFileSync(path.join(this.dir,'tls-password'),'utf8'),minVersion:'TLSv1.2'},(req,res)=>this.route(req,res));server.requestTimeout=0;server.headersTimeout=30000;this.streams.attach(server);this.server=server;return new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>resolve(server));});
  }
- async close(){clearInterval(this.timer);await this.streams.close();this.taskEvents.close();if(this.pendingPairing){this.pendingPairing.controller.abort();try{fs.writeFileSync(path.join(this.pendingPairing.dir,'cancel'),'SERVICE_STOPPED');}catch{}}return new Promise(r=>{this.server?.close(r);this.server?.closeAllConnections();if(!this.server)r();});}
+ async close(){for(const t of this.tasks.values())if(t.op==='record.start')this.cancel(t,'SERVICE_STOPPED');clearInterval(this.timer);await this.streams.close();this.taskEvents.close();if(this.pendingPairing){this.pendingPairing.controller.abort();try{fs.writeFileSync(path.join(this.pendingPairing.dir,'cancel'),'SERVICE_STOPPED');}catch{}}return new Promise(r=>{this.server?.close(r);this.server?.closeAllConnections();if(!this.server)r();});}
 }
 if(require.main===module){const a=argv();const bridge=new Bridge({dataDir:a['data-dir'],helperPort:a['helper-port']});bridge.listen(Number(a.port||18766),a.host||'127.0.0.1').then(()=>console.log(JSON.stringify({event:'server-ready',port:Number(a.port||18766),deviceId:bridge.config.deviceId,pid:process.pid}))).catch(e=>{console.error(e);process.exitCode=1;});}
 module.exports={Bridge};
