@@ -123,8 +123,8 @@ public static class DesktopBridge {
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             buttons.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             Countdown=new Label{Name="Countdown",Text="120 秒后关闭",AutoSize=true,Margin=new Padding(0,0,0,12),ForeColor=Color.FromArgb(114,117,124)};
-            Allow=new Button{Name="Allow",Text="同意",AutoSize=true,MinimumSize=new Size(96,48),Margin=new Padding(0,1,1,0),AccessibleName="同意连接"};
-            Deny=new Button{Name="Deny",Text="拒绝",AutoSize=true,MinimumSize=new Size(96,48),Margin=new Padding(1,1,0,0),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
+            Allow=new Button{Name="Allow",Text="同意",AutoSize=true,MinimumSize=new Size(96,48),Margin=new Padding(1,1,0,0),AccessibleName="同意连接"};
+            Deny=new Button{Name="Deny",Text="拒绝",AutoSize=true,MinimumSize=new Size(96,48),Margin=new Padding(0,1,1,0),AccessibleName="拒绝连接",DialogResult=DialogResult.Cancel};
             foreach(var button in new[]{Allow,Deny}) {
                 button.MaximumSize=new Size(0,48);
                 button.FlatStyle=FlatStyle.Flat;button.FlatAppearance.BorderSize=0;
@@ -132,7 +132,7 @@ public static class DesktopBridge {
                 button.FlatAppearance.MouseDownBackColor=Color.FromArgb(222,235,255);
                 button.ForeColor=Color.FromArgb(0,102,255);button.Dock=DockStyle.Fill;button.Cursor=Cursors.Hand;
             }
-            buttons.Controls.Add(Allow,0,0);buttons.Controls.Add(Deny,1,0);
+            buttons.Controls.Add(Deny,0,0);buttons.Controls.Add(Allow,1,0);
             int row=0;foreach(Control control in new Control[]{Identity,Heading,Remember}){control.Margin=new Padding(0,0,0,8);content.Controls.Add(control,0,row++);}
             Heading.Margin=new Padding(0,0,0,20);
             content.Controls.Add(Countdown,0,3);content.Controls.Add(buttons,0,4);Controls.Add(content);
