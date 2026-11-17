@@ -7,7 +7,6 @@
 <p align="center"><strong>用一套 CLI 连接、操作和调试 Windows，让开发者与 AI Agent 共用同一条调试通路。</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/CLI-0.1.1-blue" alt="CLI 版本 0.1.1" />
   <img src="https://img.shields.io/badge/server-Windows-0078D4" alt="Windows 服务端" />
   <img src="https://img.shields.io/badge/CLI-Windows%20%7C%20macOS-333333" alt="Windows 与 macOS CLI" />
   <img src="https://img.shields.io/badge/Node.js-22%2B-43853D" alt="Node.js 22 及以上" />
@@ -28,7 +27,7 @@ WDB (Windows Debug Bridge) 由 Windows 后台服务、跨平台 CLI 和 Agent Sk
 
 WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截图与录屏用于观察和取证，目前不提供实时远程桌面视频串流。
 
-CLI 当前版本为 **0.1.1**，通过 npm 分发；Windows 服务端 **0.1.0** 安装器见 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0)。项目采用 [MIT 许可证](LICENSE)。
+本文默认介绍最新发布版本。CLI 通过 npm 分发；Windows 服务端安装器见 [GitHub 最新 Release](https://github.com/guoxiucai/wdb/releases/latest)。项目采用 [MIT 许可证](LICENSE)。
 
 <a id="quick-start"></a>
 
@@ -60,12 +59,12 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 
 #### Windows 服务端
 
-从 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0) 下载以下一种安装器，并按同页 SHA-256 清单核对下载文件。
+从 [GitHub 最新 Release](https://github.com/guoxiucai/wdb/releases/latest) 下载以下一种安装器，并按同页 SHA-256 清单核对下载文件。
 
-| 安装器 | 适用场景 |
+| 安装器类型 | 适用场景 |
 | --- | --- |
-| `wdb-server-0.1.0-windows-x64-with-node-setup.exe` | 自带固定版本 Node，目标机器无需安装 Node、npm、Git 或编译器 |
-| `wdb-server-0.1.0-windows-x64-external-node-setup.exe` | 使用系统已安装的合格 Node；要求受保护的安装路径、有效签名和匹配版本 |
+| `with-node` | 自带固定版本 Node，目标机器无需安装 Node、npm、Git 或编译器 |
+| `external-node` | 使用系统已安装的合格 Node；要求受保护的安装路径、有效签名和匹配版本 |
 
 双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
 
@@ -95,7 +94,7 @@ Windows PowerShell 如限制 npm 生成的 `.ps1` 启动器，可使用 `wdb.cmd
 
 npm 包名为 `@tsingwill/wdb`，安装后的命令为 `wdb`。源码构建方法见下方[本地开发与构建](#development)，安装与配置见 [npm CLI 指南](docs/NPM-CLIENT.md)。
 
-从 CLI **0.1.1** 起可执行 `wdb update`：检查发布版本、展示目标，确认后更新 CLI 及已登记的对应 Skill；只检查用 `wdb update --check --json`。旧 **0.1.0** 尚无此命令，先执行上面的 npm 安装命令升级一次。更新不需要连接设备，也不会更新 Windows 服务或 Node，详见[更新指南](docs/UPDATING.md)。
+执行 `wdb update` 检查最新发布版本，确认后更新 CLI 及已登记的对应 Skill；只检查用 `wdb update --check --json`。若旧客户端不支持此命令，重新执行上面的 npm 安装命令即可升级。更新不需要连接设备，也不会更新 Windows 服务或 Node，详见[更新指南](docs/UPDATING.md)。
 
 ### 3. 连接设备
 
