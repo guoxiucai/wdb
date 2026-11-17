@@ -1,0 +1,4 @@
+a2c8bf3408dde83c011c8517a65d4bec3bd4867175b635127fd24c35302fb782  wdb-server-0.1.2-windows-x64-external-node-no-ffmpeg-setup.exe
+298d5fab450c7f29a7aaae0534a7a4d87d4a17b1db0cb604511a5b0528761088  wdb-server-0.1.2-windows-x64-external-node-with-ffmpeg-setup.exe
+e857545a260cc09d605c3c77cf2ac3fc0f5a15bbf67741b76f7af684b154481d  wdb-server-0.1.2-windows-x64-with-node-no-ffmpeg-setup.exe
+bbe3e5be20f0c8b7d6b32e75c7bce037832edbdb4aace966918e68a509487a16  wdb-server-0.1.2-windows-x64-with-node-with-ffmpeg-setup.exe

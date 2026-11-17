@@ -63,10 +63,12 @@ Skill 指导 Agent 先查询窗口和控件，再执行操作，最后重新观�
 
 | 安装器类型 | 适用场景 |
 | --- | --- |
-| `with-node` | 自带固定版本 Node，目标机器无需安装 Node、npm、Git 或编译器 |
-| `external-node` | 使用系统已安装的合格 Node；要求受保护的安装路径、有效签名和匹配版本 |
+| `with-node-with-ffmpeg` | 内置 Node、原生录屏和可选 FFmpeg 后端 |
+| `with-node-no-ffmpeg` | 内置 Node 和原生录屏，无需 FFmpeg |
+| `external-node-with-ffmpeg` | 使用外部合格 Node，内置原生录屏和可选 FFmpeg 后端 |
+| `external-node-no-ffmpeg` | 使用外部合格 Node，内置原生录屏，无需 FFmpeg |
 
-双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。两个安装器共用一个服务与数据目录，可切换升级。
+双击安装器，通过 Windows UAC，并确认实际使用桌面的用户。安装完成后，`WdbService` 自动启动；程序位于 `C:\Program Files\wdb`，数据位于 `C:\ProgramData\wdb`。四个安装器共用一个服务与数据目录，可切换升级。
 
 安装器会将 `C:\Program Files\wdb\bin` 加入系统 PATH。重新打开 PowerShell 后可直接运行 `wdb --help` 或 `wdb connect localhost:18766`；服务器本机无需再单独安装 npm CLI。该入口使用服务绑定的 Node，以当前用户权限执行。其他电脑上的客户端按下方说明安装 CLI。
 
@@ -237,7 +239,7 @@ Windows 的 CLI 功能自验证见 [localhost 验证指南](docs/CLI-LOCALHOST-V
 node scripts/build-cli-npm.js --development true --license MIT --license-file LICENSE --output dist/npm/local-dev-01
 ```
 
-仅构建服务端双 EXE，生成未签名的 Development 安装包：
+仅构建服务端四种 EXE，生成未签名的 Development 安装包：
 
 ```powershell
 npm run build:server

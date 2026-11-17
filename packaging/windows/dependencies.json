@@ -7,6 +7,7 @@
   },
   "ffmpeg": {
     "version": "9.0.2-essentials_build",
+    "vendoredArchiveSha256": "dd9972424e8e361ff104cd431967f831e15f2e2dad4f6ef70f0f2860b19029ce",
     "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.7z",
     "archiveSha256": "4705843ccaaf54257c16ad90f3e952ece33c17df964ecf7bfdbb0f49c7171077",
     "files": [

@@ -1,4 +1,6 @@
-# Windows 双运行时安装器与本地构建
+# Windows 四组合安装器与本地构建
+
+external-node 安装器检查系统默认目录及其进程 PATH 中的 node.exe，优先自动填写第一个通过权限、签名、版本和架构校验的系统运行时；不执行未经路径和签名校验的候选文件。如果没有合格候选，则显示发现的路径及不合格原因，供用户修改。`/NODEPATH` 显式参数优先，也可以在账户配置页手动修改路径。提升权限后的 PATH 可能与原用户终端不同；未发现时可手动填写绝对路径。点击下一步会检查路径权限、官方签名、x64 和 Node >=22；不安全或不可用时直接显示具体原因和处理办法：安装系统级官方 Node、请管理员部署到受保护目录，或改用 with-node 包。不会修改用户 PATH，也不依赖任何测试目录。静默安装同样执行检查，进入安装前再次复核。
 
 项目许可为 MIT。安装器支持未签名 Development 测试包及人工签名 Manual 包；CLI/npm 可通过 ServerOnly 从本轮服务端构建中排除。正式发布动作由维护者执行。CLI 分发见 [NPM-CLIENT.md](NPM-CLIENT.md)。
 
@@ -6,7 +8,18 @@
 
 ## 构建
 
-一键构建服务端双版本（默认不签名、不访问签名服务、不构建 npm）：
+每次服务端构建产生同一源码与 BuildId 的四个组合：
+
+| variantId | Node | FFmpeg |
+| --- | --- | --- |
+| with-node-with-ffmpeg | 内置 | 内置 |
+| with-node-no-ffmpeg | 内置 | 无 |
+| external-node-with-ffmpeg | 外部合格 Node | 内置 |
+| external-node-no-ffmpeg | 外部合格 Node | 无 |
+
+四包均包含原生无声录屏，默认不调用 FFmpeg，详见 [录屏指南](RECORDING.md)。无 FFmpeg 包无需安装外部 FFmpeg。文件名包含完整 variantId；升级切换到 no-ffmpeg 后会删除旧安装器拥有的 FFmpeg 文件，失败则按事务恢复。
+
+一键构建服务端四种组合（默认不签名、不访问签名服务、不构建 npm）：
 
 ```powershell
 npm run build:server
@@ -21,11 +34,11 @@ npm run build:server -- -BuildId server-dev-example
 npm run build:server -- -BuildId server-dev-example -Resume
 ```
 
-该入口沿用 Prepare → Package → Finalize，构建 with-node 和 external-node 两个 Setup.exe，校验冻结内容及最终哈希。默认输出位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含双 EXE 和 SHA256SUMS.txt；不会覆盖既有 `release/0.1.0`。`-OutputRoot` 可指定构建工作目录，`-OutputDirectory` 可指定产物目录，已有不同内容文件会拒绝覆盖。构建不会安装程序或重启服务。
+该入口沿用 Prepare → Package → Finalize，构建 Node × FFmpeg 四组合 Setup.exe，校验冻结内容及最终哈希。默认输出位于 `dist/server-builds/<BuildId>/output/<版本>/`，包含四种 EXE 和 SHA256SUMS.txt；不会覆盖既有 `release/0.1.0`。`-OutputRoot` 可指定构建工作目录，`-OutputDirectory` 可指定产物目录，已有不同内容文件会拒绝覆盖。构建不会安装程序或重启服务。
 
 同一 BuildId 按串行方式执行；前一个构建进程退出后再使用 Resume。仅可续跑此入口创建的 Development 服务端构建；源码或版本修改后使用新 BuildId。通用的人工签名阶段见下文，具体组织的签名服务及配置不属于公开构建流程。
 
-构建机需要 Windows x64、Node/npm 22+、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 缓存沿用 `.runtime/ffmpeg/`。所有校验先于执行，缓存齐备后不需要下载依赖。
+构建机需要 Windows x64、Node/npm 22+、.NET Framework C# 编译器和 Inno Setup 6.7.1。`packaging/windows/dependencies.json` 固定 Node、FFmpeg、Inno 编译工具文件的来源和 SHA-256。Node 缓存放在 `.runtime/dependencies/node-v24.15.0-win-x64/`（node.exe 与 NODE-LICENSE.txt）；FFmpeg 固定文件随工程保存在 `vendor/ffmpeg/`，包含本地 ffmpeg.zip、许可及来源记录。构建验证压缩包 SHA-256 后在本地展开 exe，再按锁定的原始 SHA-256 校验；缺失或不匹配直接失败，不下载 FFmpeg；`fetch-ffmpeg.ps1` 仅为手动维护工具。所有校验先于执行，其他缓存齐备后不需要下载依赖。
 
 ```powershell
 .\scripts\build-release.ps1 -Phase Prepare -SigningMode Development -BuildId my-build
@@ -34,18 +47,18 @@ npm run build:server -- -BuildId server-dev-example -Resume
 .\scripts\verify-release.ps1 -ReleaseDirectory dist/release-builds/my-build/release/Development
 ```
 
-Prepare 只编译一次服务宿主、桌面桥和 PtyHost，冻结公共 payload、构建模板、npm tarball 和签名前基线。Package 只消费该 BuildId，生成两个独立的单文件 EXE；每个都包含 FFmpeg、许可、服务与助手。with-node 包含已校验官方 Node；external-node 不含 Node，也不在安装时下载 Node。两者共用 AppId `{CB6CE060-4707-4E8F-880A-64CBB085D781}`、服务名和升级通道，不能并存为两套服务。
+Prepare 只编译一次 CLI 启动器、服务宿主、桌面桥、PtyHost 和 CaptureHost，冻结公共 payload、构建模板、npm tarball 和签名前基线。Package 只消费该 BuildId，生成四个独立的单文件 EXE；每个都包含原生无声录屏组件、服务与助手；FFmpeg 仅随 with-ffmpeg 组合分发。with-node 包含已校验官方 Node；external-node 不含 Node，也不在安装时下载 Node。四包共用 AppId `{CB6CE060-4707-4E8F-880A-64CBB085D781}`、服务名和升级通道，不能并存为多套服务。
 
-Release 目录包含两个 Setup.exe、同一个 npm tarball、SHA256SUMS、release-manifest、signing-report、verification-report。报告分开记录下载大小、解压 payload 大小和实机安装大小。`releaseReady:false` 表示本地开发/等待发行验收，不可当作正式签名版本。
+Release 目录包含四个 Setup.exe、同一个 npm tarball、SHA256SUMS、release-manifest、signing-report、verification-report。报告分开记录下载大小、解压 payload 大小和实机安装大小。`releaseReady:false` 表示本地开发/等待发行验收，不可当作正式签名版本。
 
 ## 安装和运行时
 
 双击 EXE，通过正常 UAC，再确认实际桌面用户。默认目标是当前控制台用户，不使用提升后的管理员用户名。静默安装必须显式传用户：
 
 ```powershell
-Start-Process '.\wdb-server-0.1.0-windows-x64-with-node-Development-setup.exe' -Wait `
+Start-Process '.\wdb-server-0.1.0-windows-x64-with-node-with-ffmpeg-Development-setup.exe' -Wait `
   -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DESKTOPUSER="DOMAIN\User"'
-Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-Development-setup.exe' -Wait `
+Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-with-ffmpeg-Development-setup.exe' -Wait `
   -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DESKTOPUSER="DOMAIN\User" /NODEPATH="C:\Program Files\nodejs\node.exe"'
 ```
 
@@ -57,7 +70,7 @@ Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-Development-setup.ex
 
 ## 升级、修复与卸载
 
-两个 EXE 安装器都会安装 `C:\Program Files\wdb\bin\wdb.exe` 并将此目录加入系统 PATH。安装后重新打开 PowerShell，即可运行 `wdb --help`、`wdb connect localhost:18766` 和 `wdb clients list`；首次连接仍需本机弹窗同意。已打开的终端不会自动刷新环境变量；若新标签页仍继承旧 PATH，请完全退出并重新打开终端应用。
+四个 EXE 安装器都会安装 `C:\Program Files\wdb\bin\wdb.exe` 并将此目录加入系统 PATH。安装后重新打开 PowerShell，即可运行 `wdb --help`、`wdb connect localhost:18766` 和 `wdb clients list`；首次连接仍需本机弹窗同意。已打开的终端不会自动刷新环境变量；若新标签页仍继承旧 PATH，请完全退出并重新打开终端应用。
 
 启动器读取受保护的 `runtime-binding.json`，使用与服务相同的 Node 路径，保留当前用户身份、工作目录、标准输入输出和退出码。不会将捆绑 Node 加入 PATH，也不会提升 CLI 权限。安装器保留其他 PATH 项，升级不重复添加，失败回滚和卸载只删除它添加的 WDB 项；预先由用户添加的同路径项保留。若已有其他版本的 `wdb`，用 `Get-Command wdb -All` 检查命令优先级，或直接运行安装目录的 `bin\wdb.exe`。
 
@@ -73,18 +86,18 @@ Start-Process '.\wdb-server-0.1.0-windows-x64-external-node-Development-setup.ex
 
 ## 人工签名续跑
 
-仅构建服务端双 EXE 时使用 `-ServerOnly`，不构建 npm、不要求 npm 包名。维护者自行负责手动签名、无需绑定或验证证书时可显式选择 `-TrustManualSignatures`；报告记录 `user-managed-not-validated`，不宣称证书链、发布者或时间戳已验证。文件冻结与最终 SHA-256 仍执行。默认未指定该选项时保持证书/时间戳校验。
+仅构建服务端四种 EXE 时使用 `-ServerOnly`，不构建 npm、不要求 npm 包名。维护者自行负责手动签名、无需绑定或验证证书时可显式选择 `-TrustManualSignatures`；报告记录 `user-managed-not-validated`，不宣称证书链、发布者或时间戳已验证。文件冻结与最终 SHA-256 仍执行。默认未指定该选项时保持证书/时间戳校验。
 
 ```powershell
 .\scripts\build-release.ps1 -Phase Prepare -SigningMode Manual -ServerOnly -TrustManualSignatures -Publisher WDB -License MIT -LicenseFile LICENSE -BuildId server-0-1-0-signing
 ```
 
-Prepare 输出的 signing-plan.json 是精确清单：当前包含四个自有 EXE（CLI 启动器、服务宿主、桌面桥、PtyHost）、十三个 PowerShell 脚本，以及本次分发的 FFmpeg。FFmpeg 保持第三方归属与许可，签名表示分发者签署此二进制；Node 保留上游签名，不重新签署。JS、JSON、配置、文档不做独立 Authenticode 签名，其内容由包内哈希清单覆盖。
+Prepare 输出的 signing-plan.json 是精确清单：当前包含五个自有 EXE（CLI 启动器、服务宿主、桌面桥、PtyHost、CaptureHost）、十三个 PowerShell 脚本，以及本次分发的 FFmpeg。FFmpeg 保持第三方归属与许可，签名表示分发者签署此二进制；Node 保留上游签名，不重新签署。JS、JSON、配置、文档不做独立 Authenticode 签名，其内容由包内哈希清单覆盖。
 
-只签 `common` 清单中的文件，保持 PowerShell 的 UTF-8 BOM 编码，不改正文；不要改 `pristine`。之后由 Package 生成待签卸载程序，签好再续跑；最后签两个 Setup.exe。最终文件签好后才能生成发布 SHA256SUMS，不能使用签名前的哈希。
+只签 `common` 清单中的文件，保持 PowerShell 的 UTF-8 BOM 编码，不改正文；不要改 `pristine`。之后由 Package 生成待签卸载程序，签好再续跑；最后签四个 Setup.exe。最终文件签好后才能生成发布 SHA256SUMS，不能使用签名前的哈希。
 
 Prepare 的 Manual 模式要求干净提交、发布者与许可信息；完整 CLI 构建还要求 npm 名称。默认要求 SignerThumbprint；TrustManualSignatures 按维护者的手动签名确认继续。它导出 signing-plan.json 与文字清单；用户对 common 清单中的 EXE/脚本逐个签名并加时间戳，再执行 Package。原始程序字节冻结；只接受 Authenticode 排除字段和附加证书、或 PowerShell 附加签名块的变化，不能用新程序替换后刷新 hash。
 
-首次 Package 可能返回 `awaiting-uninstaller-signature` 和缓存文件路径；用户签名后用相同 BuildId 续跑。启用 `SignedUninstaller=yes`，保证编译器使用签名卸载程序/安装临时副本。两个 Setup.exe 生成后用户逐个签名，Finalize 验证发布者、时间戳、原始内容及最终 SHA-256；脚本不访问私钥或请求密码/PIN。[Inno 官方签名流程](https://jrsoftware.org/ishelp/topic_setup_signeduninstaller.htm)。
+首次 Package 可能返回 `awaiting-uninstaller-signature` 和缓存文件路径；用户签名后用相同 BuildId 续跑。启用 `SignedUninstaller=yes`，保证编译器使用签名卸载程序/安装临时副本。四个 Setup.exe 生成后用户逐个签名，Finalize 验证发布者、时间戳、原始内容及最终 SHA-256；脚本不访问私钥或请求密码/PIN。[Inno 官方签名流程](https://jrsoftware.org/ishelp/topic_setup_signeduninstaller.htm)。
 
 第三方 Node 保留上游签名；FFmpeg 的未签名状态如实记录，不视为自有签名。Development 模式允许未签名本地验证，Manual 模式不能跳过自有签名。真实人工证书签名、干净 Windows、Mac npm 和 registry 测试是独立验收项；本轮不会执行 npm publish 或上传安装包。

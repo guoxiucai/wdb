@@ -5,7 +5,7 @@ const http=require('node:http');
 const crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
 const {ROOT,fail,powershell,execute,read}=require('./common');
-const {parseProgress,recordingStats}=require('./recording-stats');
+const recordings=new (require('./recording-manager').RecordingManager)({prepare:require('./recording-backends').prepare});
 function psQuote(s){return "'"+String(s).replaceAll("'","''")+"'";}
 async function native(op,args,ctx){
   if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
@@ -30,7 +30,7 @@ async function helperRequest(op,args,ctx,config){
      res.setEncoding('utf8');let raw='',bytes=0;res.on('data',c=>{raw+=c;bytes+=Buffer.byteLength(c);if(bytes>16*1024*1024)res.destroy(fail('HELPER_RESPONSE_TOO_LARGE','Desktop helper JSON exceeds 16 MiB'));});res.on('error',reject);res.on('end',()=>{try{const r=JSON.parse(raw);if(!r.ok)throw Object.assign(fail(r.error.code,r.error.message),{details:r.error.details,artifacts:r.error.artifacts});resolve(r.data);}catch(e){reject(e);}});
    });
    req.on('error',e=>reject(Object.assign(fail('DESKTOP_HELPER_UNAVAILABLE',e.message),{causeCode:e.code})));req.setTimeout(ctx.timeoutMs+15000,()=>req.destroy(new Error('Desktop helper timeout')));
-   req.end(JSON.stringify({op,args,taskId:ctx.id,dir:ctx.dir,timeoutMs:Math.max(1,ctx.timeoutMs-(Date.now()-started))}));
+   req.end(JSON.stringify({op,args,taskId:ctx.id,dir:ctx.dir,timeoutMs:Math.max(1,ctx.timeoutMs-(Date.now()-started)),maxArtifactBytes:ctx.maxArtifactBytes}));
  });}catch(e){
    if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled while waiting for the desktop helper');
    // Connection refused means the local helper could not have accepted this request.
@@ -81,27 +81,6 @@ async function eventLogs(args){
  const script='$ErrorActionPreference="Stop"; try { @(Get-WinEvent -FilterHashtable '+filter+' -MaxEvents '+(limit+offset)+' | Select-Object -Skip '+offset+' -First '+limit+' | Select-Object TimeCreated,Id,LevelDisplayName,ProviderName,RecordId,Message) | ConvertTo-Json -Depth 5 -Compress } catch { if ($_.FullyQualifiedErrorId -like "NoMatchingEventsFound*") { "[]" } else { throw } }';
  const r=await powershell(script,{timeoutMs:30000});if(r.exitCode!==0)throw fail('EVENT_LOG_FAILED',r.stderr);let entries=JSON.parse(r.stdout||'[]');entries=Array.isArray(entries)?entries:entries?[entries]:[];const fetched=entries.length;if(args.keyword)entries=entries.filter(e=>e.Message?.includes(args.keyword));return {entries,nextOffset:fetched===limit?offset+limit:null};
 }
-const recordings=new Map();
-async function record(op,args,ctx){
- if(op==='record.stop'){
-   const entry=recordings.get(args.id);if(!entry)throw fail('RECORDING_NOT_FOUND','Recording id is absent or process restarted');
-   if(entry.child.exitCode===null)entry.child.stdin.write('q\n');await entry.done;return entry.result;
- }
- const ffmpeg=[path.join(ROOT,'runtime','ffmpeg.exe'),path.join(ROOT,'.runtime','ffmpeg','ffmpeg.exe'),path.join(ROOT,'dist','wdb-windows-x64','runtime','ffmpeg.exe')].find(f=>fs.existsSync(f));if(!ffmpeg)throw fail('CAPABILITY_UNAVAILABLE','Bundled ffmpeg is not installed');
- const duration=Number(args.durationSeconds||600);if(!(duration>0&&duration<=3600))throw fail('INVALID_DURATION','Recording duration must be 1..3600 seconds');
- const screens=await native('screens',{},ctx);const list=Array.isArray(screens)?screens:screens.screens||screens.monitors;const monitor=list?.[Number(args.monitor||0)];if(!monitor)throw fail('MONITOR_NOT_FOUND','Monitor unavailable');
- const target=path.join(ctx.dir,'recording.mp4');const id=ctx.id;const fps=Number(args.fps||30);if(!Number.isInteger(fps)||fps<1||fps>60)throw fail('INVALID_FPS','fps must be 1..60');
- const captureIndex=Number(args.captureIndex??args.monitor??0);if(!Number.isInteger(captureIndex)||captureIndex<0)throw fail('INVALID_MONITOR','captureIndex must be a nonnegative DXGI output index');
- const progressPath=path.join(ctx.dir,'encoder-progress.log');
- const cmd=['-y','-hide_banner','-nostats','-loglevel','warning','-progress',progressPath,'-f','lavfi','-i',`ddagrab=output_idx=${captureIndex}:framerate=${fps}`,'-t',String(duration),'-vf','hwdownload,format=bgra,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-r',String(fps),'-fps_mode','cfr','-an','-movflags','+faststart',target];
- const entry={};let resolveDone;entry.done=new Promise(r=>resolveDone=r);recordings.set(id,entry);
- const child=spawn(ffmpeg,cmd,{windowsHide:true,stdio:['pipe','ignore','pipe']});entry.child=child;child.stdin.on('error',()=>{});let stderr='';child.stderr.on('data',c=>{stderr=(stderr+c).slice(-65536);});
- const started=Date.now();const timer=setTimeout(()=>child.stdin.write('q\n'),(duration+10)*1000);const abort=()=>child.stdin.write('q\n');ctx.signal?.addEventListener('abort',abort);
- const hardStop=setTimeout(()=>{if(child.exitCode===null)spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});},(duration+30)*1000);
- return await new Promise((resolve,reject)=>{child.on('error',e=>{clearTimeout(timer);clearTimeout(hardStop);reject(e);resolveDone();});child.on('close',async code=>{clearTimeout(timer);clearTimeout(hardStop);ctx.signal?.removeEventListener('abort',abort);const log=path.join(ctx.dir,'encoder.log');fs.writeFileSync(log,stderr);const probe=null; // Legacy optional metadata field; no ffprobe runtime dependency.
- let progress={};try{progress=parseProgress(fs.readFileSync(progressPath,'utf8'));}catch{}
- entry.result={id,path:target,exitCode:code,durationMs:Date.now()-started,captureMethod:'DXGI Desktop Duplication (ddagrab)',monitor:Number(args.monitor||0),captureIndex,monitorMappingVerified:list.length===1,requestedFps:fps,probe,progress,recordingStats:recordingStats(progress),encoderLog:log,artifacts:fs.existsSync(target)?[{path:target,type:'video/mp4',size:fs.statSync(target).size},{path:log,type:'text/plain',size:fs.statSync(log).size},...(fs.existsSync(progressPath)?[{path:progressPath,type:'text/plain',size:fs.statSync(progressPath).size}]:[])]:[]};resolveDone();recordings.delete(id);if(code===0)resolve(entry.result);else reject(fail('RECORDING_FAILED',stderr.slice(-2000)));});});
-}
 async function runOperation(op,args,ctx,config={}){
  if(ctx.signal?.aborted)throw fail('CANCELLED','Operation cancelled before execution');
  const desktop=['desktop.','screens','screenshot','windows.','ui.','input.','app.launch','record.','electron.','flutter.','connection.approve'].some(p=>op.startsWith(p));
@@ -124,8 +103,9 @@ async function runOperation(op,args,ctx,config={}){
  }
  if(op==='logs.file')return logFile(args);
  if(op==='logs.events')return eventLogs(args);
- if(op.startsWith('record.'))return record(op,args,ctx);
+ if(op==='record.capabilities')return require('./media-capabilities').capabilities(ctx);
+ if(op.startsWith('record.'))return recordings.run(op,args,ctx);
  if(desktop){if(op==='screenshot')args={...args,path:path.join(ctx.dir,'screenshot.png')};const data=await native(op,args,ctx);if(op==='screenshot')return {...data,artifacts:[{path:args.path,type:'image/png',size:fs.statSync(args.path).size}]};return data;}
  throw fail('UNKNOWN_OPERATION','Unsupported operation: '+op);
 }
-module.exports={runOperation,native,psQuote,logFile,eventLogs,executionIdentity};
+module.exports={runOperation,native,psQuote,logFile,eventLogs,executionIdentity,closeRecordings:()=>recordings.close()};

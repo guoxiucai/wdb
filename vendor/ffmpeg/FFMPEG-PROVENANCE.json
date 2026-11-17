@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.7z",
+  "archiveSha256": "4705843ccaaf54257c16ad90f3e952ece33c17df964ecf7bfdbb0f49c7171077",
+  "version": "9.0.2-essentials_build",
+  "license": "GPL-3.0-or-later",
+  "upstream": "https://ffmpeg.org",
+  "buildProvider": "https://www.gyan.dev/ffmpeg/builds/",
+  "sourceCode": "https://github.com/FFmpeg/FFmpeg/tree/946fcce07b"
+}

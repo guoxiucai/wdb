@@ -23,6 +23,7 @@ Copy-RuntimeFile $nodePath (Join-Path $outputRoot 'runtime\node.exe')
 if (!$HostOnly) {
     & node.exe (Join-Path $PSScriptRoot 'copy-ws.js') $outputRoot
     if($LASTEXITCODE -ne 0){throw 'WebSocket dependency staging failed'}
+    & (Join-Path $PSScriptRoot 'build-capture.ps1') -OutputFile (Join-Path $outputRoot 'native\bin\CaptureHost.exe') | Out-Null
     & (Join-Path $PSScriptRoot 'build-pty.ps1') -OutputFile (Join-Path $outputRoot 'native\bin\PtyHost.exe') | Out-Null
     foreach ($name in @('src','bin','scripts','skills','docs','native','tests','package.json','README.md','wdb.cmd','wdb-phase1-requirements.md')) {
         $item = Join-Path $sourceRoot $name
@@ -42,10 +43,12 @@ if (!$HostOnly) {
     $nodeLicense = Join-Path (Split-Path $nodePath -Parent) 'LICENSE'
     if (!(Test-Path -LiteralPath $nodeLicense)) { $nodeLicense = Join-Path $sourceRoot '.runtime\NODE-LICENSE.txt' }
     if (Test-Path -LiteralPath $nodeLicense) { Copy-Item -LiteralPath $nodeLicense -Destination (Join-Path $outputRoot 'runtime\NODE-LICENSE.txt') -Force }
-    $ffmpegRoot = Join-Path $sourceRoot '.runtime\ffmpeg'
+    . (Join-Path $PSScriptRoot 'expand-vendored-ffmpeg.ps1')
+    Expand-WdbVendoredFFmpeg -SourceRoot $sourceRoot
+    $ffmpegRoot = Join-Path $sourceRoot 'vendor\ffmpeg'
     if (Test-Path -LiteralPath $ffmpegRoot) {
-        Get-ChildItem -LiteralPath $ffmpegRoot -File | Where-Object { $_.Name -ne 'ffprobe.exe' } | ForEach-Object { Copy-RuntimeFile $_.FullName (Join-Path $outputRoot "runtime\$($_.Name)") }
-    } else { Write-Warning 'FFmpeg is absent: run scripts/fetch-ffmpeg.ps1 before producing the recording-enabled offline bundle.' }
+        Get-ChildItem -LiteralPath $ffmpegRoot -File | Where-Object { $_.Name -eq 'ffmpeg.exe' -or $_.Name -like 'FFMPEG-*' } | ForEach-Object { Copy-RuntimeFile $_.FullName (Join-Path $outputRoot "runtime\$($_.Name)") }
+    } else { Write-Warning 'FFmpeg is absent: restore vendor/ffmpeg from the project to enable the optional FFmpeg backend. Native recording remains available.' }
     . (Join-Path $PSScriptRoot 'package-metadata.ps1')
     Write-WdbPackageMetadata -SourceRoot $sourceRoot -OutputRoot $outputRoot -Kind Server -Node (Join-Path $outputRoot 'runtime\node.exe')
     $manifest = Get-ChildItem -LiteralPath $outputRoot -Recurse -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
