@@ -7,7 +7,7 @@ npm install -g @tsingwill/wdb
 wdb --version
 ```
 
-CLI 0.1.1 通过 npm 分发；需要离线 tarball 时运行 `npm pack @tsingwill/wdb@0.1.1`。Windows 服务端安装器仍见 [GitHub Release v0.1.0](https://github.com/guoxiucai/wdb/releases/tag/v0.1.0)。
+CLI 通过 npm 分发。需要下载最新离线 tarball 时运行 `npm pack @tsingwill/wdb@latest`。Windows 服务端安装器见 [GitHub 最新发行版](https://github.com/guoxiucai/wdb/releases/latest)。
 
 CLI 0.1.1 起支持 `wdb update`（确认后更新）与 `wdb update --check --json`（只检查）。旧 0.1.0 用户先运行上面的 npm 安装命令升级，完整行为见 [更新指南](UPDATING.md)。
 
@@ -18,7 +18,8 @@ Windows/macOS 共用一个 tarball，支持 Node `>=22.0.0`。唯一第三方运
 ```powershell
 # 新目录，不覆盖已有构建；仅本地开发包
 node scripts/build-cli-npm.js --development true --license MIT --license-file LICENSE --output dist/npm/my-build
-node scripts/verify-cli-npm.js dist/npm/my-build/wdb-cli-local-test-0.1.0.tgz 'D:\测试 prefix'
+$tarball = (Get-ChildItem -LiteralPath dist/npm/my-build -Filter '*.tgz').FullName
+node scripts/verify-cli-npm.js $tarball 'D:\测试 prefix'
 # 从已安装产物运行
 & 'D:\测试 prefix\wdb.cmd' connect <服务器IP>
 & 'D:\测试 prefix\wdb.cmd' info
