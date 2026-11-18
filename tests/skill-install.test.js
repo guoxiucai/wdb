@@ -13,12 +13,15 @@ test('Windows PowerShell bootstrap isolates iex validation and preserves caller 
 });
 function fixtureFiles(){return new Map([['SKILL.md',{bytes:Buffer.from('---\nname: wdb\ndescription: test\n---\n'),mode:0o644}],['references/说明.md',{bytes:Buffer.from('完整的参考内容'),mode:0o644}]]);}
 async function temporary(t){const root=await fs.mkdtemp(path.join(os.tmpdir(),'wdb-install-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));return root;}
-test('arguments, both agent locations, project spaces/Unicode and interactive choices',async()=>{
+test('multi-select arguments, legacy aliases and interactive choices',async()=>{
  assert.throws(()=>parseArgs(['--scope','system']),/scope/);assert.throws(()=>parseArgs(['--agent']),/arguments/);assert.throws(()=>parseArgs(['--project','x','--scope','user']),/cannot/);
  const home=path.resolve('user home'),project=path.resolve('中文 project');
  assert.deepEqual(targets({agent:'both',scope:'user'},home).map(t=>t.directory),[path.join(home,'.agents/skills/wdb'),path.join(home,'.claude/skills/wdb')]);
  assert.deepEqual(targets({agent:'both',scope:'project',project},home).map(t=>t.directory),[path.join(project,'.agents/skills/wdb'),path.join(project,'.claude/skills/wdb')]);
- const answers=['wrong','3','2',project];const result=await choose({},async()=>answers.shift());assert.equal(result.agent,'both');assert.equal(result.scope,'project');assert.equal(result.project,project);
+ assert.equal(parseArgs(['--agent','shared,cursor','--agent','codex,claude']).agent,'shared,cursor,claude');
+ assert.throws(()=>parseArgs(['--agent','cursor,unknown']),/--agent accepts/);
+ const answers=['wrong','1,3,1','2',project];const result=await choose({},async()=>answers.shift());assert.equal(result.agent,'shared,cursor');assert.equal(result.scope,'project');assert.equal(result.project,project);
+ assert.deepEqual(targets(result,home).map(t=>t.directory),[path.join(project,'.agents/skills/wdb'),path.join(project,'.cursor/skills/wdb')]);
 });
 test('CLI reuse avoids npm; missing/broken CLI installs once and verifies result',()=>{
  const good={status:0,stdout:JSON.stringify({data:{version:'0.1.0'}})};let installs=0,ready=false;
@@ -39,10 +42,10 @@ test('downloads pinned Skill files without GitHub API, verifies hashes and rejec
  await assert.rejects(fetchSkill(sha,{get:async url=>url.endsWith('/scripts/skill-install-manifest.json')?Buffer.from(JSON.stringify({version:1,sourceCommit:sha,files:tree})):Buffer.from('corrupt')}),/verification failed/);
  await assert.rejects(download('https://test.invalid',async()=>new Response('missing',{status:404})),/HTTP 404/);
 });
-test('all four destinations contain complete resources; existing files are backed up outside discovery',async t=>{
+test('all six destinations contain complete resources; existing files are backed up outside discovery',async t=>{
  const root=await temporary(t),home=path.join(root,'home'),project=path.join(root,'中文 project');await fs.mkdir(home);await fs.mkdir(project);
  const skill={sha,files:fixtureFiles()};
- for(const scope of ['user','project'])for(const target of targets({agent:'both',scope,project},home)){
+ for(const scope of ['user','project'])for(const target of targets({agent:'shared,claude,cursor',scope,project},home)){
   await installSkill(target,skill,{log(){}});assert.equal(await fs.readFile(path.join(target.directory,'references/说明.md'),'utf8'),'完整的参考内容');
   await fs.writeFile(path.join(target.directory,'custom.txt'),'keep');
   await assert.rejects(installSkill(target,skill,{ask:async()=> 'n',log(){}}),/cancelled/);
@@ -110,7 +113,7 @@ try:
             except OSError:
                 break
         if not sent and b'Install Skill for' in output:
-            os.write(master, bytes([51, 10, 50, 10]))
+            os.write(master, b'1,3\\n2\\n')
             sent = True
     p.wait(timeout=2)
     print(output.decode('utf-8', errors='replace'))
@@ -124,6 +127,9 @@ finally:
   const interactive=spawnSync('python3',[driver,command],{env,cwd:root,encoding:'utf8',timeout:15000});
   assert.equal(interactive.status,0,interactive.stderr||interactive.stdout||interactive.error?.message);
   assert.ok(interactive.stdout.includes('Done.'));
+  assert.equal(await fs.readFile(path.join(project,'.cursor/skills/wdb/SKILL.md'),'utf8'),fixtureFiles().get('SKILL.md').bytes.toString());
+  const registry=JSON.parse(await fs.readFile(path.join(env.WDB_CONFIG,'skill-installs.json'),'utf8'));
+  assert.deepEqual(registry.installations.map(r=>r.agent).sort(),['claude','cursor','shared']);
  }
 });
 

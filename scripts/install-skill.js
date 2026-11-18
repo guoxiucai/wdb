@@ -4,22 +4,38 @@
 const fs=require('node:fs/promises'),syncFs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
 const {spawnSync}=require('node:child_process');
 const REPO='guoxiucai/wdb',PACKAGE='@tsingwill/wdb',MAX_BYTES=5*1024*1024;
+const AGENT_ROOTS={shared:'.agents',claude:'.claude',cursor:'.cursor'};
+const AGENT_LABELS={shared:'Shared install / 共享安装',claude:'Claude Code',cursor:'Cursor'};
 const HELP=`WDB CLI + Skill installer (Node >=22)
-  --agent codex|claude|both   --scope user|project
+  --agent shared,claude,cursor   Select one or more (comma-separated or repeat --agent)
+  --scope user|project
   --project <directory>      Existing project directory (default: current directory)
   --yes                      Replace existing wdb Skill with a retained backup
   --ref <revision>           Repository revision (default: main)
   --help
 Missing agent/scope are prompted on the terminal, including curl ... | bash.
+Legacy values: codex = shared, both = shared,claude.
 Only installs WDB CLI/Skill; does not install Node, an Agent, or Windows server.`;
+function agentSelection(value){
+ const selected=new Set();
+ for(const name of value.toLowerCase().split(',').map(part=>part.trim())){
+  if(name==='both'){selected.add('shared');selected.add('claude');}
+  else if(name==='codex')selected.add('shared');
+  else if(Object.hasOwn(AGENT_ROOTS,name))selected.add(name);
+  else throw Error('--agent accepts shared, claude, cursor (legacy: codex, both)');
+ }
+ return [...selected].join(',');
+}
 function parseArgs(args){
  const o={ref:'main'};
  for(let i=0;i<args.length;i++){
   const key=args[i];if(key==='--yes'||key==='--help'){o[key.slice(2)]=true;continue;}
   if(!['--agent','--scope','--project','--ref'].includes(key)||!args[i+1]||args[i+1].startsWith('--'))throw Error('Invalid arguments.\n'+HELP);
-  o[key.slice(2)]=args[++i];
+  const value=args[++i];
+  if(key==='--agent')o.agent=o.agent===undefined?value:o.agent+','+value;
+  else o[key.slice(2)]=value;
  }
- if(o.agent&&!['codex','claude','both'].includes(o.agent))throw Error('--agent must be codex, claude or both');
+ if(o.agent!==undefined)o.agent=agentSelection(o.agent);
  if(o.scope&&!['user','project'].includes(o.scope))throw Error('--scope must be user or project');
  if(o.project&&o.scope==='user')throw Error('--project cannot be combined with --scope user');
  if(!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/.test(o.ref))throw Error('Invalid repository revision');
@@ -27,7 +43,7 @@ function parseArgs(args){
 }
 function targets({agent,scope,project},home=os.homedir(),cwd=process.cwd()){
  const base=path.resolve(scope==='user'?home:project||cwd);
- return (agent==='both'?['codex','claude']:[agent]).map(name=>({agent:name,base,directory:path.join(base,name==='codex'?'.agents':'.claude','skills','wdb')}));
+ return agentSelection(agent).split(',').map(name=>({agent:name,base,directory:path.join(base,AGENT_ROOTS[name],'skills','wdb')}));
 }
 function terminalPrompt(){
  const readline=require('node:readline');let input=process.stdin,output=process.stdout,owned=false;
@@ -42,7 +58,20 @@ function terminalPrompt(){
 }
 async function choose(options,ask){
  const o={...options},promptedScope=!options.scope;
- while(!o.agent){const a=(await ask('Install Skill for: 1) Codex  2) Claude Code  3) Both [1]: ')).toLowerCase();o.agent=({'':'codex','1':'codex','2':'claude','3':'both',codex:'codex',claude:'claude',both:'both'})[a];}
+ while(!o.agent){
+  const answer=await ask(
+   'Install Skill for (multiple choices, e.g. 1,3):\n'+
+   '  1) Shared install / 共享安装 (.agents/skills)\n'+
+   '     Codex, GitHub Copilot (CLI / VS Code), Gemini CLI, OpenCode, Grok Build CLI,\n'+
+   '     DeepSeek Harness Desktop, Qoder CN IDE, Qwen Code, Kimi Code CLI.\n'+
+   '     Also works with local Cursor and TRAE CN projects (enable .agents in TRAE).\n'+
+   '  2) Claude Code\n'+
+   '  3) Cursor (.cursor/skills)\n'+
+   'Selection [1]: ');
+  const choices=['shared','claude','cursor'];
+  const names=(answer.trim()||'1').split(/[,\s]+/).map(part=>/^[1-3]$/.test(part)?choices[Number(part)-1]:part);
+  try{o.agent=agentSelection(names.join(','));}catch{}
+ }
  while(!o.scope){const a=(await ask('Install scope: 1) User (all projects)  2) Project [1]: ')).toLowerCase();o.scope=({'':'user','1':'user','2':'project',user:'user',project:'project'})[a];}
  if(o.project&&o.scope==='user')throw Error('A project path was supplied; select project scope.');
  if(o.scope==='project'&&!o.project){o.project=promptedScope?((await ask(`Project directory [${process.cwd()}]: `))||process.cwd()):process.cwd();}
@@ -148,7 +177,7 @@ async function installSkill(target,skill,{yes=false,ask,log=console.log}={}){
   for(const [file,{bytes,mode}] of skill.files){const output=path.join(stage,...file.split('/'));await fs.mkdir(path.dirname(output),{recursive:true,mode:0o700});await fs.writeFile(output,bytes,{flag:'wx',mode});}
   if(existing){const backupRoot=path.join(path.dirname(parent),'wdb-skill-backups');await fs.mkdir(backupRoot,{recursive:true,mode:0o700});if((await fs.lstat(backupRoot)).isSymbolicLink())throw Error('Refusing linked backup path: '+backupRoot);backup=path.join(backupRoot,`wdb-${Date.now()}-${crypto.randomUUID().slice(0,8)}`);await fs.rename(destination,backup);}
   try{await fs.rename(stage,destination);stage=null;}catch(e){if(backup)await fs.rename(backup,destination);throw e;}
-  log('Installed '+target.agent+' Skill: '+destination);if(backup)log('Previous Skill retained at: '+backup);
+ log('Installed '+AGENT_LABELS[target.agent]+' Skill: '+destination);if(backup)log('Previous Skill retained at: '+backup);
   return {destination,backup,sha:skill.sha};
  }finally{if(stage)await fs.rm(stage,{recursive:true,force:true});await fs.rmdir(lock);}
 }
@@ -158,11 +187,20 @@ async function main(argv=process.argv.slice(2)){
  let prompt;const ask=message=>(prompt||=terminalPrompt()).ask(message);
  try{
   const chosen=await choose(options,ask),plan=targets(chosen);
-  console.log('WDB Skill installation targets:');for(const target of plan){await fs.realpath(target.base);console.log('  '+target.agent+': '+target.directory);}
+  console.log('WDB Skill installation targets:');for(const target of plan){await fs.realpath(target.base);console.log('  '+AGENT_LABELS[target.agent]+': '+target.directory);}
   const cli=ensureCli(),bundled=chosen.ref==='main'?await packagedSkill(cli):null,skill=bundled||await fetchSkill(chosen.ref);console.log('Skill source: '+(bundled?PACKAGE+' @ '+skill.version:REPO+' @ '+skill.sha));
   if(!bundled)console.log('CLI has no packaged Skill manifest; repository Skill compatibility is not version-pinned to this CLI.');
-  for(const target of plan){if(bundled){const base=await fs.realpath(target.base),destination=path.join(base,target.agent==='codex'?'.agents':'.claude','skills','wdb'),relative=path.relative(bundled.packageRoot,destination),reverse=path.relative(destination,bundled.packageRoot);if(!relative||!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)||!reverse||!reverse.startsWith('..'+path.sep)&&reverse!=='..'&&!path.isAbsolute(reverse))throw Error('Skill target overlaps the CLI package; choose another project.');}const installed=await installSkill(target,skill,{yes:chosen.yes,ask});try{await registerSkill(target,chosen.scope,skill,installed);}catch{throw Error('Skill installed at '+installed.destination+', but update registration failed. Check the client config permissions/lock and rerun.');}}
-  console.log('Done. Start a new Claude Code / Codex session in the target project.');
+  for(const target of plan){
+   if(bundled){
+    const base=await fs.realpath(target.base);
+    const destination=path.join(base,path.relative(target.base,target.directory));
+    const relative=path.relative(bundled.packageRoot,destination),reverse=path.relative(destination,bundled.packageRoot);
+    if(!relative||!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)||!reverse||!reverse.startsWith('..'+path.sep)&&reverse!=='..'&&!path.isAbsolute(reverse))throw Error('Skill target overlaps the CLI package; choose another project.');
+   }
+   const installed=await installSkill(target,skill,{yes:chosen.yes,ask});
+   try{await registerSkill(target,chosen.scope,skill,installed);}catch{throw Error('Skill installed at '+installed.destination+', but update registration failed. Check the client config permissions/lock and rerun.');}
+  }
+  console.log('Done. Start a new Agent session in the target project.');
   console.log('Ask the Agent to debug your Windows device and provide its address. First connection needs approval on Windows.');
   console.log('Windows server is installed separately: https://github.com/guoxiucai/wdb/releases/latest');
  }finally{prompt?.close();}

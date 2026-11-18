@@ -17,7 +17,7 @@ foreach ($WdbParameterName in @('Agent', 'Scope', 'Project', 'Yes')) {
 }
 & {
     param(
-        [ValidateSet('codex', 'claude', 'both')][string]$Agent,
+        [string[]]$Agent,
         [ValidateSet('user', 'project')][string]$Scope,
         [string]$Project,
         [switch]$Yes
@@ -35,7 +35,7 @@ foreach ($WdbParameterName in @('Agent', 'Scope', 'Project', 'Yes')) {
         $entry = Join-Path $temporary 'install-skill.cjs'
         Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/guoxiucai/wdb/main/scripts/install-skill.js" -OutFile $entry -TimeoutSec 30
         $arguments = @($entry)
-        if ($Agent) { $arguments += @('--agent', $Agent) }
+        if ($Agent) { $arguments += @('--agent', ($Agent -join ',')) }
         if ($Scope) { $arguments += @('--scope', $Scope) }
         if ($Project) { $arguments += @('--project', $Project) }
         if ($Yes) { $arguments += '--yes' }

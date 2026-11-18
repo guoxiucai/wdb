@@ -20,7 +20,7 @@ try {
     if($ProbeMode -eq 'iex' -or $ProbeMode -eq 'failure'){Invoke-Expression $text}
     elseif($ProbeMode -eq 'file'){& $BootstrapPath -Agent both -Scope project -Project 'C:\wdb project' -Yes}
     elseif($ProbeMode -eq 'invalid'){& ([scriptblock]::Create($text)) -Scope invalid}
-    else {& ([scriptblock]::Create($text)) -Agent both -Scope project -Project 'C:\wdb project' -Yes}
+    else {& ([scriptblock]::Create($text)) -Agent shared,cursor -Scope project -Project 'C:\wdb project' -Yes}
 } catch {if($ProbeMode -notin @('invalid','failure')){throw};$caught=$true}
 if($Agent -ne 'caller-agent' -or $Scope -ne 'caller-scope' -or $Project -ne 'caller-project' -or $Yes -ne 'caller-yes'){throw 'Caller variables changed'}
 if([Net.ServicePointManager]::SecurityProtocol -ne $tlsBefore){throw 'TLS state changed'}
@@ -29,7 +29,7 @@ if(($ProbeMode -in @('invalid','failure')) -and !$caught){throw 'Expected failur
 if($ProbeMode -eq 'invalid'){if($calls.Count){throw 'Invalid scope executed node'}}
 else {
     if($calls.Count -ne 2){throw 'Expected Node version check and installer invocation'}
-    $actual=@($calls[1]);$expected=if($ProbeMode -in @('iex','failure')){@()}else{@('--agent','both','--scope','project','--project','C:\wdb project','--yes')}
+    $actual=@($calls[1]);$expected=if($ProbeMode -in @('iex','failure')){@()}elseif($ProbeMode -eq 'file'){@('--agent','both','--scope','project','--project','C:\wdb project','--yes')}else{@('--agent','shared,cursor','--scope','project','--project','C:\wdb project','--yes')}
     if(($actual.Count -ne $expected.Count+1) -or (($actual | Select-Object -Skip 1) -join '|') -ne ($expected -join '|')){throw 'Incorrect forwarded arguments'}
 }
 [ordered]@{status='passed';mode=$ProbeMode;powershell=$PSVersionTable.PSVersion.ToString();callerPreserved=$true;tlsRestored=$true;temporaryCleaned=$true} | ConvertTo-Json -Compress

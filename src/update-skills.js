@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
 const {error}=require('./npm-client');
+const AGENT_ROOTS={shared:'.agents',claude:'.claude',cursor:'.cursor'};
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 function dataDirectory(options={}){return path.resolve(options.config||process.env.WDB_CONFIG||(process.platform==='win32'?path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'AppData/Local'),'wdb/client'):process.platform==='darwin'?path.join(os.homedir(),'Library/Application Support/wdb/client'):path.join(os.homedir(),'.config/wdb/client')));}
 function canonical(file){let current=path.resolve(file),suffix=[];while(!fs.existsSync(current)){const parent=path.dirname(current);if(parent===current)break;suffix.unshift(path.basename(current));current=parent;}return path.join(fs.realpathSync(current),...suffix);}
@@ -27,16 +28,24 @@ function read(dir){const file=receiptFile(dir);if(!fs.existsSync(file))return {s
 function write(dir,value){fs.mkdirSync(dir,{recursive:true,mode:0o700});if(fs.lstatSync(dir).isSymbolicLink()||fs.existsSync(receiptFile(dir))&&fs.lstatSync(receiptFile(dir)).isSymbolicLink())throw error('UPDATE_SKILL_UNSAFE','Linked update registry.');const temp=path.join(dir,'.skill-registry-'+crypto.randomUUID()+'.tmp');try{fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});fs.renameSync(temp,receiptFile(dir));}finally{fs.rmSync(temp,{force:true});}}
 function lock(dir){try{fs.mkdirSync(dir,{mode:0o700});}catch(e){if(e.code==='EEXIST')throw error('UPDATE_IN_PROGRESS','An update/install lock exists. Inspect the owning process before retrying.');throw e;}try{fs.writeFileSync(path.join(dir,'owner.json'),JSON.stringify({pid:process.pid,startedAt:new Date().toISOString()}),{flag:'wx',mode:0o600});}catch(e){fs.rmdirSync(dir);throw e;}return ()=>{fs.unlinkSync(path.join(dir,'owner.json'));fs.rmdirSync(dir);};}
 function target(record){
- if(!['codex','claude'].includes(record.agent)||!['user','project'].includes(record.scope)||!path.isAbsolute(record.base)||!path.isAbsolute(record.directory))throw error('UPDATE_SKILL_UNSAFE','Invalid registered Skill target.');
- const base=fs.realpathSync(record.base),parts=[record.agent==='codex'?'.agents':'.claude','skills','wdb'],directory=path.join(base,...parts);
+ // Older installers registered the shared directory under Codex.
+ const agent=record.agent==='codex'?'shared':record.agent;
+ if(!Object.hasOwn(AGENT_ROOTS,agent)||!['user','project'].includes(record.scope)||!path.isAbsolute(record.base)||!path.isAbsolute(record.directory))throw error('UPDATE_SKILL_UNSAFE','Invalid registered Skill target.');
+ const base=fs.realpathSync(record.base),parts=[AGENT_ROOTS[agent],'skills','wdb'],directory=path.join(base,...parts);
  if(path.resolve(record.directory)!==directory&&path.resolve(record.directory)!==path.join(path.resolve(record.base),...parts))throw error('UPDATE_SKILL_UNSAFE','Skill target does not match its registered base.');let current=base;
  for(const part of parts){current=path.join(current,part);if(fs.existsSync(current)){const st=fs.lstatSync(current);if(st.isSymbolicLink()||!st.isDirectory())throw error('UPDATE_SKILL_UNSAFE','Linked/non-directory Skill target.');}}
  return {base,directory};
 }
 function preview(dir,desired,{home=os.homedir(),cwd=process.cwd()}={}){
  const rows=read(dir).installations,targets=rows.map(record=>{try{target(record);const actual=snapshot(record.directory);return {...record,state:actual&&!sameFiles(actual,record.files)?'conflict':actual&&record.version===desired.version&&sameFiles(actual,desired.files)?'current':'pending'};}catch{return {...record,state:'unavailable'};}});
- const seen=new Set(targets.flatMap(t=>{try{return [t.directory,target(t).directory];}catch{return [t.directory];}}));for(const [scope,base] of [['user',home],['project',cwd]])for(const agent of ['codex','claude']){
-  if(!fs.existsSync(base))continue;const actualBase=fs.realpathSync(base),directory=path.join(actualBase,agent==='codex'?'.agents':'.claude','skills','wdb');if(!seen.has(directory)&&fs.existsSync(directory)){targets.push({agent,scope,base:actualBase,directory,state:'unmanaged'});seen.add(directory);}
+ const seen=new Set(targets.flatMap(t=>{try{return [t.directory,target(t).directory];}catch{return [t.directory];}}));
+ for(const [scope,base] of [['user',home],['project',cwd]]){
+  if(!fs.existsSync(base))continue;
+  const actualBase=fs.realpathSync(base);
+  for(const [agent,agentRoot] of Object.entries(AGENT_ROOTS)){
+   const directory=path.join(actualBase,agentRoot,'skills','wdb');
+   if(!seen.has(directory)&&fs.existsSync(directory)){targets.push({agent,scope,base:actualBase,directory,state:'unmanaged'});seen.add(directory);}
+  }
  }
  return targets;
 }

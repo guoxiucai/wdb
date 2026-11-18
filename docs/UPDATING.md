@@ -35,7 +35,9 @@ Node、npm、Windows 服务和桌面 helper 不更新；设备凭据、配对授
 
 npm 包包含完整 `skills/wdb` 和 `SKILL-MANIFEST.json`。更新从刚确认的精确版本包中同步 Skill，不另取 GitHub main，避免版本错配。新安装脚本优先从可识别的 npm CLI 包读取 Skill，并在客户端配置目录的 `skill-installs.json` 登记位置及文件 hash；设置 WDB_CONFIG 可选择独立的登记目录，update 也可用 --config 选择。
 
-默认同步所有已登记的 Codex/Claude Code 用户级与项目级位置，不扫描其他磁盘或未知项目。CLI 已是最新、但登记的 Skill 落后时，确认后可单独同步 Skill。包更新不等于已安装 Skill 自动热重载，完成后请新开 Agent 会话。
+默认同步已登记的用户级与项目级 Skill，包括共享目录 `.agents/skills/wdb/`、Claude Code 的 `.claude/skills/wdb/` 和 Cursor 的 `.cursor/skills/wdb/`。旧安装器登记的 Codex 路径仍可原地更新。兼容共享目录的 Agent 会读取同一份更新后的 Skill。CLI 已是最新、但登记的 Skill 落后时，确认后可单独同步 Skill。完成后请新开 Agent 会话。
+
+如果旧客户端无法识别新登记的共享或 Cursor 位置，可用 `wdb update --no-skill` 先升级到支持这些位置的 CLI，再运行 `wdb update` 同步 Skill。
 
 旧安装没有登记时，只发现已知用户目录和当前项目目录；交互模式逐项询问是否备份后纳入同步，然后再询问总更新确认。--yes 不会认领未登记目录。其他项目可重跑安装脚本纳入登记。手动复制的 Skill 不会被静默覆盖。
 

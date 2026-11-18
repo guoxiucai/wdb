@@ -37,7 +37,7 @@ WDB 面向 Windows 应用调试，设计参考 Android adb / Harmony hdc；截�
 
 ### 1. AI Agent 使用
 
-一键检查/安装 CLI，并选择 Claude Code 或 Codex 的用户级/项目级 Skill 安装位置（需要 Node.js 22+ 和 npm）：
+一键检查或安装 CLI，并选择用户级或项目级 Skill。安装菜单可多选：共享安装（Codex、DeepSeek Harness、Grok Build 等）、Claude Code、Cursor（需要 Node.js 22+ 和 npm）。
 
 macOS：
 
